@@ -121,6 +121,43 @@ assert.equal(unconfirmedBridge.status, "blocked");
 assert.equal(unconfirmedBridge.data.decision.action, "request_approval");
 assert.ok(unconfirmedBridge.summary.includes("requires explicit model confirmation"));
 
+const strandedPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "resume a stranded read-only planning run",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+const strandedRunPath = path.join(repoPath, ".thehood", "runs", strandedPlan.runId, "run.json");
+const strandedRun = JSON.parse(await fs.readFile(strandedRunPath, "utf8"));
+await fs.writeFile(
+  strandedRunPath,
+  `${JSON.stringify({
+    ...strandedRun,
+    state: "planning",
+    events: [
+      ...strandedRun.events,
+      {
+        id: "event_smoke_stranded_planning",
+        createdAt: strandedRun.updatedAt,
+        type: "state_changed",
+        message: "Smoke forced a stranded planning state."
+      }
+    ]
+  }, null, 2)}\n`,
+  "utf8"
+);
+const resumedPlan = JSON.parse((await runCli(["continue", strandedPlan.runId, "--repo", repoPath, "--json"])).stdout);
+assert.equal(resumedPlan.run.state, "completed");
+assert.equal(resumedPlan.providerResponses.length, 1);
+assert.equal(resumedPlan.providerResponses[0].status, "ok");
+
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
 const run = JSON.parse(plan.stdout);
 

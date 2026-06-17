@@ -207,6 +207,7 @@ export const createFallbackAgentResponse = (
 
 export const buildAgentPrompt = (request: AgentRequest): string => {
   const requiredDataKey = request.directive.outputContract.requiredDataKey;
+  const schema = buildAgentResponseSchema(request);
   const responseEnvelope = {
     status: "ok | blocked | failed",
     summary: "short human-readable summary",
@@ -223,6 +224,10 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
     "Return only a JSON object. Do not wrap it in Markdown.",
     "The JSON object must match this envelope:",
     JSON.stringify(responseEnvelope, null, 2),
+    "The JSON object must satisfy this exact JSON Schema:",
+    JSON.stringify(schema, null, 2),
+    `The role payload is data.${requiredDataKey}. Use the schema property names literally.`,
+    "Do not replace required schema fields with synonyms such as nextAction, next_action, rationale, or verdictSummary.",
     "Runtime directive:",
     JSON.stringify(request.directive, null, 2)
   ].join("\n\n");

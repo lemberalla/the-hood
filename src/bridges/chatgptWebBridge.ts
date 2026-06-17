@@ -349,7 +349,7 @@ const assistantSnapshotExpression = (responseSelector: string): string => `
 `;
 
 const sendPromptExpression = (prompt: string, promptSelector: string, sendSelector: string): string => `
-(() => {
+(async () => {
   const promptSelectors = ${JSON.stringify(promptSelector)}.split(',').map((selector) => selector.trim()).filter(Boolean);
   const sendSelectors = ${JSON.stringify(sendSelector)}.split(',').map((selector) => selector.trim()).filter(Boolean);
   const prompt = ${JSON.stringify(prompt)};
@@ -359,23 +359,44 @@ const sendPromptExpression = (prompt: string, promptSelector: string, sendSelect
     return { ok: false, error: 'prompt editor not found' };
   }
 
+  editor.focus();
+
   if ('value' in editor) {
     editor.value = prompt;
   } else {
     editor.textContent = prompt;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
+  editor.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: prompt }));
   editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prompt }));
   editor.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const button = sendSelectors.map((selector) => document.querySelector(selector)).find((candidate) => candidate && !candidate.disabled);
+  const findEnabledButton = () => sendSelectors
+    .map((selector) => document.querySelector(selector))
+    .find((candidate) => candidate && !candidate.disabled && candidate.getAttribute('aria-disabled') !== 'true');
+  let button = findEnabledButton();
 
-  if (!button) {
-    return { ok: false, error: 'send button not found or disabled' };
+  for (let attempt = 0; !button && attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    button = findEnabledButton();
   }
 
-  button.click();
-  return { ok: true };
+  if (button) {
+    button.click();
+    return { ok: true };
+  }
+
+  editor.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', metaKey: true }));
+  editor.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter', metaKey: true }));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  return { ok: false, error: 'send button not found or disabled' };
 })()
 `;
 

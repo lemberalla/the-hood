@@ -215,6 +215,37 @@ const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
   return "orchestrator";
 };
 
+const executeReadOnlyRun = async (
+  run: RunRecord,
+  role: RuntimeRole
+): Promise<{ run: RunRecord; response: AgentResponse; advanced: boolean; stopReason?: string }> => {
+  const result = await runAgent(run, role, {
+    phase: run.mode
+  });
+  const stopped = await stopForProviderStatus(result.run, role, result.response);
+
+  if (stopped) {
+    return {
+      run: stopped.run,
+      response: result.response,
+      advanced: true,
+      stopReason: stopped.stopReason
+    };
+  }
+
+  const completed = await updateRun(
+    result.run,
+    { state: "completed", stopReason: `${role} run completed by provider response.` },
+    [createEvent("run_completed", `${role} run completed.`)]
+  );
+
+  return {
+    run: completed,
+    response: result.response,
+    advanced: true
+  };
+};
+
 const advanceOneStep = async (
   run: RunRecord
 ): Promise<{ run: RunRecord; response?: AgentResponse; advanced: boolean; stopReason?: string }> => {
@@ -241,31 +272,11 @@ const advanceOneStep = async (
       { state: "planning" },
       [createEvent("state_changed", `Run entered ${run.mode} execution with ${role}.`)]
     );
-    const result = await runAgent(planned, role, {
-      phase: run.mode
-    });
-    const stopped = await stopForProviderStatus(result.run, role, result.response);
+    return executeReadOnlyRun(planned, role);
+  }
 
-    if (stopped) {
-      return {
-        run: stopped.run,
-        response: result.response,
-        advanced: true,
-        stopReason: stopped.stopReason
-      };
-    }
-
-    const completed = await updateRun(
-      result.run,
-      { state: "completed", stopReason: `${role} run completed by provider response.` },
-      [createEvent("run_completed", `${role} run completed.`)]
-    );
-
-    return {
-      run: completed,
-      response: result.response,
-      advanced: true
-    };
+  if (run.state === "planning" && run.mode !== "implement") {
+    return executeReadOnlyRun(run, readOnlyRoleForMode(run));
   }
 
   if (run.state === "delegating") {

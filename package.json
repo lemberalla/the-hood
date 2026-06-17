@@ -13,7 +13,7 @@
     "docs"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/prepare-bin.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
     "smoke:runtime": "node scripts/smoke-runtime.mjs",
