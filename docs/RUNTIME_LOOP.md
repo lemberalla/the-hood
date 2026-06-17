@@ -116,3 +116,20 @@ Verifier and runtime failures should be classified into stable categories:
 Only the runtime applies approved changes to the target checkout.
 
 Implementers can produce patches. They do not get to self-merge.
+
+## Current Loop
+
+The current implementation can advance approved runs using the deterministic `stub` provider:
+
+```text
+delegating
+  -> orchestrator response
+  -> implementing
+  -> implementer response
+  -> verifying
+  -> git evidence capture
+  -> verifier response
+  -> completed or awaiting_approval
+```
+
+Real model providers are not wired yet.

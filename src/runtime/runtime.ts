@@ -92,8 +92,8 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     events: [
       createEvent("run_created", `Created ${input.mode} run.`),
       createEvent(
-        "provider_execution_pending",
-        "Provider adapters are not implemented in this skeleton; the runtime stopped before model execution."
+        "run_ready",
+        "Run is ready for the next runtime transition."
       )
     ]
   };

@@ -75,4 +75,30 @@ await runCli(["exec", run.runId, "--repo", repoPath, "--", "rm", "src/app.ts"], 
   expectExitCode: 3
 });
 
+const loopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-loop-smoke-"));
+await runCli(["init", "--repo", loopRepoPath]);
+const loopRunOutput = await runCli([
+  "run",
+  "exercise deterministic loop",
+  "--repo",
+  loopRepoPath,
+  "--orchestrator",
+  "stub:orchestrator",
+  "--implementer",
+  "stub:implementer",
+  "--verifier",
+  "stub:verifier",
+  "--critic",
+  "stub:critic",
+  "--json"
+]);
+const loopRun = JSON.parse(loopRunOutput.stdout);
+assert.equal(loopRun.state, "awaiting_approval");
+
+await runCli(["approve", loopRun.runId, "--repo", loopRepoPath, "--reason", "smoke-approved"]);
+const loopContinue = await runCli(["continue", loopRun.runId, "--repo", loopRepoPath, "--json"]);
+const loopResult = JSON.parse(loopContinue.stdout);
+assert.equal(loopResult.run.state, "completed");
+assert.equal(loopResult.providerResponses.length, 3);
+
 process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

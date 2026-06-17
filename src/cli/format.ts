@@ -1,4 +1,5 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
+import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
@@ -91,4 +92,12 @@ export const formatGitEvidence = (result: GitEvidenceResult): string => [
         ...result.protectedChanges.map((match) => `  ${match.path} (${match.pattern})`)
       ]
     : [])
+].join("\n");
+
+export const formatAdvanceRunResult = (result: AdvanceRunResult): string => [
+  formatRunSummary(result.run),
+  "",
+  `advanced: ${result.advanced}`,
+  `stopReason: ${result.stopReason}`,
+  `providerResponses: ${result.providerResponses.length}`
 ].join("\n");

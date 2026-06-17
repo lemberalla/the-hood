@@ -1,0 +1,14 @@
+import { ProviderUnavailableError } from "../runtime/errors.js";
+import type { RoleAssignment } from "../runtime/types.js";
+import { stubProvider } from "./stub.js";
+import type { ProviderAdapter } from "./types.js";
+
+export const getProviderAdapter = (assignment: RoleAssignment): ProviderAdapter => {
+  if (assignment.provider === stubProvider.id) {
+    return stubProvider;
+  }
+
+  throw new ProviderUnavailableError(
+    `Provider "${assignment.provider}" is not implemented yet. Use stub:<role> for deterministic loop smoke tests.`
+  );
+};

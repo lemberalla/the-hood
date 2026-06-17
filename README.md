@@ -28,6 +28,8 @@ It supports:
 - a real stdio MCP server exposing TheHood runtime tools
 - runtime-owned command log artifacts
 - git status/diff evidence capture with protected test-path classification
+- deterministic `stub` provider for local loop smoke tests
+- `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 
 Provider adapters are contract-first placeholders. They are not wired to external models yet.
 
@@ -43,6 +45,7 @@ node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js status --repo .
 node dist/cli/main.js evidence <run-id> --repo .
+node dist/cli/main.js continue <run-id> --repo .
 ```
 
 ## Product Shape

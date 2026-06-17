@@ -39,6 +39,27 @@ agent_request:
   output_schema: string
 ```
 
+## Stub Adapter
+
+Purpose:
+
+- Exercise the runtime loop without external model calls.
+- Produce deterministic orchestrator, implementer, critic, and verifier responses.
+- Keep smoke tests stable while the real provider adapters are still being built.
+
+Best roles:
+
+- orchestrator
+- implementer
+- verifier
+- critic
+
+Rules:
+
+- It must not edit files.
+- It must use runtime evidence for verifier decisions.
+- It exists for testing the orchestration contract, not for real work.
+
 ## ChatGPT Web Adapter
 
 Purpose:
@@ -156,4 +177,3 @@ Rules:
 
 - Keep tasks narrow.
 - Do not use local model output as authoritative verification unless backed by deterministic logs.
-

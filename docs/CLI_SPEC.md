@@ -51,6 +51,20 @@ thehood run "Add export flow" \
   --critic anthropic-api:claude-sonnet
 ```
 
+Deterministic local loop smoke:
+
+```bash
+thehood run "Exercise the loop" \
+  --repo . \
+  --orchestrator stub:orchestrator \
+  --implementer stub:implementer \
+  --verifier stub:verifier \
+  --critic stub:critic
+
+thehood approve <run-id>
+thehood continue <run-id>
+```
+
 ## Config File
 
 The current implementation uses `.thehood/config.json` to avoid adding a YAML parser before the runtime is stable.
@@ -98,6 +112,10 @@ Initial config shape:
     "claude-code": {
       "enabled": true,
       "models": ["default"]
+    },
+    "stub": {
+      "enabled": true,
+      "models": ["orchestrator", "implementer", "verifier", "critic"]
     }
   },
   "roles": {
@@ -154,3 +172,5 @@ The CLI should support:
 TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.
+
+`thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, and verifier phases without external model calls.

@@ -3,6 +3,7 @@ import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
+import { advanceRun } from "../runtime/loop.js";
 import { startMcpServer } from "../mcp/server.js";
 import { listProviders } from "../runtime/providers.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -23,6 +24,7 @@ import {
 } from "./args.js";
 import {
   formatConfig,
+  formatAdvanceRunResult,
   formatCommandResult,
   formatGitEvidence,
   formatProviders,
@@ -50,7 +52,7 @@ Usage:
   thehood exec <run-id> [--repo <path>] [--cwd <path>] [--allow-risky] -- <command> [args...]
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
-  thehood continue <run-id> [--repo <path>]
+  thehood continue <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood mcp
 
@@ -257,20 +259,12 @@ const handleContinue = async (
   args: string[],
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
-  const run = await getRun(repoFromOptions(options), ensureRunId(args[0]));
-  const message =
-    "Provider execution is not implemented yet. The run remains available for inspection.";
+  const result = await advanceRun({
+    repoPath: repoFromOptions(options),
+    runId: ensureRunId(args[0])
+  });
 
-  if (shouldPrintJson(options)) {
-    printJson({
-      runId: run.runId,
-      state: run.state,
-      message
-    });
-    return;
-  }
-
-  process.stdout.write(`${message}\n`);
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatAdvanceRunResult(result)}\n`);
 };
 
 const handleAbort = async (

@@ -1,5 +1,6 @@
 import { abortRun, createRun, getRun, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
+import { advanceRun } from "../runtime/loop.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunRecord } from "../runtime/types.js";
 import { parseRoleAssignment } from "../runtime/role-assignment.js";
 import { errorToolResult, toolResult, type ToolDefinition, type ToolResult } from "./protocol.js";
@@ -27,6 +28,7 @@ const runSummary = (run: RunRecord): JsonObject => ({
   goal: run.userGoal,
   approval_required: run.approvalRequired,
   approval_reason: run.approvalReason ?? null,
+  stop_reason: run.stopReason ?? null,
   artifacts: run.artifacts.map((artifact) => ({
     kind: artifact.kind,
     ref: artifact.ref,
@@ -196,10 +198,16 @@ const createContinueTool = (): McpTool => ({
         approval === "none"
           ? await getRun(repoPath, runId)
           : await recordApproval(repoPath, runId, approval as ApprovalDecision, message);
+      const advanced = await advanceRun({
+        repoPath,
+        runId: run.runId
+      });
 
       return {
-        ...runSummary(run),
-        summary: "Provider execution is not implemented yet. The run remains available for inspection."
+        ...runSummary(advanced.run),
+        advanced: advanced.advanced,
+        stop_reason: advanced.stopReason,
+        provider_response_count: advanced.providerResponses.length
       };
     })
 });

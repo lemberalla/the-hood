@@ -138,5 +138,53 @@ const invariantPath = await runMcp([
 assert.equal(invariantPath[1].result.isError, true);
 assert.equal(invariantPath[1].result.structuredContent.error.code, "permission_denied");
 
-process.stdout.write(`MCP smoke passed using ${repoPath}\n`);
+const loopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-loop-smoke-"));
+await runCommand(["init", "--repo", loopRepoPath]);
 
+const loopCreate = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_orchestrate",
+      arguments: {
+        goal: "mcp deterministic loop",
+        repo_path: loopRepoPath,
+        mode: "implement",
+        role_mapping: {
+          orchestrator: "stub:orchestrator",
+          implementer: "stub:implementer",
+          verifier: "stub:verifier",
+          critic: "stub:critic"
+        }
+      }
+    }
+  }
+]);
+
+const loopRunId = loopCreate[1].result.structuredContent.run_id;
+const loopContinue = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: loopRunId,
+        repo_path: loopRepoPath,
+        approval: "approve",
+        message: "mcp-smoke-approved"
+      }
+    }
+  }
+]);
+
+assert.equal(loopCreate[1].result.structuredContent.status, "awaiting_approval");
+assert.equal(loopContinue[1].result.structuredContent.status, "completed");
+assert.equal(loopContinue[1].result.structuredContent.provider_response_count, 3);
+
+process.stdout.write(`MCP smoke passed using ${repoPath}\n`);

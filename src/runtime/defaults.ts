@@ -34,6 +34,10 @@ export const builtinProviders: Record<string, ProviderConfig> = {
     enabled: true,
     models: ["default"]
   },
+  stub: {
+    enabled: true,
+    models: ["orchestrator", "implementer", "verifier", "critic"]
+  },
   local: {
     enabled: false,
     models: ["default"]
@@ -71,4 +75,3 @@ export const createDefaultConfig = (): TheHoodConfig => ({
   providers: structuredClone(builtinProviders),
   roles: structuredClone(defaultRoles)
 });
-

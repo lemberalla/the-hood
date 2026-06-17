@@ -106,6 +106,12 @@ Output:
 
 Continue a paused run.
 
+Current behavior:
+
+- optionally records an approval decision
+- advances the runtime loop until completion or the next gate
+- returns the final state, stop reason, and provider response count
+
 Input:
 
 ```json
