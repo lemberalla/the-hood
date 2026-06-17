@@ -1,0 +1,35 @@
+{
+  "name": "thehood",
+  "version": "0.0.0",
+  "description": "A local, provider-neutral agent runtime for orchestrating multi-agent software work.",
+  "type": "module",
+  "bin": {
+    "thehood": "dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:mcp": "node scripts/smoke-mcp.mjs",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "agents",
+    "mcp",
+    "codex",
+    "orchestration",
+    "runtime"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3"
+  }
+}
