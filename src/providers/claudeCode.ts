@@ -1,4 +1,5 @@
 import { createLocalCommandProvider } from "./localCommand.js";
+import type { LocalAgentCommandContext } from "./localCommand.js";
 import type { AgentRequest } from "./types.js";
 
 const permissionModeForRequest = (request: AgentRequest): string =>
@@ -16,11 +17,13 @@ const toolsForRequest = (request: AgentRequest): string => {
   return "Read,Glob,Grep";
 };
 
-export const buildClaudeCodeArgs = (request: AgentRequest): string[] => {
+export const buildClaudeCodeArgs = (request: AgentRequest, context: LocalAgentCommandContext): string[] => {
   const args = [
     "--print",
     "--output-format",
     "json",
+    "--json-schema",
+    JSON.stringify(context.schema),
     "--no-session-persistence",
     "--permission-mode",
     permissionModeForRequest(request),

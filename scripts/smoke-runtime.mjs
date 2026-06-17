@@ -171,11 +171,20 @@ const fallbackProviderOutput = createFallbackAgentResponse(fakeVerifierRequest, 
   summary: "not-json"
 });
 assert.equal(fallbackProviderOutput.data.verificationResult.verdict, "ask_user");
-const codexArgs = buildCodexCliArgs(fakeVerifierRequest);
+const schemaContext = {
+  schema: {
+    type: "object"
+  },
+  schemaPath: path.join(loopRepoPath, "agent-response.schema.json")
+};
+const codexArgs = buildCodexCliArgs(fakeVerifierRequest, schemaContext);
 assert.deepEqual(codexArgs.slice(0, 5), ["exec", "--cd", loopRepoPath, "--sandbox", "read-only"]);
+assert.equal(codexArgs.includes("--output-schema"), true);
+assert.equal(codexArgs[codexArgs.indexOf("--output-schema") + 1], schemaContext.schemaPath);
 assert.equal(codexArgs.at(-1), "-");
-const claudeArgs = buildClaudeCodeArgs(fakeVerifierRequest);
+const claudeArgs = buildClaudeCodeArgs(fakeVerifierRequest, schemaContext);
 assert.ok(claudeArgs.includes("--print"));
+assert.equal(claudeArgs.includes("--json-schema"), true);
 assert.ok(claudeArgs.includes("Read,Glob,Grep,Bash"));
 assert.equal(claudeArgs.includes("-"), false);
 

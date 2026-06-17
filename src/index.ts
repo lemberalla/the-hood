@@ -22,6 +22,7 @@ export * from "./mcp/server.js";
 export * from "./providers/claudeCode.js";
 export * from "./providers/codexCli.js";
 export * from "./providers/localCommand.js";
+export * from "./providers/responseSchema.js";
 export * from "./providers/router.js";
 export * from "./providers/stub.js";
 export * from "./providers/types.js";

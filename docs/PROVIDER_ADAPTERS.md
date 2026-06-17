@@ -55,6 +55,7 @@ Rules:
 - It invokes commands without a shell.
 - It passes the runtime directive as stdin or prompt input.
 - It asks the provider to return the normalized `AgentResponse` JSON envelope.
+- It builds a role-specific JSON Schema for the expected `AgentResponse`.
 - It redacts obvious secrets from captured process output before parsing.
 - It fails closed with a schema-compatible blocked or failed response when output is unstructured.
 - It does not use dangerous bypass flags.
@@ -164,6 +165,7 @@ Rules:
 - Do not let Codex self-verify its own changes.
 - Run through `codex exec` with TheHood's role directive.
 - Use `read-only` sandbox for non-editing roles and `workspace-write` for editing roles.
+- Pass the generated schema through `--output-schema`.
 - Do not pass dangerous sandbox bypass flags.
 
 ## Claude Code Adapter
@@ -184,6 +186,7 @@ Rules:
 - If Claude Code edits, another agent verifies.
 - Run through `claude --print` with TheHood's role directive.
 - Use plan/read tools for non-editing roles.
+- Pass the generated schema through `--json-schema`.
 - Do not pass permission bypass flags.
 
 ## Local Model Adapter

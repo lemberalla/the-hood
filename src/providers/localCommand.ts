@@ -1,15 +1,26 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { ProviderUnavailableError } from "../runtime/errors.js";
 import { redactText } from "../runtime/redaction.js";
+import { buildAgentResponseSchema } from "./responseSchema.js";
 import type { AgentRequest, AgentResponse, ProviderAdapter } from "./types.js";
 import type { JsonObject, JsonValue, RuntimeRole } from "../runtime/types.js";
 
 export interface LocalAgentCommandSpec {
   providerId: string;
   command: string;
-  args: string[];
+  buildArgs: BuildLocalAgentArgs;
   timeoutMs?: number;
 }
+
+export interface LocalAgentCommandContext {
+  schema: JsonObject;
+  schemaPath: string;
+}
+
+export type BuildLocalAgentArgs = (request: AgentRequest, context: LocalAgentCommandContext) => string[];
 
 export interface FallbackResponseInput {
   status: AgentResponse["status"];
@@ -20,6 +31,17 @@ export interface FallbackResponseInput {
 }
 
 const defaultTimeoutMs = 10 * 60 * 1000;
+
+const writeSchemaFile = async (providerId: string, schema: JsonObject): Promise<{ dir: string; path: string }> => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), `thehood-${providerId}-schema-`));
+  const schemaPath = path.join(dir, "agent-response.schema.json");
+
+  await fs.writeFile(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");
+  return {
+    dir,
+    path: schemaPath
+  };
+};
 
 const isObject = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -210,7 +232,13 @@ export const runLocalAgentCommand = async (
 ): Promise<AgentResponse> => {
   const prompt = buildAgentPrompt(request);
   const timeoutMs = spec.timeoutMs ?? defaultTimeoutMs;
-  const child = spawn(spec.command, spec.args, {
+  const schema = buildAgentResponseSchema(request);
+  const schemaFile = await writeSchemaFile(spec.providerId, schema);
+  const args = spec.buildArgs(request, {
+    schema,
+    schemaPath: schemaFile.path
+  });
+  const child = spawn(spec.command, args, {
     cwd: request.run.repoPath,
     shell: false,
     env: {
@@ -236,8 +264,9 @@ export const runLocalAgentCommand = async (
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", reject);
     child.on("close", (code) => resolve(code ?? 1));
-  }).catch((error: NodeJS.ErrnoException) => {
+  }).catch(async (error: NodeJS.ErrnoException) => {
     clearTimeout(timer);
+    await fs.rm(schemaFile.dir, { recursive: true, force: true });
 
     if (error.code === "ENOENT") {
       throw new ProviderUnavailableError(
@@ -249,6 +278,7 @@ export const runLocalAgentCommand = async (
   });
 
   clearTimeout(timer);
+  await fs.rm(schemaFile.dir, { recursive: true, force: true });
 
   const stdout = Buffer.concat(stdoutChunks).toString("utf8");
   const stderr = Buffer.concat(stderrChunks).toString("utf8");
@@ -290,14 +320,14 @@ export const runLocalAgentCommand = async (
 export const createLocalCommandProvider = (
   id: string,
   command: string,
-  buildArgs: (request: AgentRequest) => string[]
+  buildArgs: BuildLocalAgentArgs
 ): ProviderAdapter => ({
   id,
   async runAgent(request) {
     return runLocalAgentCommand(request, {
       providerId: id,
       command,
-      args: buildArgs(request)
+      buildArgs
     });
   }
 });

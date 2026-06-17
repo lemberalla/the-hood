@@ -1,10 +1,11 @@
 import { createLocalCommandProvider } from "./localCommand.js";
+import type { LocalAgentCommandContext } from "./localCommand.js";
 import type { AgentRequest } from "./types.js";
 
 const sandboxForRequest = (request: AgentRequest): string =>
   request.directive.toolPermissions.edit ? "workspace-write" : "read-only";
 
-export const buildCodexCliArgs = (request: AgentRequest): string[] => {
+export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentCommandContext): string[] => {
   const args = [
     "exec",
     "--cd",
@@ -15,7 +16,9 @@ export const buildCodexCliArgs = (request: AgentRequest): string[] => {
     "never",
     "--color",
     "never",
-    "--skip-git-repo-check"
+    "--skip-git-repo-check",
+    "--output-schema",
+    context.schemaPath
   ];
 
   if (request.assignment.model !== "default") {
