@@ -151,6 +151,22 @@ const verdictFromResponse = (response: AgentResponse): string | undefined => {
   return undefined;
 };
 
+const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
+  if (run.mode === "review" && run.roleMapping.critic) {
+    return "critic";
+  }
+
+  if (run.mode === "research" && run.roleMapping.researcher) {
+    return "researcher";
+  }
+
+  if (run.mode === "plan" && run.roleMapping.planner) {
+    return "planner";
+  }
+
+  return "orchestrator";
+};
+
 const advanceOneStep = async (
   run: RunRecord
 ): Promise<{ run: RunRecord; response?: AgentResponse; advanced: boolean; stopReason?: string }> => {
@@ -171,18 +187,19 @@ const advanceOneStep = async (
   }
 
   if (run.state === "created" && run.mode !== "implement") {
+    const role = readOnlyRoleForMode(run);
     const planned = await updateRun(
       run,
       { state: "planning" },
-      [createEvent("state_changed", "Run entered planning.")]
+      [createEvent("state_changed", `Run entered ${run.mode} execution with ${role}.`)]
     );
-    const result = await runAgent(planned, "orchestrator", {
-      phase: "plan"
+    const result = await runAgent(planned, role, {
+      phase: run.mode
     });
     const completed = await updateRun(
       result.run,
-      { state: "completed", stopReason: "Plan run completed by provider response." },
-      [createEvent("run_completed", "Plan run completed.")]
+      { state: "completed", stopReason: `${role} run completed by provider response.` },
+      [createEvent("run_completed", `${role} run completed.`)]
     );
 
     return {

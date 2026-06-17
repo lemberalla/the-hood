@@ -138,3 +138,9 @@ delegating
 ```
 
 ChatGPT Web and API model providers are not wired yet. Local Codex CLI and Claude Code adapters are available through the same directive and response-validation contract.
+
+Read-only runs can also execute a mapped guest role directly:
+
+- `plan` uses `planner` when assigned, otherwise `orchestrator`
+- `research` uses `researcher` when assigned, otherwise `orchestrator`
+- `review` uses `critic` when assigned, otherwise `orchestrator`

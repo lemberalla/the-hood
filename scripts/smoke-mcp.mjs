@@ -112,8 +112,80 @@ assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_plan"),
   "tools/list should expose thehood_plan"
 );
+assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_consult"),
+  "tools/list should expose thehood_consult"
+);
+assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_doctor"),
+  "tools/list should expose thehood_doctor"
+);
 assert.equal(happyPath[2].result.structuredContent.status, "created");
 assert.equal(happyPath[2].result.structuredContent.mode, "plan");
+
+const doctorPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_doctor",
+      arguments: {
+        repo_path: repoPath
+      }
+    }
+  }
+]);
+
+const doctorContent = doctorPath[1].result.structuredContent;
+const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
+assert.equal(stubProvider.implemented, true);
+assert.deepEqual(stubProvider.issues, []);
+
+const assignRolesPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_assign_roles",
+      arguments: {
+        repo_path: repoPath,
+        role_mapping: {
+          planner: "stub:planner",
+          researcher: "stub:researcher"
+        }
+      }
+    }
+  }
+]);
+
+assert.equal(assignRolesPath[1].result.structuredContent.roles.planner, "stub:planner");
+assert.equal(assignRolesPath[1].result.structuredContent.roles.researcher, "stub:researcher");
+
+const consultPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_consult",
+      arguments: {
+        goal: "ask a guest critic for mcp smoke",
+        repo_path: repoPath,
+        role: "critic",
+        agent: "stub:critic"
+      }
+    }
+  }
+]);
+
+assert.equal(consultPath[1].result.structuredContent.status, "completed");
+assert.equal(consultPath[1].result.structuredContent.consulted_role, "critic");
+assert.equal(consultPath[1].result.structuredContent.provider_response_count, 1);
 
 const invariantPath = await runMcp([
   ...baseMessages,

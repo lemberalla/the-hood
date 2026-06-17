@@ -48,7 +48,7 @@ const initializeResult = (): JsonObject => ({
   },
   serverInfo,
   instructions:
-    "TheHood exposes a local agent runtime. The runtime owns state, permissions, approvals, and run records."
+    "TheHood exposes a local agent runtime. The runtime owns state, permissions, approvals, and run records. Use thehood_doctor before invoking model-backed agents, thehood_consult to bring in a read-only guest agent such as Claude, thehood_orchestrate for implementation runs, and thehood_continue only when the user has approved the next runtime transition."
 });
 
 const listToolsResult = (): JsonObject => ({

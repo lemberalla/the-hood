@@ -61,6 +61,8 @@ Usage:
 
 Role override options for plan/run:
   --orchestrator provider:model
+  --planner provider:model
+  --researcher provider:model
   --implementer provider:model
   --verifier provider:model
   --critic provider:model
@@ -88,7 +90,7 @@ const parseMode = (value: string | undefined, fallback: RunMode): RunMode => {
 const parseRoleOverrides = (options: Record<string, CliOptionValue>): RoleMap => {
   const overrides: RoleMap = {};
 
-  for (const role of ["orchestrator", "implementer", "verifier", "critic"] as const) {
+  for (const role of ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"] as const) {
     const value = getStringOption(options, role);
     if (value) {
       overrides[role] = parseRoleAssignment(value);

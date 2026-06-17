@@ -36,7 +36,7 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   stub: {
     enabled: true,
-    models: ["orchestrator", "implementer", "verifier", "critic"]
+    models: ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"]
   },
   local: {
     enabled: false,

@@ -1,8 +1,11 @@
+import { loadConfig, writeConfig } from "../runtime/config.js";
+import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { abortRun, createRun, getRun, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
-import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunRecord } from "../runtime/types.js";
-import { parseRoleAssignment } from "../runtime/role-assignment.js";
+import { assertRoleInvariants } from "../runtime/permissions.js";
+import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
+import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { errorToolResult, toolResult, type ToolDefinition, type ToolResult } from "./protocol.js";
 import {
   asObject,
@@ -35,6 +38,40 @@ const runSummary = (run: RunRecord): JsonObject => ({
     summary: artifact.summary
   }))
 });
+
+const toJsonObject = (value: unknown): JsonObject =>
+  JSON.parse(JSON.stringify(value)) as JsonObject;
+
+const roleSummary = (roles: RoleMap): JsonObject =>
+  Object.fromEntries(
+    Object.entries(roles)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
+  );
+
+const consultRoles = new Set(["orchestrator", "planner", "researcher", "critic"]);
+
+const parseConsultRole = (value: string): RuntimeRole => {
+  const role = parseRole(value);
+
+  if (!consultRoles.has(role)) {
+    throw new Error("role must be orchestrator, planner, researcher, or critic.");
+  }
+
+  return role;
+};
+
+const modeForConsultRole = (role: RuntimeRole): RunMode => {
+  if (role === "critic") {
+    return "review";
+  }
+
+  if (role === "researcher") {
+    return "research";
+  }
+
+  return "plan";
+};
 
 const roleOverrideFromOrchestrator = (orchestrator: string | undefined): RoleMap => {
   if (!orchestrator) {
@@ -153,6 +190,167 @@ const createOrchestrateTool = (): McpTool => ({
       return {
         ...runSummary(run),
         summary: "TheHood created the run and stopped at the current runtime boundary."
+      };
+    })
+});
+
+const createDoctorTool = (): McpTool => ({
+  definition: {
+    name: "thehood_doctor",
+    title: "Inspect TheHood Provider Health",
+    description: "Report provider and role readiness without invoking model calls.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const config = await loadConfig(requiredString(args, "repo_path"));
+      const health = await inspectRuntimeHealth(config);
+
+      return health as unknown as JsonObject;
+    })
+});
+
+const createRolesTool = (): McpTool => ({
+  definition: {
+    name: "thehood_roles",
+    title: "Inspect TheHood Roles",
+    description: "Inspect configured provider:model assignments for TheHood roles.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const repoPath = requiredString(args, "repo_path");
+      const config = await loadConfig(repoPath);
+      const health = await inspectRuntimeHealth(config);
+
+      return {
+        roles: roleSummary(config.roles),
+        health: toJsonObject(health)
+      };
+    })
+});
+
+const createAssignRolesTool = (): McpTool => ({
+  definition: {
+    name: "thehood_assign_roles",
+    title: "Assign TheHood Roles",
+    description: "Persist provider:model assignments for one or more TheHood roles in the repo config.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        role_mapping: {
+          type: "object",
+          additionalProperties: {
+            type: "string"
+          }
+        }
+      },
+      required: ["repo_path", "role_mapping"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const repoPath = requiredString(args, "repo_path");
+      const config = await loadConfig(repoPath);
+      const roleMapping = optionalRoleMapping(args);
+      const updated = {
+        ...config,
+        roles: {
+          ...config.roles,
+          ...roleMapping
+        }
+      };
+
+      assertRoleInvariants(updated.roles);
+      await writeConfig(repoPath, updated);
+
+      return {
+        roles: roleSummary(updated.roles),
+        health: toJsonObject(await inspectRuntimeHealth(updated))
+      };
+    })
+});
+
+const createConsultTool = (): McpTool => ({
+  definition: {
+    name: "thehood_consult",
+    title: "Consult TheHood Guest Agent",
+    description: "Run a single read-only role immediately, useful for asking Claude or another agent to plan, research, or critique from Codex chat.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        goal: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        role: {
+          type: "string",
+          enum: ["orchestrator", "planner", "researcher", "critic"]
+        },
+        agent: {
+          type: "string",
+          description: "provider:model assignment, for example claude-code:opus or stub:critic."
+        },
+        constraints: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        }
+      },
+      required: ["goal", "repo_path", "role", "agent"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const role = parseConsultRole(requiredString(args, "role"));
+      const assignment = parseRoleAssignment(requiredString(args, "agent"));
+      const run = await createRun({
+        repoPath: requiredString(args, "repo_path"),
+        goal: requiredString(args, "goal"),
+        mode: modeForConsultRole(role),
+        roleOverrides: {
+          [role]: assignment
+        },
+        constraints: optionalStringList(args, "constraints")
+      });
+      const advanced = await advanceRun({
+        repoPath: run.repoPath,
+        runId: run.runId
+      });
+
+      return {
+        ...runSummary(advanced.run),
+        consulted_role: role,
+        consulted_agent: formatRoleAssignment(assignment),
+        advanced: advanced.advanced,
+        stop_reason: advanced.stopReason,
+        provider_response_count: advanced.providerResponses.length
       };
     })
 });
@@ -323,8 +521,12 @@ const createAbortTool = (): McpTool => ({
 });
 
 export const mcpTools: McpTool[] = [
+  createDoctorTool(),
+  createRolesTool(),
+  createAssignRolesTool(),
   createPlanTool(),
   createOrchestrateTool(),
+  createConsultTool(),
   createContinueTool(),
   createStatusTool(),
   createCaptureEvidenceTool(),

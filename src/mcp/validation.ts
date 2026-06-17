@@ -1,5 +1,5 @@
 import { InputError } from "../runtime/errors.js";
-import { parseRoleAssignment } from "../runtime/role-assignment.js";
+import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { runModes, type JsonObject, type JsonValue, type RoleMap, type RunMode } from "../runtime/types.js";
 
 export const asObject = (value: JsonValue | undefined, name: string): JsonObject => {
@@ -79,15 +79,11 @@ export const optionalRoleMapping = (source: JsonObject): RoleMap => {
   }
 
   for (const [role, value] of Object.entries(raw)) {
-    if (!["orchestrator", "implementer", "verifier", "critic"].includes(role)) {
-      throw new InputError(`Unsupported role_mapping key "${role}".`);
-    }
-
     if (typeof value !== "string") {
       throw new InputError(`role_mapping.${role} must use provider:model string format.`);
     }
 
-    roles[role as keyof RoleMap] = parseRoleAssignment(value);
+    roles[parseRole(role)] = parseRoleAssignment(value);
   }
 
   return roles;

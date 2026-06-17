@@ -10,8 +10,8 @@ const orchestratorResponse = (request: AgentRequest): AgentResponse =>
   response("Stub orchestrator created a deterministic delegation plan.", {
     decision: {
       action: request.run.mode === "implement" ? "delegate" : "complete",
+      reason: "Stub provider is exercising the loop without external model calls.",
       nextRole: request.run.mode === "implement" ? "implementer" : null,
-      reason: "Stub provider is exercising the loop without external model calls."
     },
     plan: [
       "Capture baseline evidence.",
@@ -24,6 +24,18 @@ const orchestratorResponse = (request: AgentRequest): AgentResponse =>
       "Verifier remains separate from implementer.",
       "Evidence artifacts are available for inspection."
     ]
+  });
+
+const researcherResponse = (): AgentResponse =>
+  response("Stub researcher returned deterministic findings.", {
+    researchResult: {
+      summary: "Stub research completed without external calls.",
+      findings: [
+        "Runtime can dispatch a read-only research role.",
+        "Research output is schema-bound before state advances."
+      ],
+      openQuestions: []
+    }
   });
 
 const implementerResponse = (): AgentResponse =>
@@ -60,6 +72,8 @@ export const stubProvider: ProviderAdapter = {
       case "orchestrator":
       case "planner":
         return orchestratorResponse(request);
+      case "researcher":
+        return researcherResponse();
       case "implementer":
         return implementerResponse();
       case "verifier":

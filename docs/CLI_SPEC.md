@@ -47,6 +47,8 @@ Role mapping can be set globally, per repo, or per run.
 thehood run "Add export flow" \
   --repo . \
   --orchestrator chatgpt-web:chatgpt-pro \
+  --planner claude-code:opus \
+  --researcher claude-code:sonnet \
   --implementer codex-cli:gpt-5.5-low \
   --verifier anthropic-api:claude-opus \
   --critic anthropic-api:claude-sonnet
@@ -116,7 +118,7 @@ Initial config shape:
     },
     "stub": {
       "enabled": true,
-      "models": ["orchestrator", "implementer", "verifier", "critic"]
+      "models": ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"]
     }
   },
   "roles": {

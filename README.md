@@ -22,6 +22,7 @@ It supports:
 - JSON config under `.thehood/config.json`
 - provider and role inspection
 - provider and role health inspection
+- Codex-facing MCP tools for role assignment and guest-agent consultation
 - role mapping updates
 - run creation for `plan` and `implement`
 - approval, rejection, abort, status, and log inspection

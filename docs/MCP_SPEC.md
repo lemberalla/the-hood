@@ -30,12 +30,60 @@ args = ["mcp"]
 
 Implemented tools:
 
+- `thehood_doctor`
+- `thehood_roles`
+- `thehood_assign_roles`
 - `thehood_plan`
 - `thehood_orchestrate`
+- `thehood_consult`
 - `thehood_continue`
 - `thehood_status`
 - `thehood_capture_evidence`
 - `thehood_abort`
+
+### `thehood_doctor`
+
+Inspect provider and role readiness without invoking model calls.
+
+Input:
+
+```json
+{
+  "repo_path": "string"
+}
+```
+
+### `thehood_roles`
+
+Inspect configured role assignments and health.
+
+Input:
+
+```json
+{
+  "repo_path": "string"
+}
+```
+
+### `thehood_assign_roles`
+
+Persist provider:model assignments for one or more roles.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "role_mapping": {
+    "orchestrator": "provider:model",
+    "planner": "provider:model",
+    "researcher": "provider:model",
+    "implementer": "provider:model",
+    "verifier": "provider:model",
+    "critic": "provider:model"
+  }
+}
+```
 
 ### `thehood_plan`
 
@@ -76,6 +124,8 @@ Input:
   "mode": "plan | research | implement | review",
   "role_mapping": {
     "orchestrator": "provider:model",
+    "planner": "provider:model",
+    "researcher": "provider:model",
     "implementer": "provider:model",
     "verifier": "provider:model",
     "critic": "provider:model"
@@ -83,6 +133,35 @@ Input:
   "constraints": ["string"]
 }
 ```
+
+### `thehood_consult`
+
+Run one read-only guest role immediately. This is the fast path for Codex chat to bring in Claude or another agent for planning, research, or critique.
+
+Input:
+
+```json
+{
+  "goal": "string",
+  "repo_path": "string",
+  "role": "orchestrator | planner | researcher | critic",
+  "agent": "provider:model",
+  "constraints": ["string"]
+}
+```
+
+Example:
+
+```json
+{
+  "goal": "Critique the current approach before implementation.",
+  "repo_path": "/path/to/repo",
+  "role": "critic",
+  "agent": "claude-code:opus"
+}
+```
+
+Output includes the created run id, final state, consulted role, consulted agent, stop reason, provider response count, and artifacts.
 
 Output:
 
@@ -154,3 +233,13 @@ Input:
 - Tool outputs include approval state.
 - MCP tools do not bypass CLI/runtime policies.
 - MCP tools never expose secrets.
+
+## Codex Chat Flow
+
+Recommended flow inside a Codex chat:
+
+1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
+2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Claude as critic or verifier.
+3. Call `thehood_consult` to bring in a guest read-only agent immediately.
+4. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
+5. Call `thehood_continue` with approval only after the user authorizes the next runtime transition.
