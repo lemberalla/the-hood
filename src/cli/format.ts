@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
+import type { McpConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
@@ -116,4 +117,12 @@ export const formatAdvanceRunResult = (result: AdvanceRunResult): string => [
   `advanced: ${result.advanced}`,
   `stopReason: ${result.stopReason}`,
   `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatMcpConfigReport = (report: McpConfigReport): string => [
+  "installed package:",
+  report.installedToml,
+  "",
+  "local build:",
+  report.localToml
 ].join("\n");

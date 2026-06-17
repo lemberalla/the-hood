@@ -26,6 +26,8 @@ command = "thehood"
 args = ["mcp"]
 ```
 
+Run `thehood mcp config` or `node dist/cli/main.js mcp config` to print installed-package and local-build snippets.
+
 ## Tools
 
 Implemented tools:

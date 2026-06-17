@@ -41,6 +41,12 @@ const runCli = async (args, options = {}) => {
 };
 
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
+const mcpConfig = await runCli(["mcp", "config", "--json"]);
+const mcpConfigResult = JSON.parse(mcpConfig.stdout);
+assert.equal(mcpConfigResult.installed.command, "thehood");
+assert.deepEqual(mcpConfigResult.installed.args, ["mcp"]);
+assert.equal(mcpConfigResult.local.command, process.execPath);
+assert.equal(mcpConfigResult.local.args.at(-1), "mcp");
 await runCli(["init", "--repo", repoPath]);
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);

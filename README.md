@@ -85,6 +85,7 @@ Agents
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Codex Setup](docs/CODEX_SETUP.md)
 - [Runtime Loop](docs/RUNTIME_LOOP.md)
 - [Role Contracts](docs/ROLE_CONTRACTS.md)
 - [Prompt Schemas](docs/PROMPT_SCHEMAS.md)

@@ -28,6 +28,7 @@ thehood reject <run-id>
 thehood continue <run-id>
 thehood abort <run-id>
 thehood mcp
+thehood mcp config
 ```
 
 ## Run Modes

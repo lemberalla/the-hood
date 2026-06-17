@@ -23,12 +23,14 @@ import {
   parseArgs,
   type CliOptionValue
 } from "./args.js";
+import { getMcpConfigReport } from "./mcpConfig.js";
 import {
   formatConfig,
   formatAdvanceRunResult,
   formatCommandResult,
   formatDoctorReport,
   formatGitEvidence,
+  formatMcpConfigReport,
   formatProviders,
   formatRoles,
   formatRunEvents,
@@ -58,6 +60,7 @@ Usage:
   thehood continue <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood mcp
+  thehood mcp config [--json]
 
 Role override options for plan/run:
   --orchestrator provider:model
@@ -287,7 +290,20 @@ const handleAbort = async (
   shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
 };
 
-const handleMcp = async (): Promise<void> => {
+const handleMcp = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  if (args[0] === "config") {
+    const report = getMcpConfigReport(process.argv[1]);
+    shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatMcpConfigReport(report)}\n`);
+    return;
+  }
+
+  if (args.length > 0) {
+    throw new InputError(`Unknown mcp subcommand "${args[0]}".`);
+  }
+
   await startMcpServer();
 };
 
@@ -344,7 +360,7 @@ const runCli = async (argv: string[]): Promise<void> => {
       await handleAbort(args, parsed.options);
       return;
     case "mcp":
-      await handleMcp();
+      await handleMcp(args, parsed.options);
       return;
     default:
       throw new InputError(`Unknown command "${command}". Run "thehood help".`);
