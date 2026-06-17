@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
@@ -107,5 +108,62 @@ assert.ok(verifierDirectiveArtifact, "verifier directive artifact should be capt
 const verifierDirective = JSON.parse(await fs.readFile(verifierDirectiveArtifact.ref, "utf8"));
 assert.equal(verifierDirective.toolPermissions.edit, false);
 assert.equal(verifierDirective.outputContract.requiredDataKey, "verificationResult");
+
+const { createFallbackAgentResponse, parseLocalAgentOutput } = await import(
+  pathToFileURL(path.join(root, "dist", "providers", "localCommand.js")).href
+);
+const { buildCodexCliArgs } = await import(pathToFileURL(path.join(root, "dist", "providers", "codexCli.js")).href);
+const { buildClaudeCodeArgs } = await import(
+  pathToFileURL(path.join(root, "dist", "providers", "claudeCode.js")).href
+);
+const fakeVerifierRequest = {
+  role: "verifier",
+  assignment: {
+    provider: "codex-cli",
+    model: "default"
+  },
+  run: {
+    repoPath: loopRepoPath
+  },
+  directive: {
+    toolPermissions: {
+      read: true,
+      edit: false,
+      shell: true,
+      network: false
+    },
+    outputContract: {
+      schemaVersion: 1,
+      name: "verification_result",
+      requiredDataKey: "verificationResult"
+    }
+  }
+};
+const parsedProviderOutput = parseLocalAgentOutput(
+  JSON.stringify({
+    status: "ok",
+    summary: "verified",
+    data: {
+      verificationResult: {
+        verdict: "approve",
+        summary: "ok"
+      }
+    }
+  })
+);
+assert.ok(parsedProviderOutput, "local provider JSON output should parse");
+assert.equal(parsedProviderOutput.data.verificationResult.verdict, "approve");
+const fallbackProviderOutput = createFallbackAgentResponse(fakeVerifierRequest, {
+  status: "blocked",
+  summary: "not-json"
+});
+assert.equal(fallbackProviderOutput.data.verificationResult.verdict, "ask_user");
+const codexArgs = buildCodexCliArgs(fakeVerifierRequest);
+assert.deepEqual(codexArgs.slice(0, 5), ["exec", "--cd", loopRepoPath, "--sandbox", "read-only"]);
+assert.equal(codexArgs.at(-1), "-");
+const claudeArgs = buildClaudeCodeArgs(fakeVerifierRequest);
+assert.ok(claudeArgs.includes("--print"));
+assert.ok(claudeArgs.includes("Read,Glob,Grep,Bash"));
+assert.equal(claudeArgs.includes("-"), false);
 
 process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

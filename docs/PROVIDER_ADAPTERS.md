@@ -46,6 +46,19 @@ agent_request:
 
 The runtime writes each directive as a `directive` artifact before provider execution. It validates each provider response against the role output contract before advancing the run state.
 
+## Local Command Runner
+
+The local command runner is shared by CLI-backed adapters.
+
+Rules:
+
+- It invokes commands without a shell.
+- It passes the runtime directive as stdin or prompt input.
+- It asks the provider to return the normalized `AgentResponse` JSON envelope.
+- It redacts obvious secrets from captured process output before parsing.
+- It fails closed with a schema-compatible blocked or failed response when output is unstructured.
+- It does not use dangerous bypass flags.
+
 ## Stub Adapter
 
 Purpose:
@@ -149,6 +162,9 @@ Rules:
 - Scope tasks tightly.
 - Capture diffs and logs.
 - Do not let Codex self-verify its own changes.
+- Run through `codex exec` with TheHood's role directive.
+- Use `read-only` sandbox for non-editing roles and `workspace-write` for editing roles.
+- Do not pass dangerous sandbox bypass flags.
 
 ## Claude Code Adapter
 
@@ -166,6 +182,9 @@ Rules:
 
 - Same separation rules as any other implementer.
 - If Claude Code edits, another agent verifies.
+- Run through `claude --print` with TheHood's role directive.
+- Use plan/read tools for non-editing roles.
+- Do not pass permission bypass flags.
 
 ## Local Model Adapter
 

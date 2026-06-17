@@ -137,4 +137,4 @@ delegating
   -> completed or awaiting_approval
 ```
 
-Real model providers are not wired yet.
+ChatGPT Web and API model providers are not wired yet. Local Codex CLI and Claude Code adapters are available through the same directive and response-validation contract.

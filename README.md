@@ -31,8 +31,9 @@ It supports:
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances
+- guarded local CLI adapters for Codex CLI and Claude Code
 
-Provider adapters are contract-first placeholders. They are not wired to external models yet.
+ChatGPT Web and API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.
 
 ## Quick Start
 
