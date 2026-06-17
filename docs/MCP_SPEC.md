@@ -40,6 +40,7 @@ Implemented tools:
 - `thehood_consult`
 - `thehood_continue`
 - `thehood_status`
+- `thehood_runs`
 - `thehood_read_artifact`
 - `thehood_capture_evidence`
 - `thehood_abort`
@@ -213,6 +214,19 @@ Input:
 ```json
 {
   "run_id": "string"
+}
+```
+
+### `thehood_runs`
+
+List recent runs for a repository.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "limit": 20
 }
 ```
 

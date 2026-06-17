@@ -272,6 +272,29 @@ assert.equal(
   "acceptable"
 );
 
+const runsPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_runs",
+      arguments: {
+        repo_path: repoPath,
+        limit: 10
+      }
+    }
+  }
+]);
+
+assert.ok(
+  runsPath[1].result.structuredContent.runs.some(
+    (run) => run.run_id === fakeClaudeConsultPath[1].result.structuredContent.run_id
+  ),
+  "runs should include the fake Claude consult run"
+);
+
 const invariantPath = await runMcp([
   ...baseMessages,
   {

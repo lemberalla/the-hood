@@ -1,6 +1,6 @@
 import { loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
-import { abortRun, createRun, getRun, recordApproval } from "../runtime/runtime.js";
+import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
@@ -506,6 +506,39 @@ const createStatusTool = (): McpTool => ({
     })
 });
 
+const createRunsTool = (): McpTool => ({
+  definition: {
+    name: "thehood_runs",
+    title: "List TheHood Runs",
+    description: "List recent TheHood runs for a repository.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        limit: {
+          type: "number"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const limitValue = args.limit;
+      const limit = typeof limitValue === "number" && Number.isFinite(limitValue)
+        ? Math.max(1, Math.floor(limitValue))
+        : 20;
+      const runs = await listRuns(requiredString(args, "repo_path"));
+
+      return {
+        runs: runs.slice(0, Math.min(limit, 100)).map(runSummary)
+      };
+    })
+});
+
 const createCaptureEvidenceTool = (): McpTool => ({
   definition: {
     name: "thehood_capture_evidence",
@@ -591,6 +624,7 @@ export const mcpTools: McpTool[] = [
   createConsultTool(),
   createContinueTool(),
   createStatusTool(),
+  createRunsTool(),
   createReadArtifactTool(),
   createCaptureEvidenceTool(),
   createAbortTool()
