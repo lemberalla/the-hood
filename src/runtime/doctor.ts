@@ -30,9 +30,13 @@ export interface RuntimeHealthReport {
   roles: RoleHealth[];
 }
 
-const implementedProviderIds = new Set(["stub", "codex-cli", "claude-code"]);
+const implementedProviderIds = new Set(["stub", "chatgpt-web", "codex-cli", "claude-code"]);
 
 const commandForProvider = (providerId: string): string | undefined => {
+  if (providerId === "chatgpt-web") {
+    return process.env.THEHOOD_CHATGPT_WEB_COMMAND;
+  }
+
   if (providerId === "codex-cli") {
     return process.env.THEHOOD_CODEX_COMMAND ?? "codex";
   }
@@ -91,9 +95,18 @@ const modelConfigured = (provider: ProviderDescriptor | undefined, assignment: R
   return provider.models.includes(assignment.model) || provider.models.includes("configured");
 };
 
-const providerIssues = (provider: ProviderDescriptor, implemented: boolean, commandFound?: boolean): string[] => [
+const bridgeIssues = (providerId: string, command?: string): string[] =>
+  providerId === "chatgpt-web" && !command ? ["bridge_command_not_configured"] : [];
+
+const providerIssues = (
+  provider: ProviderDescriptor,
+  implemented: boolean,
+  command?: string,
+  commandFound?: boolean
+): string[] => [
   ...(provider.enabled ? [] : ["provider_disabled"]),
   ...(implemented ? [] : ["provider_not_implemented"]),
+  ...bridgeIssues(provider.id, command),
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
 
@@ -102,11 +115,13 @@ const roleIssues = (
   assignment: RoleAssignment,
   provider: ProviderDescriptor | undefined,
   implemented: boolean,
+  command?: string,
   commandFound?: boolean
 ): string[] => [
   ...(provider ? [] : [`provider_not_configured:${assignment.provider}`]),
   ...(provider?.enabled === false ? ["provider_disabled"] : []),
   ...(implemented ? [] : ["provider_not_implemented"]),
+  ...bridgeIssues(assignment.provider, command),
   ...(provider && !modelConfigured(provider, assignment) ? [`model_not_configured:${assignment.model}`] : []),
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
@@ -134,7 +149,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       models: provider.models,
       ...(command ? { command } : {}),
       ...(commandFound === undefined ? {} : { commandFound }),
-      issues: providerIssues(provider, implemented, commandFound)
+      issues: providerIssues(provider, implemented, command, commandFound)
     };
   });
 
@@ -144,6 +159,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
     .map(([role, assignment]): RoleHealth => {
       const provider = providerById.get(assignment.provider);
       const implemented = implementedProviderIds.has(assignment.provider);
+      const command = commandForProvider(assignment.provider);
       const commandFound = commandChecks.get(assignment.provider);
 
       return {
@@ -153,7 +169,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
         providerImplemented: implemented,
         modelConfigured: modelConfigured(provider, assignment),
         ...(commandFound === undefined ? {} : { commandFound }),
-        issues: roleIssues(role as RuntimeRole, assignment, provider, implemented, commandFound)
+        issues: roleIssues(role as RuntimeRole, assignment, provider, implemented, command, commandFound)
       };
     });
 

@@ -54,7 +54,13 @@ const stubHealth = doctorResult.providers.find((provider) => provider.id === "st
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
-assert.ok(defaultOrchestratorHealth.issues.includes("provider_not_implemented"));
+assert.equal(defaultOrchestratorHealth.providerImplemented, true);
+assert.ok(defaultOrchestratorHealth.issues.includes("bridge_command_not_configured"));
+const blockedChatGptPlan = JSON.parse((await runCli(["plan", "block missing ChatGPT bridge", "--repo", repoPath, "--json"])).stdout);
+const blockedChatGptContinue = JSON.parse((await runCli(["continue", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout);
+assert.equal(blockedChatGptContinue.run.state, "awaiting_approval");
+assert.equal(blockedChatGptContinue.providerResponses[0].status, "blocked");
+assert.ok(blockedChatGptContinue.run.approvalReason.includes("ChatGPT Web bridge command is not configured"));
 await runCli(["exec", "missing-run", "--repo", repoPath, "--", "git", "init"], { expectExitCode: 1 });
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);

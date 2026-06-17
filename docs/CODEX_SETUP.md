@@ -50,6 +50,25 @@ Example guest critic:
 }
 ```
 
+Example ChatGPT Pro orchestrator consult:
+
+```json
+{
+  "goal": "Plan the safest implementation path before workers start.",
+  "repo_path": "/path/to/repo",
+  "role": "orchestrator",
+  "agent": "chatgpt-web:chatgpt-pro"
+}
+```
+
+`chatgpt-web` requires a local bridge executable:
+
+```bash
+export THEHOOD_CHATGPT_WEB_COMMAND=/path/to/chatgpt-web-bridge
+```
+
+The bridge receives the TheHood prompt on stdin, gets `--model <model>` and `--schema <schema-path>` arguments, uses the user's authenticated ChatGPT session, and prints the normalized `AgentResponse` JSON envelope to stdout. TheHood intentionally does not read ChatGPT cookies, browser local storage, or tokens.
+
 Example persistent role assignment:
 
 ```json

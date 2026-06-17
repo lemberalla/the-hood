@@ -34,9 +34,10 @@ It supports:
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances
 - guarded local CLI adapters for Codex CLI and Claude Code
+- bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 
-ChatGPT Web and API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.
+ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.
 
 ## Quick Start
 

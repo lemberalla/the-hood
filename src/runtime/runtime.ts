@@ -11,7 +11,8 @@ import type {
   RunEvent,
   RunMode,
   RunRecord,
-  RunState
+  RunState,
+  RuntimeRole
 } from "./types.js";
 
 export interface CreateRunInput {
@@ -19,6 +20,7 @@ export interface CreateRunInput {
   goal: string;
   mode: RunMode;
   roleOverrides?: RoleMap;
+  preferredRole?: RuntimeRole;
   constraints?: string[];
 }
 
@@ -76,6 +78,7 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     userGoal: goal,
     mode: input.mode,
     state: initial.state,
+    ...(input.preferredRole ? { preferredRole: input.preferredRole } : {}),
     roleMapping,
     constraints: input.constraints ?? [],
     maxIterations: config.defaults.maxIterations,

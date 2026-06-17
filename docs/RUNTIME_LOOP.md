@@ -140,7 +140,7 @@ delegating
   -> completed or awaiting_approval
 ```
 
-ChatGPT Web and API model providers are not wired yet. Local Codex CLI and Claude Code adapters are available through the same directive and response-validation contract.
+ChatGPT Web is wired through a user-configured bridge command. API model providers are not wired yet. Local Codex CLI and Claude Code adapters are available through the same directive and response-validation contract.
 
 Read-only runs can also execute a mapped guest role directly:
 

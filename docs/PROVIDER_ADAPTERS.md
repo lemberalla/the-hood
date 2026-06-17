@@ -89,6 +89,16 @@ Purpose:
 - Use the user's authenticated ChatGPT session for models only exposed in ChatGPT.
 - Support ChatGPT Pro as an orchestrator or planner.
 
+Current implementation:
+
+- Provider id: `chatgpt-web`
+- Default model: `chatgpt-pro`
+- Requires `THEHOOD_CHATGPT_WEB_COMMAND`
+- Sends the runtime directive as stdin.
+- Passes `--model <model>` and `--schema <schema-path>` to the bridge command.
+- Expects stdout to contain the normalized `AgentResponse` JSON envelope.
+- Returns `blocked` when no bridge command is configured.
+
 Rules:
 
 - Use the user's existing subscription and browser session.
@@ -97,6 +107,7 @@ Rules:
 - Do not rely on hidden chain-of-thought.
 - Prefer structured visible outputs.
 - Fail closed when the requested model cannot be confirmed.
+- The bridge must not log cookies, local storage, tokens, or private browser profile data.
 
 Best roles:
 

@@ -273,6 +273,59 @@ assert.equal(
   "acceptable"
 );
 
+const fakeChatGptPath = path.join(repoPath, "fake-chatgpt-web.mjs");
+await fs.writeFile(
+  fakeChatGptPath,
+  [
+    "#!/usr/bin/env node",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', () => {",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: input.includes('Runtime directive') ? 'fake chatgpt saw directive' : 'fake chatgpt missing directive',",
+    "    data: {",
+    "      decision: {",
+    "        action: 'complete',",
+    "        reason: 'fake ChatGPT Web bridge path exercised'",
+    "      }",
+    "    }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeChatGptPath, 0o755);
+process.env.THEHOOD_CHATGPT_WEB_COMMAND = fakeChatGptPath;
+
+const fakeChatGptConsultPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_consult",
+      arguments: {
+        goal: "ask fake ChatGPT Pro through web bridge",
+        repo_path: repoPath,
+        role: "orchestrator",
+        agent: "chatgpt-web:chatgpt-pro"
+      }
+    }
+  }
+]);
+
+assert.equal(fakeChatGptConsultPath[1].result.structuredContent.status, "completed");
+assert.equal(fakeChatGptConsultPath[1].result.structuredContent.consulted_agent, "chatgpt-web:chatgpt-pro");
+assert.equal(fakeChatGptConsultPath[1].result.structuredContent.provider_responses[0].summary, "fake chatgpt saw directive");
+assert.equal(
+  fakeChatGptConsultPath[1].result.structuredContent.provider_responses[0].data.decision.action,
+  "complete"
+);
+
 const runsPath = await runMcp([
   ...baseMessages,
   {

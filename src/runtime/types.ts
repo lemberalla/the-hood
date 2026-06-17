@@ -119,6 +119,7 @@ export interface RunRecord {
   userGoal: string;
   mode: RunMode;
   state: RunState;
+  preferredRole?: RuntimeRole;
   roleMapping: RoleMap;
   constraints: string[];
   maxIterations: number;

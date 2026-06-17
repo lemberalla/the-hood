@@ -165,6 +165,19 @@ Example:
 }
 ```
 
+ChatGPT Pro example:
+
+```json
+{
+  "goal": "Plan the implementation and delegate safely.",
+  "repo_path": "/path/to/repo",
+  "role": "orchestrator",
+  "agent": "chatgpt-web:chatgpt-pro"
+}
+```
+
+`chatgpt-web` requires `THEHOOD_CHATGPT_WEB_COMMAND`; without it the run returns `blocked`.
+
 Output includes the created run id, final state, consulted role, consulted agent, stop reason, provider response count, normalized provider responses, and artifacts.
 
 Output:

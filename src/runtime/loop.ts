@@ -196,6 +196,10 @@ const stopForProviderStatus = async (
 };
 
 const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
+  if (run.preferredRole && run.roleMapping[run.preferredRole]) {
+    return run.preferredRole;
+  }
+
   if (run.mode === "review" && run.roleMapping.critic) {
     return "critic";
   }

@@ -19,6 +19,7 @@ export { loadRun, saveRun } from "./runtime/store.js";
 export * from "./runtime/types.js";
 export * from "./cli/mcpConfig.js";
 export * from "./mcp/server.js";
+export * from "./providers/chatgptWeb.js";
 export * from "./providers/claudeCode.js";
 export * from "./providers/codexCli.js";
 export * from "./providers/localCommand.js";

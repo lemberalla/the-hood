@@ -36,6 +36,7 @@ const runSummary = (run: RunRecord): JsonObject => ({
   run_id: run.runId,
   status: run.state,
   mode: run.mode,
+  preferred_role: run.preferredRole ?? null,
   repo_path: run.repoPath,
   goal: run.userGoal,
   roles: roleSummary(run.roleMapping),
@@ -344,6 +345,7 @@ const createConsultTool = (): McpTool => ({
         repoPath: requiredString(args, "repo_path"),
         goal: requiredString(args, "goal"),
         mode: modeForConsultRole(role),
+        preferredRole: role,
         roleOverrides: {
           [role]: assignment
         },
