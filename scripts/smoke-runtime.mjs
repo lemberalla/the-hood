@@ -188,4 +188,30 @@ assert.equal(claudeArgs.includes("--json-schema"), true);
 assert.ok(claudeArgs.includes("Read,Glob,Grep,Bash"));
 assert.equal(claudeArgs.includes("-"), false);
 
+const blockedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-blocked-edit-smoke-"));
+await runCli(["init", "--repo", blockedRepoPath]);
+const blockedRunOutput = await runCli([
+  "run",
+  "block direct local edits",
+  "--repo",
+  blockedRepoPath,
+  "--orchestrator",
+  "stub:orchestrator",
+  "--implementer",
+  "claude-code:default",
+  "--verifier",
+  "stub:verifier",
+  "--critic",
+  "stub:critic",
+  "--json"
+]);
+const blockedRun = JSON.parse(blockedRunOutput.stdout);
+await runCli(["approve", blockedRun.runId, "--repo", blockedRepoPath, "--reason", "smoke-approved"]);
+const blockedContinue = await runCli(["continue", blockedRun.runId, "--repo", blockedRepoPath, "--json"]);
+const blockedResult = JSON.parse(blockedContinue.stdout);
+assert.equal(blockedResult.run.state, "awaiting_approval");
+assert.equal(blockedResult.run.approvalRequired, true);
+assert.ok(blockedResult.run.approvalReason.includes("Direct edit-capable local agent execution is blocked"));
+assert.equal(blockedResult.providerResponses.at(-1).status, "blocked");
+
 process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

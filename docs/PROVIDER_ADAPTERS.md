@@ -59,6 +59,7 @@ Rules:
 - It redacts obvious secrets from captured process output before parsing.
 - It fails closed with a schema-compatible blocked or failed response when output is unstructured.
 - It does not use dangerous bypass flags.
+- It blocks edit-capable local agent execution unless `THEHOOD_ALLOW_DIRECT_EDIT=1` is explicitly set.
 
 ## Stub Adapter
 
@@ -164,7 +165,7 @@ Rules:
 - Capture diffs and logs.
 - Do not let Codex self-verify its own changes.
 - Run through `codex exec` with TheHood's role directive.
-- Use `read-only` sandbox for non-editing roles and `workspace-write` for editing roles.
+- Use `read-only` sandbox for non-editing roles.
 - Pass the generated schema through `--output-schema`.
 - Do not pass dangerous sandbox bypass flags.
 

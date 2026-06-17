@@ -32,6 +32,8 @@ export interface FallbackResponseInput {
 
 const defaultTimeoutMs = 10 * 60 * 1000;
 
+const directEditAllowed = (): boolean => process.env.THEHOOD_ALLOW_DIRECT_EDIT === "1";
+
 const writeSchemaFile = async (providerId: string, schema: JsonObject): Promise<{ dir: string; path: string }> => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), `thehood-${providerId}-schema-`));
   const schemaPath = path.join(dir, "agent-response.schema.json");
@@ -230,6 +232,14 @@ export const runLocalAgentCommand = async (
   request: AgentRequest,
   spec: LocalAgentCommandSpec
 ): Promise<AgentResponse> => {
+  if (request.directive.toolPermissions.edit && !directEditAllowed()) {
+    return createFallbackAgentResponse(request, {
+      status: "blocked",
+      summary:
+        "Direct edit-capable local agent execution is blocked until isolated workspaces and patch integration are enabled."
+    });
+  }
+
   const prompt = buildAgentPrompt(request);
   const timeoutMs = spec.timeoutMs ?? defaultTimeoutMs;
   const schema = buildAgentResponseSchema(request);

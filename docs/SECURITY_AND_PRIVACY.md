@@ -54,6 +54,7 @@ The runtime must:
 - isolate worker changes in worktrees when possible
 - enforce allowed and disallowed paths
 - block protected test changes unless approved
+- block direct edit-capable local agent execution until isolated workspaces and patch integration are enabled, unless explicitly overridden by `THEHOOD_ALLOW_DIRECT_EDIT=1`
 
 ## Command Safety
 
@@ -98,4 +99,3 @@ The public repo should not contain:
 - hardcoded local paths as defaults
 
 Fixtures should be synthetic.
-

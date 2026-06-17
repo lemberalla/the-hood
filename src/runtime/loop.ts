@@ -151,6 +151,50 @@ const verdictFromResponse = (response: AgentResponse): string | undefined => {
   return undefined;
 };
 
+const stopForProviderStatus = async (
+  run: RunRecord,
+  role: RuntimeRole,
+  response: AgentResponse
+): Promise<{ run: RunRecord; stopReason: string } | undefined> => {
+  if (response.status === "ok") {
+    return undefined;
+  }
+
+  const stopReason = `${role} returned ${response.status}: ${response.summary}`;
+
+  if (response.status === "blocked") {
+    const blocked = await updateRun(
+      run,
+      {
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason: stopReason
+      },
+      [createEvent("approval_required", stopReason)]
+    );
+
+    return {
+      run: blocked,
+      stopReason
+    };
+  }
+
+  const failed = await updateRun(
+    run,
+    {
+      state: "failed",
+      approvalRequired: false,
+      stopReason
+    },
+    [createEvent("run_failed", stopReason)]
+  );
+
+  return {
+    run: failed,
+    stopReason
+  };
+};
+
 const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
   if (run.mode === "review" && run.roleMapping.critic) {
     return "critic";
@@ -196,6 +240,17 @@ const advanceOneStep = async (
     const result = await runAgent(planned, role, {
       phase: run.mode
     });
+    const stopped = await stopForProviderStatus(result.run, role, result.response);
+
+    if (stopped) {
+      return {
+        run: stopped.run,
+        response: result.response,
+        advanced: true,
+        stopReason: stopped.stopReason
+      };
+    }
+
     const completed = await updateRun(
       result.run,
       { state: "completed", stopReason: `${role} run completed by provider response.` },
@@ -213,6 +268,17 @@ const advanceOneStep = async (
     const result = await runAgent(run, "orchestrator", {
       phase: "delegate"
     });
+    const stopped = await stopForProviderStatus(result.run, "orchestrator", result.response);
+
+    if (stopped) {
+      return {
+        run: stopped.run,
+        response: result.response,
+        advanced: true,
+        stopReason: stopped.stopReason
+      };
+    }
+
     const next = await updateRun(
       result.run,
       { state: "implementing" },
@@ -230,6 +296,17 @@ const advanceOneStep = async (
     const result = await runAgent(run, "implementer", {
       phase: "implement"
     });
+    const stopped = await stopForProviderStatus(result.run, "implementer", result.response);
+
+    if (stopped) {
+      return {
+        run: stopped.run,
+        response: result.response,
+        advanced: true,
+        stopReason: stopped.stopReason
+      };
+    }
+
     const next = await updateRun(
       result.run,
       { state: "verifying" },
@@ -250,6 +327,17 @@ const advanceOneStep = async (
       changedPathCount: evidence.changedPaths.length,
       protectedChangeCount: evidence.protectedChanges.length
     });
+    const stopped = await stopForProviderStatus(result.run, "verifier", result.response);
+
+    if (stopped) {
+      return {
+        run: stopped.run,
+        response: result.response,
+        advanced: true,
+        stopReason: stopped.stopReason
+      };
+    }
+
     const verdict = verdictFromResponse(result.response);
 
     if (verdict === "approve") {

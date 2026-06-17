@@ -65,6 +65,7 @@ The loop must stop when any of these are true:
 - command failure requires user action
 - protected file change requires explicit approval
 - model output fails schema validation repeatedly
+- provider response status is `blocked` or `failed`
 - user aborts the run
 
 ## Approval Gates
@@ -95,6 +96,8 @@ The runtime captures evidence directly:
 - protected path classification
 
 Models may summarize evidence, but summaries are not authoritative.
+
+Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 
 ## Failure Classes
 
