@@ -100,5 +100,12 @@ const loopContinue = await runCli(["continue", loopRun.runId, "--repo", loopRepo
 const loopResult = JSON.parse(loopContinue.stdout);
 assert.equal(loopResult.run.state, "completed");
 assert.equal(loopResult.providerResponses.length, 3);
+const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
+assert.equal(directiveArtifacts.length, 3);
+const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));
+assert.ok(verifierDirectiveArtifact, "verifier directive artifact should be captured");
+const verifierDirective = JSON.parse(await fs.readFile(verifierDirectiveArtifact.ref, "utf8"));
+assert.equal(verifierDirective.toolPermissions.edit, false);
+assert.equal(verifierDirective.outputContract.requiredDataKey, "verificationResult");
 
 process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

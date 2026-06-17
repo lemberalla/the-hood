@@ -30,6 +30,7 @@ It supports:
 - git status/diff evidence capture with protected test-path classification
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
+- schema-bound agent directives and response validation before runtime state advances
 
 Provider adapters are contract-first placeholders. They are not wired to external models yet.
 

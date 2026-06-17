@@ -2,7 +2,7 @@
 
 TheHood prompts should be schema-bound. The goal is to make model outputs actionable and auditable rather than conversational.
 
-This document defines the first prompt variables and output contracts. Implementation should turn these into typed schemas.
+This document defines the first prompt variables and output contracts. The current implementation builds executable directives in `src/runtime/directives.ts` and validates normalized provider responses in `src/runtime/responseContracts.ts`.
 
 ## Run Variables
 
@@ -220,4 +220,3 @@ critique_result:
     - string
   recommended_next_action: string
 ```
-

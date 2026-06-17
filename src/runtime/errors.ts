@@ -37,3 +37,9 @@ export class PermissionDeniedError extends TheHoodError {
   }
 }
 
+export class SchemaValidationError extends TheHoodError {
+  constructor(message: string) {
+    super(message, "schema_validation_failed", 7);
+    this.name = "SchemaValidationError";
+  }
+}

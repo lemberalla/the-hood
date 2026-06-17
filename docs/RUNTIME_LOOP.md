@@ -18,6 +18,8 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 11. Produce final report with evidence
 ```
 
+Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
+
 ## State Machine
 
 ```text
@@ -124,11 +126,14 @@ The current implementation can advance approved runs using the deterministic `st
 ```text
 delegating
   -> orchestrator response
+  -> orchestrator response schema validation
   -> implementing
   -> implementer response
+  -> implementer response schema validation
   -> verifying
   -> git evidence capture
   -> verifier response
+  -> verifier response schema validation
   -> completed or awaiting_approval
 ```
 

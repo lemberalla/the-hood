@@ -11,33 +11,40 @@ Each adapter should support:
 ```ts
 interface ProviderAdapter {
   id: string;
-  listModels(): Promise<ModelDescriptor[]>;
-  run(request: AgentRequest): Promise<AgentResponse>;
-  healthCheck(): Promise<ProviderHealth>;
+  runAgent(request: AgentRequest): Promise<AgentResponse>;
 }
 ```
 
-Conceptual request shape:
+Current request shape:
 
 ```yaml
 agent_request:
-  run_id: string
+  run: RunRecord
   role: orchestrator | planner | researcher | implementer | verifier | critic
-  model: string
-  instructions: string
-  input:
-    goal: string
-    context_refs:
+  assignment:
+    provider: string
+    model: string
+  context: object
+  directive:
+    objective: string
+    instructions:
       - string
-    artifacts:
-      - string
-  tool_permissions:
-    read: boolean
-    edit: boolean
-    shell: boolean
-    network: boolean
-  output_schema: string
+    tool_permissions:
+      read: boolean
+      edit: boolean
+      shell: boolean
+      network: boolean
+    output_contract:
+      schema_version: 1
+      name: string
+      required_data_key: string
+    variables:
+      run: object
+      role: object
+      context: object
 ```
+
+The runtime writes each directive as a `directive` artifact before provider execution. It validates each provider response against the role output contract before advancing the run state.
 
 ## Stub Adapter
 

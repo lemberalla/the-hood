@@ -1,7 +1,9 @@
 import { writeRunArtifact } from "./artifacts.js";
+import { buildAgentDirective } from "./directives.js";
 import { captureGitEvidence } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { getProviderAdapter } from "../providers/router.js";
+import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { JsonObject, RoleAssignment, RunEvent, RunRecord, RunState, RuntimeRole } from "./types.js";
@@ -69,26 +71,56 @@ const runAgent = async (
 ): Promise<{ run: RunRecord; response: AgentResponse }> => {
   const assignment = requiredAssignment(run, role);
   const adapter = getProviderAdapter(assignment);
-  const response = await adapter.runAgent({
-    run,
-    role,
-    assignment,
-    context
-  });
-  const artifact = await writeRunArtifact({
+  const callId = newId("response");
+  const directive = await buildAgentDirective(run, role, assignment, context);
+  const directiveArtifact = await writeRunArtifact({
     repoPath: run.repoPath,
     runId: run.runId,
+    kind: "directive",
+    name: `${role}-${callId}-directive.json`,
+    content: `${JSON.stringify(directive, null, 2)}\n`,
+    summary: `${role} directive for ${assignment.provider}:${assignment.model}`
+  });
+  const runWithDirective: RunRecord = {
+    ...run,
+    updatedAt: nowIso(),
+    artifacts: [...run.artifacts, directiveArtifact],
+    events: [
+      ...run.events,
+      createEvent("agent_directive_created", `${role} directive created.`, {
+        role,
+        provider: assignment.provider,
+        model: assignment.model,
+        outputContract: directive.outputContract.name
+      })
+    ]
+  };
+
+  await saveRun(runWithDirective);
+
+  const response = await adapter.runAgent({
+    run: runWithDirective,
+    role,
+    assignment,
+    context,
+    directive
+  });
+  validateAgentResponse(role, directive, response);
+
+  const artifact = await writeRunArtifact({
+    repoPath: runWithDirective.repoPath,
+    runId: runWithDirective.runId,
     kind: role === "orchestrator" || role === "planner" ? "plan" : "agent",
-    name: `${role}-${newId("response")}.json`,
+    name: `${role}-${callId}-response.json`,
     content: `${JSON.stringify(response, null, 2)}\n`,
     summary: `${role} response: ${response.summary}`
   });
   const updated: RunRecord = {
-    ...run,
+    ...runWithDirective,
     updatedAt: nowIso(),
-    artifacts: [...run.artifacts, artifact],
+    artifacts: [...runWithDirective.artifacts, artifact],
     events: [
-      ...run.events,
+      ...runWithDirective.events,
       createEvent("agent_response", `${role} responded: ${response.summary}`, {
         role,
         provider: assignment.provider,
