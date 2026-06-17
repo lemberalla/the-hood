@@ -42,6 +42,13 @@ const runCli = async (args, options = {}) => {
 
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
 await runCli(["init", "--repo", repoPath]);
+const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
+const doctorResult = JSON.parse(doctor.stdout);
+const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
+assert.equal(stubHealth.implemented, true);
+assert.deepEqual(stubHealth.issues, []);
+const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
+assert.ok(defaultOrchestratorHealth.issues.includes("provider_not_implemented"));
 await runCli(["exec", "missing-run", "--repo", repoPath, "--", "git", "init"], { expectExitCode: 1 });
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);

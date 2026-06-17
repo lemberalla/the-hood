@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
+import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
@@ -26,6 +27,7 @@ import {
   formatConfig,
   formatAdvanceRunResult,
   formatCommandResult,
+  formatDoctorReport,
   formatGitEvidence,
   formatProviders,
   formatRoles,
@@ -41,6 +43,7 @@ Usage:
   thehood init [--repo <path>]
   thehood config show [--repo <path>] [--json]
   thehood providers [--repo <path>] [--json]
+  thehood doctor [--repo <path>] [--json]
   thehood models [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
@@ -142,6 +145,12 @@ const handleProviders = async (options: Record<string, CliOptionValue>): Promise
   const config = await loadConfig(repoFromOptions(options));
   const providers = listProviders(config);
   shouldPrintJson(options) ? printJson(providers) : process.stdout.write(`${formatProviders(providers)}\n`);
+};
+
+const handleDoctor = async (options: Record<string, CliOptionValue>): Promise<void> => {
+  const config = await loadConfig(repoFromOptions(options));
+  const report = await inspectRuntimeHealth(config);
+  shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatDoctorReport(report)}\n`);
 };
 
 const handleRoles = async (
@@ -299,6 +308,9 @@ const runCli = async (argv: string[]): Promise<void> => {
     case "providers":
     case "models":
       await handleProviders(parsed.options);
+      return;
+    case "doctor":
+      await handleDoctor(parsed.options);
       return;
     case "roles":
       await handleRoles(args, parsed.options);

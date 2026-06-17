@@ -12,6 +12,7 @@ thehood config show
 thehood config edit
 thehood models
 thehood providers
+thehood doctor
 thehood roles
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood run "Implement the requested change" --repo .
@@ -176,3 +177,14 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 `thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, and verifier phases without external model calls.
 
 When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing.
+
+## Doctor Command
+
+`thehood doctor --repo .` reports provider and role readiness without invoking model calls.
+
+It checks:
+
+- whether providers are configured and enabled
+- whether the provider adapter is implemented
+- whether local CLI commands such as `codex` and `claude` are available on `PATH`
+- whether configured role models are listed for their providers

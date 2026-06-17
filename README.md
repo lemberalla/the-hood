@@ -21,6 +21,7 @@ It supports:
 - local project initialization
 - JSON config under `.thehood/config.json`
 - provider and role inspection
+- provider and role health inspection
 - role mapping updates
 - run creation for `plan` and `implement`
 - approval, rejection, abort, status, and log inspection
@@ -43,6 +44,7 @@ npm run build
 npm run smoke:runtime
 npm run smoke:mcp
 node dist/cli/main.js init --repo .
+node dist/cli/main.js doctor --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js status --repo .

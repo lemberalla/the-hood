@@ -4,6 +4,7 @@ export * from "./runtime/commandSafety.js";
 export * from "./runtime/config.js";
 export * from "./runtime/defaults.js";
 export * from "./runtime/directives.js";
+export * from "./runtime/doctor.js";
 export * from "./runtime/errors.js";
 export * from "./runtime/gitEvidence.js";
 export * from "./runtime/loop.js";

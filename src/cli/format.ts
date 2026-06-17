@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
+import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
@@ -22,6 +23,21 @@ export const formatProviders = (providers: ProviderDescriptor[]): string =>
       return `${provider.id} (${state}): ${provider.models.join(", ")}`;
     })
     .join("\n");
+
+export const formatDoctorReport = (report: RuntimeHealthReport): string => [
+  "providers:",
+  ...report.providers.map((provider) => {
+    const state = provider.issues.length > 0 ? provider.issues.join(", ") : "ready";
+    const command = provider.command ? ` command=${provider.command}` : "";
+    return `  ${provider.id}: ${state}${command}`;
+  }),
+  "",
+  "roles:",
+  ...report.roles.map((role) => {
+    const state = role.issues.length > 0 ? role.issues.join(", ") : "ready";
+    return `  ${role.role}: ${formatRoleAssignment(role.assignment)} ${state}`;
+  })
+].join("\n");
 
 export const formatConfig = (config: TheHoodConfig): string => [
   "defaults:",
