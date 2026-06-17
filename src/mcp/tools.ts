@@ -25,12 +25,20 @@ export interface McpTool {
   handle: ToolHandler;
 }
 
+const roleSummary = (roles: RoleMap): JsonObject =>
+  Object.fromEntries(
+    Object.entries(roles)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
+  );
+
 const runSummary = (run: RunRecord): JsonObject => ({
   run_id: run.runId,
   status: run.state,
   mode: run.mode,
   repo_path: run.repoPath,
   goal: run.userGoal,
+  roles: roleSummary(run.roleMapping),
   approval_required: run.approvalRequired,
   approval_reason: run.approvalReason ?? null,
   stop_reason: run.stopReason ?? null,
@@ -50,13 +58,6 @@ const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
 
 const toJsonObject = (value: unknown): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject;
-
-const roleSummary = (roles: RoleMap): JsonObject =>
-  Object.fromEntries(
-    Object.entries(roles)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
-  );
 
 const consultRoles = new Set(["orchestrator", "planner", "researcher", "critic"]);
 

@@ -185,6 +185,7 @@ const consultPath = await runMcp([
 
 assert.equal(consultPath[1].result.structuredContent.status, "completed");
 assert.equal(consultPath[1].result.structuredContent.consulted_role, "critic");
+assert.equal(consultPath[1].result.structuredContent.roles.critic, "stub:critic");
 assert.equal(consultPath[1].result.structuredContent.provider_response_count, 1);
 assert.equal(
   consultPath[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
