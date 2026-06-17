@@ -218,6 +218,60 @@ assert.equal(artifactPath[1].result.structuredContent.artifact.kind, "agent");
 assert.equal(artifactPath[1].result.structuredContent.truncated, false);
 assert.ok(artifactPath[1].result.structuredContent.content.includes("critiqueResult"));
 
+const fakeAgentPath = path.join(repoPath, "fake-agent.mjs");
+await fs.writeFile(
+  fakeAgentPath,
+  [
+    "#!/usr/bin/env node",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', () => {",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: input.includes('Runtime directive') ? 'fake guest saw directive' : 'fake guest missing directive',",
+    "    data: {",
+    "      critiqueResult: {",
+    "        verdict: 'acceptable',",
+    "        blockingConcerns: [],",
+    "        nonBlockingConcerns: ['fake local command adapter path exercised']",
+    "      }",
+    "    }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeAgentPath, 0o755);
+process.env.THEHOOD_CLAUDE_COMMAND = fakeAgentPath;
+
+const fakeClaudeConsultPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_consult",
+      arguments: {
+        goal: "ask fake claude through local command adapter",
+        repo_path: repoPath,
+        role: "critic",
+        agent: "claude-code:default"
+      }
+    }
+  }
+]);
+
+assert.equal(fakeClaudeConsultPath[1].result.structuredContent.status, "completed");
+assert.equal(fakeClaudeConsultPath[1].result.structuredContent.consulted_agent, "claude-code:default");
+assert.equal(fakeClaudeConsultPath[1].result.structuredContent.provider_responses[0].summary, "fake guest saw directive");
+assert.equal(
+  fakeClaudeConsultPath[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
+  "acceptable"
+);
+
 const invariantPath = await runMcp([
   ...baseMessages,
   {
