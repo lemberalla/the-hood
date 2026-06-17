@@ -4,7 +4,8 @@
   "description": "A local, provider-neutral agent runtime for orchestrating multi-agent software work.",
   "type": "module",
   "bin": {
-    "thehood": "dist/cli/main.js"
+    "thehood": "dist/cli/main.js",
+    "thehood-chatgpt-web-bridge": "dist/bridges/chatgptWebBridge.js"
   },
   "files": [
     "dist",

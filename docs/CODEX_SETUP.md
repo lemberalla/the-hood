@@ -69,6 +69,37 @@ export THEHOOD_CHATGPT_WEB_COMMAND=/path/to/chatgpt-web-bridge
 
 The bridge receives the TheHood prompt on stdin, gets `--model <model>` and `--schema <schema-path>` arguments, uses the user's authenticated ChatGPT session, and prints the normalized `AgentResponse` JSON envelope to stdout. TheHood intentionally does not read ChatGPT cookies, browser local storage, or tokens.
 
+This package includes an experimental Chrome DevTools bridge:
+
+```bash
+npm run build
+export THEHOOD_CHATGPT_WEB_COMMAND=/path/to/thehood/dist/bridges/chatgptWebBridge.js
+```
+
+Launch a separate browser profile with remote debugging enabled, open ChatGPT, sign in, and select the model you want the bridge to use:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/thehood-chatgpt-profile
+```
+
+After you have visibly selected the intended model in ChatGPT, enable the model confirmation guard:
+
+```bash
+export THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1
+```
+
+Optional bridge settings:
+
+```bash
+export THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222
+export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=120000
+export THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR="#prompt-textarea,[contenteditable='true'],textarea"
+export THEHOOD_CHATGPT_WEB_SEND_SELECTOR="button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']"
+export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assistant']"
+```
+
 Example persistent role assignment:
 
 ```json

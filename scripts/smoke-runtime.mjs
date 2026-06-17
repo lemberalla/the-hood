@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
+const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
 
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
@@ -40,6 +41,36 @@ const runCli = async (args, options = {}) => {
   };
 };
 
+const runNodeScript = async (scriptPath, args, stdin = "", options = {}) => {
+  const child = spawn(process.execPath, [scriptPath, ...args], {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.stdin.end(stdin);
+
+  const exitCode = await new Promise((resolve) => {
+    child.on("close", resolve);
+  });
+
+  assert.equal(exitCode, options.expectExitCode ?? 0, stderr || stdout);
+
+  return {
+    stdout,
+    stderr,
+    exitCode
+  };
+};
+
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
 const mcpConfig = await runCli(["mcp", "config", "--json"]);
 const mcpConfigResult = JSON.parse(mcpConfig.stdout);
@@ -62,6 +93,33 @@ assert.equal(blockedChatGptContinue.run.state, "awaiting_approval");
 assert.equal(blockedChatGptContinue.providerResponses[0].status, "blocked");
 assert.ok(blockedChatGptContinue.run.approvalReason.includes("ChatGPT Web bridge command is not configured"));
 await runCli(["exec", "missing-run", "--repo", repoPath, "--", "git", "init"], { expectExitCode: 1 });
+
+const chatGptBridgeSchemaPath = path.join(repoPath, "chatgpt-bridge.schema.json");
+await fs.writeFile(
+  chatGptBridgeSchemaPath,
+  JSON.stringify({
+    type: "object",
+    properties: {
+      data: {
+        type: "object",
+        required: ["decision"]
+      }
+    }
+  }),
+  "utf8"
+);
+const unconfirmedBridge = JSON.parse(
+  (
+    await runNodeScript(
+      chatGptBridgePath,
+      ["--model", "chatgpt-pro", "--schema", chatGptBridgeSchemaPath],
+      "Return a plan."
+    )
+  ).stdout
+);
+assert.equal(unconfirmedBridge.status, "blocked");
+assert.equal(unconfirmedBridge.data.decision.action, "request_approval");
+assert.ok(unconfirmedBridge.summary.includes("requires explicit model confirmation"));
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
 const run = JSON.parse(plan.stdout);
