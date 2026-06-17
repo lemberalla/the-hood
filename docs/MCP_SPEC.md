@@ -40,6 +40,7 @@ Implemented tools:
 - `thehood_consult`
 - `thehood_continue`
 - `thehood_status`
+- `thehood_read_artifact`
 - `thehood_capture_evidence`
 - `thehood_abort`
 
@@ -163,7 +164,7 @@ Example:
 }
 ```
 
-Output includes the created run id, final state, consulted role, consulted agent, stop reason, provider response count, and artifacts.
+Output includes the created run id, final state, consulted role, consulted agent, stop reason, provider response count, normalized provider responses, and artifacts.
 
 Output:
 
@@ -191,7 +192,7 @@ Current behavior:
 
 - optionally records an approval decision
 - advances the runtime loop until completion or the next gate
-- returns the final state, stop reason, and provider response count
+- returns the final state, stop reason, provider response count, and normalized provider responses
 
 Input:
 
@@ -212,6 +213,21 @@ Input:
 ```json
 {
   "run_id": "string"
+}
+```
+
+### `thehood_read_artifact`
+
+Read a bounded artifact attached to a run. The runtime only allows refs already recorded on that run and only inside that run's artifact directory.
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string",
+  "ref": "string",
+  "max_bytes": 20000
 }
 ```
 

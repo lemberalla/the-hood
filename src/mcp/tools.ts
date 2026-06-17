@@ -4,6 +4,8 @@ import { abortRun, createRun, getRun, recordApproval } from "../runtime/runtime.
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
+import { readRunArtifact } from "../runtime/artifacts.js";
+import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { errorToolResult, toolResult, type ToolDefinition, type ToolResult } from "./protocol.js";
@@ -38,6 +40,13 @@ const runSummary = (run: RunRecord): JsonObject => ({
     summary: artifact.summary
   }))
 });
+
+const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
+  responses.map((response) => ({
+    status: response.status,
+    summary: response.summary,
+    data: response.data
+  }));
 
 const toJsonObject = (value: unknown): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject;
@@ -350,7 +359,8 @@ const createConsultTool = (): McpTool => ({
         consulted_agent: formatRoleAssignment(assignment),
         advanced: advanced.advanced,
         stop_reason: advanced.stopReason,
-        provider_response_count: advanced.providerResponses.length
+        provider_response_count: advanced.providerResponses.length,
+        provider_responses: agentResponsesSummary(advanced.providerResponses)
       };
     })
 });
@@ -405,7 +415,59 @@ const createContinueTool = (): McpTool => ({
         ...runSummary(advanced.run),
         advanced: advanced.advanced,
         stop_reason: advanced.stopReason,
-        provider_response_count: advanced.providerResponses.length
+        provider_response_count: advanced.providerResponses.length,
+        provider_responses: agentResponsesSummary(advanced.providerResponses)
+      };
+    })
+});
+
+const createReadArtifactTool = (): McpTool => ({
+  definition: {
+    name: "thehood_read_artifact",
+    title: "Read TheHood Artifact",
+    description: "Read a bounded artifact attached to a run.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        ref: {
+          type: "string"
+        },
+        max_bytes: {
+          type: "number"
+        }
+      },
+      required: ["run_id", "repo_path", "ref"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const maxBytesValue = args.max_bytes;
+      const maxBytes = typeof maxBytesValue === "number" && Number.isFinite(maxBytesValue)
+        ? Math.max(1, Math.floor(maxBytesValue))
+        : undefined;
+      const result = await readRunArtifact({
+        repoPath: requiredString(args, "repo_path"),
+        runId: requiredString(args, "run_id"),
+        ref: requiredString(args, "ref"),
+        ...(maxBytes === undefined ? {} : { maxBytes })
+      });
+
+      return {
+        artifact: {
+          kind: result.artifact.kind,
+          ref: result.artifact.ref,
+          summary: result.artifact.summary
+        },
+        content: result.content,
+        truncated: result.truncated,
+        byte_length: result.byteLength
       };
     })
 });
@@ -529,6 +591,7 @@ export const mcpTools: McpTool[] = [
   createConsultTool(),
   createContinueTool(),
   createStatusTool(),
+  createReadArtifactTool(),
   createCaptureEvidenceTool(),
   createAbortTool()
 ];

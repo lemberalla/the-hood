@@ -186,6 +186,37 @@ const consultPath = await runMcp([
 assert.equal(consultPath[1].result.structuredContent.status, "completed");
 assert.equal(consultPath[1].result.structuredContent.consulted_role, "critic");
 assert.equal(consultPath[1].result.structuredContent.provider_response_count, 1);
+assert.equal(
+  consultPath[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
+  "acceptable"
+);
+
+const consultAgentArtifact = consultPath[1].result.structuredContent.artifacts.find(
+  (artifact) => artifact.kind === "agent"
+);
+assert.ok(consultAgentArtifact, "consult should expose agent response artifact");
+
+const artifactPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_read_artifact",
+      arguments: {
+        run_id: consultPath[1].result.structuredContent.run_id,
+        repo_path: repoPath,
+        ref: consultAgentArtifact.ref,
+        max_bytes: 4096
+      }
+    }
+  }
+]);
+
+assert.equal(artifactPath[1].result.structuredContent.artifact.kind, "agent");
+assert.equal(artifactPath[1].result.structuredContent.truncated, false);
+assert.ok(artifactPath[1].result.structuredContent.content.includes("critiqueResult"));
 
 const invariantPath = await runMcp([
   ...baseMessages,
@@ -258,5 +289,6 @@ const loopContinue = await runMcp([
 assert.equal(loopCreate[1].result.structuredContent.status, "awaiting_approval");
 assert.equal(loopContinue[1].result.structuredContent.status, "completed");
 assert.equal(loopContinue[1].result.structuredContent.provider_response_count, 3);
+assert.equal(loopContinue[1].result.structuredContent.provider_responses.at(-1).data.verificationResult.verdict, "approve");
 
 process.stdout.write(`MCP smoke passed using ${repoPath}\n`);
