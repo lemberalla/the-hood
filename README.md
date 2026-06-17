@@ -26,6 +26,8 @@ It supports:
 - approval, rejection, abort, status, and log inspection
 - hard enforcement that implementer and verifier cannot be the same agent
 - a real stdio MCP server exposing TheHood runtime tools
+- runtime-owned command log artifacts
+- git status/diff evidence capture with protected test-path classification
 
 Provider adapters are contract-first placeholders. They are not wired to external models yet.
 
@@ -34,11 +36,13 @@ Provider adapters are contract-first placeholders. They are not wired to externa
 ```bash
 npm install
 npm run build
+npm run smoke:runtime
 npm run smoke:mcp
 node dist/cli/main.js init --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js status --repo .
+node dist/cli/main.js evidence <run-id> --repo .
 ```
 
 ## Product Shape

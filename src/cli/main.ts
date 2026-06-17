@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
+import { runRuntimeCommand } from "../runtime/commandRunner.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
+import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { startMcpServer } from "../mcp/server.js";
 import { listProviders } from "../runtime/providers.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -21,6 +23,8 @@ import {
 } from "./args.js";
 import {
   formatConfig,
+  formatCommandResult,
+  formatGitEvidence,
   formatProviders,
   formatRoles,
   formatRunEvents,
@@ -42,6 +46,8 @@ Usage:
   thehood run <goal> [--repo <path>] [--mode <mode>] [--json]
   thehood status [run-id] [--repo <path>] [--json]
   thehood logs <run-id> [--repo <path>] [--json]
+  thehood evidence <run-id> [--repo <path>] [--json]
+  thehood exec <run-id> [--repo <path>] [--cwd <path>] [--allow-risky] -- <command> [args...]
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
   thehood continue <run-id> [--repo <path>]
@@ -204,6 +210,38 @@ const handleLogs = async (
   shouldPrintJson(options) ? printJson(run.events) : process.stdout.write(`${formatRunEvents(run)}\n`);
 };
 
+const handleEvidence = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const result = await captureGitEvidence(repoFromOptions(options), ensureRunId(args[0]));
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatGitEvidence(result)}\n`);
+};
+
+const handleExec = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const runId = ensureRunId(args[0]);
+  const command = args[1];
+
+  if (!command) {
+    throw new InputError("Command is required after run id. Use: thehood exec <run-id> -- <command> [args...]");
+  }
+
+  const cwd = getStringOption(options, "cwd");
+  const result = await runRuntimeCommand({
+    repoPath: repoFromOptions(options),
+    runId,
+    command,
+    args: args.slice(2),
+    ...(cwd ? { cwd } : {}),
+    allowRisky: getBooleanOption(options, "allowRisky")
+  });
+
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatCommandResult(result)}\n`);
+};
+
 const handleApprovalCommand = async (
   command: "approve" | "reject",
   args: string[],
@@ -280,6 +318,12 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "logs":
       await handleLogs(args, parsed.options);
+      return;
+    case "evidence":
+      await handleEvidence(args, parsed.options);
+      return;
+    case "exec":
+      await handleExec(args, parsed.options);
       return;
     case "approve":
     case "reject":

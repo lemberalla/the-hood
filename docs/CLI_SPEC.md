@@ -19,6 +19,8 @@ thehood plan "Design the feature" --repo .
 thehood status
 thehood status <run-id>
 thehood logs <run-id>
+thehood evidence <run-id>
+thehood exec <run-id> -- npm run build
 thehood diff <run-id>
 thehood approve <run-id>
 thehood reject <run-id>
@@ -140,3 +142,15 @@ The CLI should support:
 - `--json` for automation
 - `--quiet` for scripts
 - `--verbose` for debugging
+
+## Runtime Evidence Commands
+
+`thehood evidence <run-id>` captures runtime-owned evidence:
+
+- `git status --short --untracked-files=all`
+- `git diff --no-ext-diff`
+- protected path matches from configured test, fixture, snapshot, and eval patterns
+
+TheHood excludes its own `.thehood` runtime directory from this evidence.
+
+`thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.

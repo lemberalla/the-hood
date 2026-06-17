@@ -76,10 +76,10 @@ export const initConfig = async (repoPath: string): Promise<{ configPath: string
 
   const configPath = await writeConfig(repoPath, createDefaultConfig());
   await fs.mkdir(paths.runsDir, { recursive: true });
+  await fs.mkdir(paths.artifactsDir, { recursive: true });
 
   return {
     configPath,
     created: true
   };
 };
-

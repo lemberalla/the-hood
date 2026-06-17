@@ -64,11 +64,22 @@ export interface TheHoodConfig {
   roles: RoleMap;
 }
 
+export type RunArtifactKind = "plan" | "diff" | "log" | "report" | "metadata" | "status";
+
 export interface RunArtifact {
-  kind: "plan" | "diff" | "log" | "report" | "metadata";
+  kind: RunArtifactKind;
   ref: string;
   summary: string;
 }
+
+export type CommandSafetyCategory =
+  | "read_only"
+  | "local_write"
+  | "dependency_install"
+  | "network"
+  | "destructive"
+  | "credential_sensitive"
+  | "unknown";
 
 export interface ApprovalEvent {
   id: string;
@@ -81,9 +92,13 @@ export interface ToolEvent {
   id: string;
   createdAt: string;
   tool: string;
+  command: string;
+  args: string[];
   cwd: string;
   exitCode: number;
   durationMs: number;
+  safetyCategory: CommandSafetyCategory;
+  permissionDecision: "allowed" | "allowed_explicit_user" | "denied";
   stdoutRef?: string;
   stderrRef?: string;
 }
@@ -115,4 +130,3 @@ export interface RunRecord {
   toolEvents: ToolEvent[];
   events: RunEvent[];
 }
-

@@ -5,6 +5,7 @@ export interface ProjectPaths {
   thehoodDir: string;
   configPath: string;
   runsDir: string;
+  artifactsDir: string;
 }
 
 export const resolveRepoPath = (repoPath: string): string => path.resolve(repoPath);
@@ -17,7 +18,7 @@ export const getProjectPaths = (repoPath: string): ProjectPaths => {
     repoPath: resolvedRepoPath,
     thehoodDir,
     configPath: path.join(thehoodDir, "config.json"),
-    runsDir: path.join(thehoodDir, "runs")
+    runsDir: path.join(thehoodDir, "runs"),
+    artifactsDir: path.join(thehoodDir, "artifacts")
   };
 };
-

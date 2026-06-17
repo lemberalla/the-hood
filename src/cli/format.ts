@@ -1,4 +1,6 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
+import type { RunCommandResult } from "../runtime/commandRunner.js";
+import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
 
@@ -69,3 +71,24 @@ export const formatRunEvents = (run: RunRecord): string =>
     .map((event) => `${event.createdAt}  ${event.type}  ${event.message}`)
     .join("\n");
 
+export const formatCommandResult = (result: RunCommandResult): string => [
+  `command: ${[result.event.command, ...result.event.args].join(" ")}`,
+  `exitCode: ${result.event.exitCode}`,
+  `cwd: ${result.event.cwd}`,
+  `safety: ${result.event.safetyCategory}`,
+  `stdout: ${result.event.stdoutRef ?? "none"}`,
+  `stderr: ${result.event.stderrRef ?? "none"}`
+].join("\n");
+
+export const formatGitEvidence = (result: GitEvidenceResult): string => [
+  `changedPaths: ${result.changedPaths.length}`,
+  `protectedChanges: ${result.protectedChanges.length}`,
+  ...result.changedPaths.map((changedPath) => `  ${changedPath}`),
+  ...(result.protectedChanges.length > 0
+    ? [
+        "",
+        "protected:",
+        ...result.protectedChanges.map((match) => `  ${match.path} (${match.pattern})`)
+      ]
+    : [])
+].join("\n");

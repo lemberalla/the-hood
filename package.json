@@ -15,6 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
+    "smoke:runtime": "node scripts/smoke-runtime.mjs",
     "clean": "rm -rf dist"
   },
   "engines": {

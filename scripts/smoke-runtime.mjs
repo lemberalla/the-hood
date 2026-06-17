@@ -1,0 +1,78 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const root = path.resolve(new URL("..", import.meta.url).pathname);
+const cliPath = path.join(root, "dist", "cli", "main.js");
+
+const runCli = async (args, options = {}) => {
+  const child = spawn(process.execPath, [cliPath, ...args], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const exitCode = await new Promise((resolve) => {
+    child.on("close", resolve);
+  });
+
+  if (options.expectExitCode !== undefined) {
+    assert.equal(exitCode, options.expectExitCode, stderr || stdout);
+  } else {
+    assert.equal(exitCode, 0, stderr || stdout);
+  }
+
+  return {
+    stdout,
+    stderr,
+    exitCode
+  };
+};
+
+const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
+await runCli(["init", "--repo", repoPath]);
+await runCli(["exec", "missing-run", "--repo", repoPath, "--", "git", "init"], { expectExitCode: 1 });
+
+const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
+const run = JSON.parse(plan.stdout);
+
+await runCli(["exec", run.runId, "--repo", repoPath, "--", "git", "init"]);
+
+await fs.mkdir(path.join(repoPath, "src"), { recursive: true });
+await fs.mkdir(path.join(repoPath, "tests"), { recursive: true });
+await fs.writeFile(path.join(repoPath, "src", "app.ts"), "export const value = 1;\n", "utf8");
+await fs.writeFile(path.join(repoPath, "tests", "app.test.ts"), "expect(1).toBe(1);\n", "utf8");
+
+const evidence = await runCli(["evidence", run.runId, "--repo", repoPath, "--json"]);
+const evidenceResult = JSON.parse(evidence.stdout);
+
+assert.ok(evidenceResult.changedPaths.includes("src/app.ts"));
+assert.ok(evidenceResult.changedPaths.includes("tests/app.test.ts"));
+assert.deepEqual(evidenceResult.protectedChanges, [
+  {
+    path: "tests/app.test.ts",
+    pattern: "**/tests/**"
+  }
+]);
+
+const command = await runCli(["exec", run.runId, "--repo", repoPath, "--json", "--", "node", "--version"]);
+const commandResult = JSON.parse(command.stdout);
+assert.equal(commandResult.event.exitCode, 0);
+assert.equal(commandResult.event.command, "node");
+assert.ok(commandResult.event.stdoutRef.endsWith(".stdout.txt"));
+
+await runCli(["exec", run.runId, "--repo", repoPath, "--", "rm", "src/app.ts"], {
+  expectExitCode: 3
+});
+
+process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

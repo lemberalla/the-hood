@@ -34,6 +34,7 @@ Implemented tools:
 - `thehood_orchestrate`
 - `thehood_continue`
 - `thehood_status`
+- `thehood_capture_evidence`
 - `thehood_abort`
 
 ### `thehood_plan`

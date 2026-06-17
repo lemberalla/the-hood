@@ -1,4 +1,5 @@
 import { abortRun, createRun, getRun, recordApproval } from "../runtime/runtime.js";
+import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunRecord } from "../runtime/types.js";
 import { parseRoleAssignment } from "../runtime/role-assignment.js";
 import { errorToolResult, toolResult, type ToolDefinition, type ToolResult } from "./protocol.js";
@@ -237,6 +238,48 @@ const createStatusTool = (): McpTool => ({
     })
 });
 
+const createCaptureEvidenceTool = (): McpTool => ({
+  definition: {
+    name: "thehood_capture_evidence",
+    title: "Capture TheHood Git Evidence",
+    description: "Capture git status, git diff, and protected path classifications for a run.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        }
+      },
+      required: ["run_id", "repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const result = await captureGitEvidence(
+        requiredString(args, "repo_path"),
+        requiredString(args, "run_id")
+      );
+
+      return {
+        ...runSummary(result.run),
+        changed_paths: result.changedPaths,
+        protected_changes: result.protectedChanges.map((match) => ({
+          path: match.path,
+          pattern: match.pattern
+        })),
+        artifacts: result.run.artifacts.map((artifact) => ({
+          kind: artifact.kind,
+          ref: artifact.ref,
+          summary: artifact.summary
+        }))
+      };
+    })
+});
+
 const createAbortTool = (): McpTool => ({
   definition: {
     name: "thehood_abort",
@@ -276,9 +319,9 @@ export const mcpTools: McpTool[] = [
   createOrchestrateTool(),
   createContinueTool(),
   createStatusTool(),
+  createCaptureEvidenceTool(),
   createAbortTool()
 ];
 
 export const findTool = (name: string): McpTool | undefined =>
   mcpTools.find((tool) => tool.definition.name === name);
-

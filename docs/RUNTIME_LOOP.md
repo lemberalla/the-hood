@@ -90,6 +90,7 @@ The runtime captures evidence directly:
 - stderr
 - duration
 - tool permission decision
+- protected path classification
 
 Models may summarize evidence, but summaries are not authoritative.
 
@@ -115,4 +116,3 @@ Verifier and runtime failures should be classified into stable categories:
 Only the runtime applies approved changes to the target checkout.
 
 Implementers can produce patches. They do not get to self-merge.
-

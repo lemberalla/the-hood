@@ -34,6 +34,11 @@ Must:
 - capture diffs before and after
 - enforce protected path policies
 
+Current implementation:
+
+- `thehood exec <run-id> -- <command> [args...]` captures command logs as artifacts.
+- `thehood evidence <run-id>` captures git status, git diff, and protected path matches.
+
 ### Verifier
 
 Must:
@@ -118,4 +123,3 @@ evidence:
 - Test files are silently modified.
 - Final report says "tests passed" without command names and exit codes.
 - Runtime applies a patch before verification.
-
