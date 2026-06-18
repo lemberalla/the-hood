@@ -32,6 +32,11 @@ export interface RuntimeHealthReport {
 
 const implementedProviderIds = new Set(["stub", "chatgpt-web", "codex-cli", "claude-code"]);
 
+interface ChromeTarget {
+  url?: string;
+  webSocketDebuggerUrl?: string;
+}
+
 const commandForProvider = (providerId: string): string | undefined => {
   if (providerId === "chatgpt-web") {
     return process.env.THEHOOD_CHATGPT_WEB_COMMAND;
@@ -98,15 +103,56 @@ const modelConfigured = (provider: ProviderDescriptor | undefined, assignment: R
 const bridgeIssues = (providerId: string, command?: string): string[] =>
   providerId === "chatgpt-web" && !command ? ["bridge_command_not_configured"] : [];
 
+const chatGptModelConfirmed = (): boolean =>
+  process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
+  process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1";
+
+const chatGptCdpUrl = (): string => process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222";
+
+const chatGptCdpIssues = async (): Promise<string[]> => {
+  try {
+    const response = await fetch(new URL("/json/list", chatGptCdpUrl()), {
+      signal: AbortSignal.timeout(1_000)
+    });
+
+    if (!response.ok) {
+      return [`cdp_http_${response.status}`];
+    }
+
+    const targets = await response.json() as ChromeTarget[];
+    const hasChatGptTarget = targets.some((target) => {
+      const url = target.url ?? "";
+      return target.webSocketDebuggerUrl && (url.includes("chatgpt.com") || url.includes("chat.openai.com"));
+    });
+
+    return hasChatGptTarget ? [] : ["chatgpt_tab_not_found"];
+  } catch {
+    return ["cdp_unreachable"];
+  }
+};
+
+const chatGptWebIssues = async (command?: string): Promise<string[]> => {
+  if (!command) {
+    return ["bridge_command_not_configured"];
+  }
+
+  if (!chatGptModelConfirmed()) {
+    return ["model_not_confirmed"];
+  }
+
+  return chatGptCdpIssues();
+};
+
 const providerIssues = (
   provider: ProviderDescriptor,
   implemented: boolean,
+  providerSpecificIssues: string[],
   command?: string,
   commandFound?: boolean
 ): string[] => [
   ...(provider.enabled ? [] : ["provider_disabled"]),
   ...(implemented ? [] : ["provider_not_implemented"]),
-  ...bridgeIssues(provider.id, command),
+  ...providerSpecificIssues,
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
 
@@ -115,13 +161,14 @@ const roleIssues = (
   assignment: RoleAssignment,
   provider: ProviderDescriptor | undefined,
   implemented: boolean,
+  providerSpecificIssues: string[],
   command?: string,
   commandFound?: boolean
 ): string[] => [
   ...(provider ? [] : [`provider_not_configured:${assignment.provider}`]),
   ...(provider?.enabled === false ? ["provider_disabled"] : []),
   ...(implemented ? [] : ["provider_not_implemented"]),
-  ...bridgeIssues(assignment.provider, command),
+  ...providerSpecificIssues,
   ...(provider && !modelConfigured(provider, assignment) ? [`model_not_configured:${assignment.model}`] : []),
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
@@ -129,18 +176,25 @@ const roleIssues = (
 export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<RuntimeHealthReport> => {
   const providers = listProviders(config);
   const commandChecks = new Map<string, boolean>();
+  const providerIssueChecks = new Map<string, string[]>();
 
   for (const provider of providers) {
     const command = commandForProvider(provider.id);
     if (command) {
       commandChecks.set(provider.id, await commandExists(command));
     }
+
+    providerIssueChecks.set(
+      provider.id,
+      provider.id === "chatgpt-web" ? await chatGptWebIssues(command) : bridgeIssues(provider.id, command)
+    );
   }
 
   const providerHealth = providers.map((provider): ProviderHealth => {
     const implemented = implementedProviderIds.has(provider.id);
     const command = commandForProvider(provider.id);
     const commandFound = command ? commandChecks.get(provider.id) ?? false : undefined;
+    const providerSpecificIssues = providerIssueChecks.get(provider.id) ?? [];
 
     return {
       id: provider.id,
@@ -149,7 +203,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       models: provider.models,
       ...(command ? { command } : {}),
       ...(commandFound === undefined ? {} : { commandFound }),
-      issues: providerIssues(provider, implemented, command, commandFound)
+      issues: providerIssues(provider, implemented, providerSpecificIssues, command, commandFound)
     };
   });
 
@@ -161,6 +215,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       const implemented = implementedProviderIds.has(assignment.provider);
       const command = commandForProvider(assignment.provider);
       const commandFound = commandChecks.get(assignment.provider);
+      const providerSpecificIssues = providerIssueChecks.get(assignment.provider) ?? [];
 
       return {
         role: role as RuntimeRole,
@@ -169,7 +224,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
         providerImplemented: implemented,
         modelConfigured: modelConfigured(provider, assignment),
         ...(commandFound === undefined ? {} : { commandFound }),
-        issues: roleIssues(role as RuntimeRole, assignment, provider, implemented, command, commandFound)
+        issues: roleIssues(role as RuntimeRole, assignment, provider, implemented, providerSpecificIssues, command, commandFound)
       };
     });
 

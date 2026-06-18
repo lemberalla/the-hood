@@ -193,4 +193,5 @@ It checks:
 - whether providers are configured and enabled
 - whether the provider adapter is implemented
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
+- whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, and ChatGPT tab are ready when `chatgpt-web` is configured
 - whether configured role models are listed for their providers

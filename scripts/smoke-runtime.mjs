@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,6 +13,10 @@ const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.j
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
     cwd: root,
+    env: {
+      ...process.env,
+      ...(options.env ?? {})
+    },
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -97,6 +102,58 @@ assert.deepEqual(stubHealth.issues, []);
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
 assert.equal(defaultOrchestratorHealth.providerImplemented, true);
 assert.ok(defaultOrchestratorHealth.issues.includes("bridge_command_not_configured"));
+const unconfirmedDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
+  env: {
+    THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
+    THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
+    THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0"
+  }
+});
+const unconfirmedDoctorResult = JSON.parse(unconfirmedDoctor.stdout);
+const unconfirmedChatGptProvider = unconfirmedDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
+assert.equal(unconfirmedChatGptProvider.commandFound, true);
+assert.deepEqual(unconfirmedChatGptProvider.issues, ["model_not_confirmed"]);
+const cdpServer = http.createServer((request, response) => {
+  if (request.url === "/json/list") {
+    response.writeHead(200, {
+      "content-type": "application/json"
+    });
+    response.end(JSON.stringify([
+      {
+        url: "https://chatgpt.com/",
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/smoke"
+      }
+    ]));
+    return;
+  }
+
+  response.writeHead(404);
+  response.end();
+});
+await new Promise((resolve) => cdpServer.listen(0, "127.0.0.1", resolve));
+const cdpAddress = cdpServer.address();
+assert.ok(cdpAddress && typeof cdpAddress === "object");
+const readyDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
+  env: {
+    THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
+    THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
+    THEHOOD_CHATGPT_WEB_CDP_URL: `http://127.0.0.1:${cdpAddress.port}`
+  }
+});
+await new Promise((resolve, reject) => {
+  cdpServer.close((error) => {
+    if (error) {
+      reject(error);
+      return;
+    }
+    resolve(undefined);
+  });
+});
+const readyDoctorResult = JSON.parse(readyDoctor.stdout);
+const readyChatGptProvider = readyDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
+const readyOrchestrator = readyDoctorResult.roles.find((role) => role.role === "orchestrator");
+assert.deepEqual(readyChatGptProvider.issues, []);
+assert.deepEqual(readyOrchestrator.issues, []);
 const blockedChatGptPlan = JSON.parse((await runCli(["plan", "block missing ChatGPT bridge", "--repo", repoPath, "--json"])).stdout);
 const blockedChatGptContinue = JSON.parse((await runCli(["continue", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout);
 assert.equal(blockedChatGptContinue.run.state, "awaiting_approval");

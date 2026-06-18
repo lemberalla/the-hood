@@ -44,6 +44,14 @@ This adds:
 
 Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
 
+Before starting the Codex app, check the local bridge readiness:
+
+```bash
+node dist/cli/main.js doctor --repo /path/to/repo --json
+```
+
+For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, and a ChatGPT tab is visible. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, and `chatgpt_tab_not_found`.
+
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:

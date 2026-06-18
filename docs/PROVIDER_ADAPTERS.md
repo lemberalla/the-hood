@@ -94,6 +94,7 @@ Current implementation:
 - Provider id: `chatgpt-web`
 - Default model: `chatgpt-pro`
 - Requires `THEHOOD_CHATGPT_WEB_COMMAND`
+- `thehood doctor` checks command executability, explicit model confirmation, Chrome DevTools reachability, and whether a ChatGPT tab is visible.
 - Sends the runtime directive as stdin.
 - Passes `--model <model>` and `--schema <schema-path>` to the bridge command.
 - Expects stdout to contain the normalized `AgentResponse` JSON envelope.
