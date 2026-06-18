@@ -34,6 +34,7 @@ It supports:
 - runtime-owned integration reports for approved isolated patch application
 - runtime-owned final reports for completed runs
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
+- runtime-enforced max iteration limits across resumed runs
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances

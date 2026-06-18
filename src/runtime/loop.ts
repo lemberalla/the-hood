@@ -155,6 +155,45 @@ const runAgent = async (
 };
 
 const terminalStates = new Set<RunState>(["completed", "failed", "aborted"]);
+const providerCallStates = new Set<RunState>(["created", "planning", "delegating", "implementing", "verifying"]);
+
+const providerResponseCount = (run: RunRecord): number =>
+  run.events.filter((event) => event.type === "agent_response").length;
+
+const stopForMaxIterations = async (
+  run: RunRecord
+): Promise<{ run: RunRecord; stopReason: string } | undefined> => {
+  if (!providerCallStates.has(run.state)) {
+    return undefined;
+  }
+
+  const iterationCount = providerResponseCount(run);
+  if (iterationCount < run.maxIterations) {
+    return undefined;
+  }
+
+  const stopReason = `Max iterations reached (${iterationCount}/${run.maxIterations}).`;
+  const failed = await updateRun(
+    run,
+    {
+      state: "failed",
+      approvalRequired: false,
+      stopReason
+    },
+    [
+      createEvent("run_failed", stopReason, {
+        reason: "max_iterations",
+        iterationCount,
+        maxIterations: run.maxIterations
+      })
+    ]
+  );
+
+  return {
+    run: failed,
+    stopReason
+  };
+};
 
 const verdictFromResponse = (response: AgentResponse): string | undefined => {
   const value = response.data.verificationResult;
@@ -954,6 +993,15 @@ const advanceOneStep = async (
       run,
       advanced: false,
       stopReason: run.approvalReason ?? "Approval required."
+    };
+  }
+
+  const maxIterationsStop = await stopForMaxIterations(run);
+  if (maxIterationsStop) {
+    return {
+      run: maxIterationsStop.run,
+      advanced: true,
+      stopReason: maxIterationsStop.stopReason
     };
   }
 

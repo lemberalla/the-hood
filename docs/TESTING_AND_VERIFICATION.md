@@ -41,6 +41,7 @@ Current implementation:
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.
+- Runs fail closed before the next provider call once recorded provider responses reach `maxIterations`.
 
 ### Verifier
 

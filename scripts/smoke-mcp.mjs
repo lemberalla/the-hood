@@ -169,6 +169,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
+assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);

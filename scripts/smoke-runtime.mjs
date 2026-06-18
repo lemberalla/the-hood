@@ -109,6 +109,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
+assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -508,6 +509,63 @@ assert.ok(verifierDirectiveArtifact, "verifier directive artifact should be capt
 const verifierDirective = JSON.parse(await fs.readFile(verifierDirectiveArtifact.ref, "utf8"));
 assert.equal(verifierDirective.toolPermissions.edit, false);
 assert.equal(verifierDirective.outputContract.requiredDataKey, "verificationResult");
+
+const maxIterationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-max-iterations-smoke-"));
+await runCli(["init", "--repo", maxIterationRepoPath]);
+const maxIterationConfigPath = path.join(maxIterationRepoPath, ".thehood", "config.json");
+const maxIterationConfig = JSON.parse(await fs.readFile(maxIterationConfigPath, "utf8"));
+await fs.writeFile(
+  maxIterationConfigPath,
+  `${JSON.stringify(
+    {
+      ...maxIterationConfig,
+      defaults: {
+        ...maxIterationConfig.defaults,
+        maxIterations: 1
+      }
+    },
+    null,
+    2
+  )}\n`,
+  "utf8"
+);
+const maxIterationRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "stop after one provider iteration",
+      "--repo",
+      maxIterationRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(maxIterationRun.maxIterations, 1);
+await runCli(["approve", maxIterationRun.runId, "--repo", maxIterationRepoPath, "--reason", "smoke-approved"]);
+const maxIterationContinue = JSON.parse(
+  (await runCli(["continue", maxIterationRun.runId, "--repo", maxIterationRepoPath, "--json"])).stdout
+);
+assert.equal(maxIterationContinue.run.state, "failed");
+assert.ok(maxIterationContinue.run.stopReason.includes("Max iterations reached (1/1)."));
+assert.equal(maxIterationContinue.providerResponses.length, 1);
+assert.equal(maxIterationContinue.providerResponses[0].data.decision.action, "delegate");
+assert.equal(
+  maxIterationContinue.run.events.filter((event) => event.type === "agent_response").length,
+  1
+);
+assert.ok(
+  maxIterationContinue.run.events.some(
+    (event) => event.type === "run_failed" && event.data?.reason === "max_iterations"
+  )
+);
 
 const { createFallbackAgentResponse, parseLocalAgentOutput } = await import(
   pathToFileURL(path.join(root, "dist", "providers", "localCommand.js")).href

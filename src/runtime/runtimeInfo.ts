@@ -8,7 +8,8 @@ export const runtimeCapabilities = [
   "cli_artifact_reads",
   "approval_phrase_enforcement",
   "final_report_artifacts",
-  "mcp_final_report_next_action"
+  "mcp_final_report_next_action",
+  "max_iteration_enforcement"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];

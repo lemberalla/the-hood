@@ -85,6 +85,8 @@ User approval is required before:
 
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
+`maxIterations` is enforced from persisted provider responses. If the next transition would call another provider after the run has already recorded `maxIterations` agent responses, the runtime fails closed with reason `max_iterations`.
+
 ## Runtime-Owned Evidence
 
 The runtime captures evidence directly:
