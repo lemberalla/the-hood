@@ -557,10 +557,220 @@ const isolatedApply = await runMcp([
   }
 ]);
 const isolatedResult = isolatedApply[1].result.structuredContent;
+const isolatedIntegrationReportArtifact = isolatedResult.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Integration report")
+);
 
 assert.equal(isolatedResult.status, "completed");
 assert.equal(isolatedResult.provider_responses.at(-1).data.verificationResult.verdict, "approve");
 assert.equal(await fs.readFile(path.join(isolatedRepoPath, "implemented.txt"), "utf8"), "isolated implementation\n");
+assert.ok(isolatedIntegrationReportArtifact, "isolated patch integration report should be attached");
+
+const isolatedIntegrationReportRead = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_read_artifact",
+      arguments: {
+        run_id: isolatedRunId,
+        repo_path: isolatedRepoPath,
+        ref: isolatedIntegrationReportArtifact.ref,
+        max_bytes: 10000
+      }
+    }
+  }
+]);
+const isolatedIntegrationReport = JSON.parse(isolatedIntegrationReportRead[1].result.structuredContent.content);
+assert.equal(isolatedIntegrationReport.applyExitCode, 0);
+assert.deepEqual(isolatedIntegrationReport.changedPaths, ["implemented.txt"]);
+assert.equal(isolatedIntegrationReport.protectedChangeCount, 0);
+assert.equal(isolatedIntegrationReport.sourceArtifactRef, isolatedDiffArtifact.ref);
+assert.ok(isolatedIntegrationReport.approvedPatchArtifactRef.endsWith(".patch"));
+
+const protectedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-protected-"));
+await runRawCommand("git", ["init"], protectedRepoPath);
+await fs.writeFile(path.join(protectedRepoPath, "README.md"), "# Protected Smoke\n", "utf8");
+await runRawCommand("git", ["add", "README.md"], protectedRepoPath);
+await runRawCommand(
+  "git",
+  [
+    "-c",
+    "user.name=TheHood Smoke",
+    "-c",
+    "user.email=smoke@example.invalid",
+    "commit",
+    "-m",
+    "initial"
+  ],
+  protectedRepoPath
+);
+await runCommand(["init", "--repo", protectedRepoPath]);
+
+const fakeProtectedCodexPath = path.join(fakeCodexDir, "fake-protected-codex.mjs");
+await fs.writeFile(
+  fakeProtectedCodexPath,
+  [
+    "#!/usr/bin/env node",
+    "import fs from 'node:fs/promises';",
+    "import path from 'node:path';",
+    "const cdIndex = process.argv.indexOf('--cd');",
+    "const workspace = cdIndex >= 0 ? process.argv[cdIndex + 1] : process.cwd();",
+    "process.stdin.resume();",
+    "process.stdin.on('end', async () => {",
+    "  await fs.mkdir(path.join(workspace, 'tests'), { recursive: true });",
+    "  await fs.writeFile(path.join(workspace, 'tests', 'generated.test.ts'), 'expect(true).toBe(true);\\n', 'utf8');",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: 'fake codex changed protected test path',",
+    "    data: {",
+    "      implementationResult: {",
+    "        status: 'changed',",
+    "        changedFiles: ['tests/generated.test.ts'],",
+    "        commandsRun: [],",
+    "        unresolvedRisks: []",
+    "      }",
+    "    }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeProtectedCodexPath, 0o755);
+process.env.THEHOOD_CODEX_COMMAND = fakeProtectedCodexPath;
+
+const protectedCreate = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_orchestrate",
+      arguments: {
+        goal: "exercise protected isolated patch gate",
+        repo_path: protectedRepoPath,
+        mode: "implement",
+        role_mapping: {
+          orchestrator: "stub:orchestrator",
+          implementer: "codex-cli:default",
+          verifier: "stub:verifier",
+          critic: "stub:critic"
+        }
+      }
+    }
+  }
+]);
+const protectedRunId = protectedCreate[1].result.structuredContent.run_id;
+const protectedImplementationGate = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: protectedRunId,
+        repo_path: protectedRepoPath,
+        approval: "approve",
+        message: "mcp-smoke-protected-approve"
+      }
+    }
+  }
+]);
+const protectedPatchGate = protectedImplementationGate[1].result.structuredContent;
+const protectedPatchApproval = protectedPatchGate.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
+assert.equal(protectedPatchGate.status, "awaiting_approval");
+assert.ok(protectedPatchGate.approval_reason.includes("apply isolated patch"));
+assert.ok(protectedPatchApproval.arguments.message.includes("apply isolated patch"));
+
+const protectedApply = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: protectedRunId,
+        repo_path: protectedRepoPath,
+        approval: "approve",
+        message: protectedPatchApproval.arguments.message
+      }
+    }
+  }
+]);
+const protectedResult = protectedApply[1].result.structuredContent;
+const protectedIntegrationReportArtifact = protectedResult.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Integration report")
+);
+const protectedChangeApproval = protectedResult.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
+assert.equal(protectedResult.status, "awaiting_approval");
+assert.equal(protectedResult.approval_required, true);
+assert.ok(protectedResult.approval_reason.includes("protected test changes"));
+assert.ok(protectedChangeApproval.arguments.message.includes("protected test changes"));
+assert.equal(
+  await fs.readFile(path.join(protectedRepoPath, "tests", "generated.test.ts"), "utf8"),
+  "expect(true).toBe(true);\n"
+);
+assert.ok(protectedIntegrationReportArtifact, "protected patch integration report should be attached");
+
+const protectedIntegrationReportRead = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_read_artifact",
+      arguments: {
+        run_id: protectedRunId,
+        repo_path: protectedRepoPath,
+        ref: protectedIntegrationReportArtifact.ref,
+        max_bytes: 10000
+      }
+    }
+  }
+]);
+const protectedIntegrationReport = JSON.parse(protectedIntegrationReportRead[1].result.structuredContent.content);
+assert.equal(protectedIntegrationReport.protectedChangeCount, 1);
+assert.deepEqual(protectedIntegrationReport.protectedChanges, [
+  {
+    path: "tests/generated.test.ts",
+    pattern: "**/tests/**"
+  }
+]);
+
+const protectedVerification = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: protectedRunId,
+        repo_path: protectedRepoPath,
+        approval: "approve",
+        message: protectedChangeApproval.arguments.message
+      }
+    }
+  }
+]);
+const protectedVerificationResult = protectedVerification[1].result.structuredContent;
+assert.equal(protectedVerificationResult.status, "awaiting_approval");
+assert.equal(protectedVerificationResult.provider_responses.at(-1).data.verificationResult.verdict, "ask_user");
+assert.ok(protectedVerificationResult.approval_reason.includes("Verifier returned ask_user"));
 
 const runsPath = await runMcp([
   ...baseMessages,

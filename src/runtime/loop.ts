@@ -1,15 +1,27 @@
 import fs from "node:fs/promises";
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
+import { loadConfig } from "./config.js";
 import { buildAgentDirective } from "./directives.js";
-import { captureGitEvidence } from "./gitEvidence.js";
+import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
+import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } from "./repoContext.js";
 import { getProviderAdapter } from "../providers/router.js";
 import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
-import type { JsonObject, JsonValue, RoleAssignment, RunArtifact, RunEvent, RunRecord, RunState, RuntimeRole } from "./types.js";
+import type {
+  JsonObject,
+  JsonValue,
+  RoleAssignment,
+  RunArtifact,
+  RunEvent,
+  RunRecord,
+  RunState,
+  RuntimeRole,
+  ToolEvent
+} from "./types.js";
 
 export interface AdvanceRunInput {
   repoPath: string;
@@ -382,6 +394,58 @@ const attachRunArtifact = async (
   return updated;
 };
 
+const protectedPatchApprovalReason = (protectedChanges: ProtectedPathMatch[]): string =>
+  `Applied patch changed ${protectedChanges.length} protected test, fixture, snapshot, or eval path(s). ` +
+  `Review before verification. Approval message must mention "protected test changes".`;
+
+const writeIntegrationReport = async (
+  run: RunRecord,
+  sourceArtifact: RunArtifact,
+  approvedPatchArtifact: RunArtifact,
+  applyEvent: ToolEvent,
+  statusEvent: ToolEvent,
+  changedPaths: string[],
+  protectedChanges: ProtectedPathMatch[]
+): Promise<RunRecord> => {
+  const reportArtifact = await writeRunArtifact({
+    repoPath: run.repoPath,
+    runId: run.runId,
+    kind: "report",
+    name: `integration-${newId("report")}.json`,
+    content: `${JSON.stringify(
+      {
+        runId: run.runId,
+        sourceArtifactRef: sourceArtifact.ref,
+        sourceArtifactSummary: sourceArtifact.summary,
+        approvedPatchArtifactRef: approvedPatchArtifact.ref,
+        approvedPatchArtifactSummary: approvedPatchArtifact.summary,
+        applyToolEventId: applyEvent.id,
+        applyExitCode: applyEvent.exitCode,
+        applyStdoutRef: applyEvent.stdoutRef,
+        applyStderrRef: applyEvent.stderrRef,
+        postApplyStatusToolEventId: statusEvent.id,
+        postApplyStatusRef: statusEvent.stdoutRef,
+        changedPaths,
+        protectedChanges,
+        protectedChangeCount: protectedChanges.length
+      },
+      null,
+      2
+    )}\n`,
+    summary: `Integration report for ${changedPaths.length} changed path(s), ${protectedChanges.length} protected.`
+  });
+
+  return attachRunArtifact(
+    run,
+    reportArtifact,
+    createEvent("integration_report_written", "Wrote runtime integration report.", {
+      artifactRef: reportArtifact.ref,
+      changedPathCount: changedPaths.length,
+      protectedChangeCount: protectedChanges.length
+    })
+  );
+};
+
 const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRecord; stopReason?: string }> => {
   const artifact = latestIsolatedPatchArtifact(run);
 
@@ -472,8 +536,60 @@ const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRec
     };
   }
 
+  const postApplyStatus = await runRuntimeCommand({
+    repoPath: applied.run.repoPath,
+    runId: applied.run.runId,
+    tool: "post_apply_git_status",
+    command: "git",
+    args: ["status", "--short", "--untracked-files=all", "--", ".", ":(exclude).thehood"]
+  });
+  const changedPaths = parseGitStatusPaths(postApplyStatus.stdout);
+  const config = await loadConfig(postApplyStatus.run.repoPath);
+  const protectedChanges = findProtectedPathMatches(changedPaths, config.defaults.protectedTestPaths);
+  const runWithReport = await writeIntegrationReport(
+    postApplyStatus.run,
+    artifact,
+    patchInput,
+    applied.event,
+    postApplyStatus.event,
+    changedPaths,
+    protectedChanges
+  );
+
+  if (protectedChanges.length > 0) {
+    const approvalReason = protectedPatchApprovalReason(protectedChanges);
+    const protectedChangesData = protectedChanges.map((match) => ({
+      path: match.path,
+      pattern: match.pattern
+    }));
+    const gated = await updateRun(
+      runWithReport,
+      {
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason
+      },
+      [
+        createEvent("patch_applied", "Applied isolated patch artifact to target checkout.", {
+          sourceArtifactRef: artifact.ref,
+          patchArtifactRef: patchInput.ref
+        }),
+        createEvent("approval_required", approvalReason, {
+          reason: "protected_patch_changes",
+          protectedChangeCount: protectedChanges.length,
+          protectedChanges: protectedChangesData
+        })
+      ]
+    );
+
+    return {
+      run: gated,
+      stopReason: approvalReason
+    };
+  }
+
   const verifying = await updateRun(
-    applied.run,
+    runWithReport,
     { state: "verifying" },
     [
       createEvent("patch_applied", "Applied isolated patch artifact to target checkout.", {

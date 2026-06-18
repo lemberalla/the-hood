@@ -30,6 +30,8 @@ It supports:
 - a real stdio MCP server exposing TheHood runtime tools
 - runtime-owned command log artifacts
 - git status/diff evidence capture with protected test-path classification
+- runtime-owned integration reports for approved isolated patch application
+- separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances

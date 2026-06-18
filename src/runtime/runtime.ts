@@ -47,6 +47,10 @@ const approvedStateForRun = (run: RunRecord): RunState => {
     return "integrating";
   }
 
+  if (run.approvalReason?.includes("protected test changes")) {
+    return "verifying";
+  }
+
   return run.mode === "implement" ? "delegating" : "planning";
 };
 
