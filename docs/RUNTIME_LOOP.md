@@ -87,7 +87,7 @@ User approval is required before:
 
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
-Before sending a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine.
+Before sending repo context or a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine.
 
 `maxIterations` is enforced from persisted provider responses. If the next transition would call another provider after the run has already recorded `maxIterations` agent responses, the runtime fails closed with reason `max_iterations`.
 
@@ -183,4 +183,4 @@ Read-only runs can also execute a mapped guest role directly:
 - `research` uses `researcher` when assigned, otherwise `orchestrator`
 - `review` uses `critic` when assigned, otherwise `orchestrator`
 
-For read-only runs, model-backed providers such as `chatgpt-web`, `claude-code`, and `codex-cli` require an explicit provider-invocation approval before the first provider call. When a read-only orchestrator or planner returns `action: "delegate"` before repo context exists, the runtime captures a bounded `repo_context` artifact using deterministic filesystem reads. For browser or API model providers such as `chatgpt-web`, the runtime then stops at a second approval gate before sending that context back to the provider. If the role requests another delegation after a context pack exists, the runtime stops at an approval gate instead of looping indefinitely.
+For read-only runs, model-backed providers such as `chatgpt-web`, `claude-code`, and `codex-cli` require an explicit provider-invocation approval before the first provider call. When a read-only orchestrator or planner returns `action: "delegate"` before repo context exists, the runtime captures a bounded `repo_context` artifact using deterministic filesystem reads. For browser or API model providers such as `chatgpt-web`, the runtime then writes a `transfer_manifest` artifact and stops at a second approval gate before sending that context back to the provider. If the role requests another delegation after a context pack exists, the runtime stops at an approval gate instead of looping indefinitely.

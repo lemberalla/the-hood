@@ -34,7 +34,7 @@ It supports:
 - runtime-owned integration reports for approved isolated patch application
 - runtime-owned final reports for completed runs
 - runtime-owned progress packet artifacts for completed runs
-- runtime-owned external transfer manifests before progress packets leave the machine
+- runtime-owned external transfer manifests before repo context or progress packets leave the machine
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
 - runtime-captured package validation command evidence during verifier review

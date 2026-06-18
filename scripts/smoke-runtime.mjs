@@ -535,8 +535,30 @@ const externalContextGate = JSON.parse(
 assert.equal(externalContextGate.run.state, "awaiting_approval");
 assert.equal(externalContextGate.run.approvalRequired, true);
 assert.ok(externalContextGate.run.approvalReason.includes("Sending repo context to chatgpt-web:chatgpt-pro"));
+assert.ok(externalContextGate.run.approvalReason.includes("Review the transfer manifest before approving"));
 assert.equal(externalContextGate.providerResponses[0].data.decision.action, "delegate");
 assert.equal(externalContextGate.providerResponses.at(-1).data.decision.action, "request_approval");
+const contextTransferManifestArtifact = externalContextGate.run.artifacts.find((artifact) => artifact.kind === "transfer_manifest");
+assert.ok(contextTransferManifestArtifact, "repo context gate should attach a transfer manifest");
+const contextTransferEvent = externalContextGate.run.events.at(-1);
+assert.equal(contextTransferEvent.type, "approval_required");
+assert.equal(contextTransferEvent.data.artifactRef, contextTransferManifestArtifact.ref);
+assert.ok(contextTransferEvent.data.sourceArtifactRef.includes("/context/"));
+assert.equal(contextTransferEvent.data.transfer.purpose, "repo_context");
+assert.equal(contextTransferEvent.data.transfer.riskClass, "repo_context");
+const contextTransferPreview = await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath]);
+assert.ok(contextTransferPreview.stdout.includes("purpose: repo_context"));
+assert.ok(contextTransferPreview.stdout.includes("risk: repo_context"));
+assert.ok(contextTransferPreview.stdout.includes("I approve send repo context to chatgpt-web"));
+const contextTransferPreviewJson = JSON.parse(
+  (await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(contextTransferPreviewJson.manifest.purpose, "repo_context");
+assert.equal(contextTransferPreviewJson.manifest.risk.class, "repo_context");
+assert.equal(contextTransferPreviewJson.manifest.artifacts.length, 1);
+const contextTransferApprovalInbox = await runCli(["ui", "approvals", "--repo", repoPath]);
+assert.ok(contextTransferApprovalInbox.stdout.includes("transfer_manifest"));
+assert.ok(contextTransferApprovalInbox.stdout.includes("thehood transfer preview"));
 assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), ["no-context"]);
 await runCli([
   "approve",
@@ -561,22 +583,24 @@ const externalProgressGate = JSON.parse(
 assert.equal(externalProgressGate.run.state, "completed");
 assert.equal(externalProgressGate.run.approvalRequired, true);
 assert.ok(externalProgressGate.stopReason.includes("Review the transfer manifest before approving"));
-const transferManifestArtifact = externalProgressGate.run.artifacts.find((artifact) => artifact.kind === "transfer_manifest");
+const transferManifestArtifact = externalProgressGate.run.artifacts
+  .filter((artifact) => artifact.kind === "transfer_manifest")
+  .at(-1);
 assert.ok(transferManifestArtifact, "progress packet gate should attach a transfer manifest");
 const progressTransferEvent = externalProgressGate.run.events.at(-1);
 assert.equal(progressTransferEvent.type, "approval_required");
 assert.equal(progressTransferEvent.data.artifactRef, transferManifestArtifact.ref);
 assert.ok(progressTransferEvent.data.sourceArtifactRef.includes("/progress/"));
-const transferPreview = await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath]);
-assert.ok(transferPreview.stdout.includes("purpose: progress_packet"));
-assert.ok(transferPreview.stdout.includes("risk: private_runtime_memory"));
-assert.ok(transferPreview.stdout.includes("I approve send progress packet to chatgpt-web"));
-const transferPreviewJson = JSON.parse(
+const progressTransferPreview = await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath]);
+assert.ok(progressTransferPreview.stdout.includes("purpose: progress_packet"));
+assert.ok(progressTransferPreview.stdout.includes("risk: private_runtime_memory"));
+assert.ok(progressTransferPreview.stdout.includes("I approve send progress packet to chatgpt-web"));
+const progressTransferPreviewJson = JSON.parse(
   (await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath, "--json"])).stdout
 );
-assert.equal(transferPreviewJson.manifest.purpose, "progress_packet");
-assert.equal(transferPreviewJson.manifest.risk.class, "private_runtime_memory");
-assert.equal(transferPreviewJson.manifest.artifacts.length, 1);
+assert.equal(progressTransferPreviewJson.manifest.purpose, "progress_packet");
+assert.equal(progressTransferPreviewJson.manifest.risk.class, "private_runtime_memory");
+assert.equal(progressTransferPreviewJson.manifest.artifacts.length, 1);
 const transferApprovalInbox = await runCli(["ui", "approvals", "--repo", repoPath]);
 assert.ok(transferApprovalInbox.stdout.includes("transfer_manifest"));
 assert.ok(transferApprovalInbox.stdout.includes("thehood transfer preview"));

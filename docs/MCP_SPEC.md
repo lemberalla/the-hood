@@ -231,7 +231,7 @@ Output:
   "approval_reason": "string",
   "artifacts": [
     {
-      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation",
+      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation | transfer_manifest",
       "ref": "string"
     }
   ]
@@ -247,7 +247,8 @@ Current behavior:
 - optionally records an approval decision
 - advances the runtime loop until completion or the next gate
 - returns the final state, stop reason, provider response count, normalized provider responses, and structured `next_actions`
-- approval gates include `thehood_read_artifact` next actions when a specific patch or integration report should be inspected first
+- approval gates include `thehood_read_artifact` next actions when a specific patch, integration report, or transfer manifest should be inspected first
+- external provider transfer gates include `thehood_transfer_preview` next actions when a transfer manifest is available
 - completed runs include an `inspect_final_report` next action when a final report artifact is available
 - completed runs include a `thehood_reconcile` next action when they can be reconciled from a progress packet
 

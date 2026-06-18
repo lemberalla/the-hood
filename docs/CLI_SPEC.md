@@ -211,7 +211,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood transfer preview <run-id>` reads the latest `transfer_manifest` artifact for a run without sending anything externally. The preview includes destination provider, purpose, source artifacts, byte counts, hashes, risk class, approval phrase, and a bounded content preview.
 
-For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads, then calls the same role again with that context attached.
+For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact and pause at an approval gate before that repo context is sent back to the provider.
 
 When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call.
 

@@ -3,6 +3,10 @@ import { requiredAssignment, runAgent } from "./agentRunner.js";
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
 import { loadConfig } from "./config.js";
+import {
+  transferManifestSummary,
+  writeExternalTransferManifestArtifact
+} from "./externalTransfer.js";
 import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
@@ -206,10 +210,12 @@ const providerInvocationApprovalReason = (role: RuntimeRole, assignment: RoleAss
 const externalRepoContextApprovalReason = (
   role: RuntimeRole,
   assignment: RoleAssignment,
-  artifactSummary: string
+  artifactSummary: string,
+  approvalPhrase: string
 ): string =>
   `Sending repo context to ${assignment.provider}:${assignment.model} for ${role} requires explicit approval. ` +
-  `Approval message must mention "send repo context to ${assignment.provider}". Context artifact: ${artifactSummary}`;
+  `Approval message must mention "${approvalPhrase}". Review the transfer manifest before approving. ` +
+  `Context artifact: ${artifactSummary}`;
 
 const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentResponse => {
   const dataForRole = (): JsonObject => {
@@ -782,23 +788,40 @@ const executeReadOnlyRun = async (
     providersRequiringRepoContextApproval.has(assignment.provider) &&
     !hasExternalRepoContextApproval(run, assignment)
   ) {
-    const approvalReason = externalRepoContextApprovalReason(role, assignment, contextArtifact.summary);
-    const gated = await updateRun(
+    const approvalPhrase = `send repo context to ${assignment.provider}`;
+    const transfer = await writeExternalTransferManifestArtifact({
       run,
-      {
-        state: "awaiting_approval",
-        approvalRequired: true,
-        approvalReason
-      },
-      [
+      role,
+      destination: assignment,
+      purpose: "repo_context",
+      approvalPhrase,
+      artifacts: [contextArtifact]
+    });
+    const approvalReason = externalRepoContextApprovalReason(role, assignment, contextArtifact.summary, approvalPhrase);
+    const gated: RunRecord = {
+      ...run,
+      updatedAt: nowIso(),
+      state: "awaiting_approval",
+      approvalRequired: true,
+      approvalReason,
+      artifacts: [...run.artifacts, transfer.artifact],
+      events: [
+        ...run.events,
         createEvent("approval_required", approvalReason, {
           role,
           provider: assignment.provider,
           model: assignment.model,
-          artifactRef: contextArtifact.ref
+          reason: "repo_context_external_transfer",
+          artifactRef: transfer.artifact.ref,
+          artifactSummary: transfer.artifact.summary,
+          sourceArtifactRef: contextArtifact.ref,
+          sourceArtifactSummary: contextArtifact.summary,
+          transfer: transferManifestSummary(transfer.manifest)
         })
       ]
-    );
+    };
+
+    await saveRun(gated);
 
     return {
       run: gated,

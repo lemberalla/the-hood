@@ -124,7 +124,7 @@ Rules:
 
 ## External Transfer Review
 
-Before runtime memory crosses a browser or API provider boundary, TheHood should create a transfer manifest and point the approval gate at it.
+Before repo context or runtime memory crosses a browser or API provider boundary, TheHood should create a transfer manifest and point the approval gate at it.
 
 The manifest records:
 

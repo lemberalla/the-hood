@@ -32,11 +32,8 @@ const maxArtifactBytes = 200_000;
 const previewBytes = 4_000;
 
 const secretPatterns = [
-  /api[_-]?key/i,
+  /(?:api[_-]?key|secret|password|token)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{8,}/i,
   /authorization:\s*bearer/i,
-  /password/i,
-  /secret/i,
-  /session[_-]?token/i,
   /ssh-rsa|-----BEGIN [A-Z ]*PRIVATE KEY-----/
 ];
 
