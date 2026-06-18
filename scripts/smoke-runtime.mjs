@@ -106,6 +106,7 @@ assert.equal(doctorResult.runtime.name, "thehood");
 assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
+assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -171,6 +172,21 @@ const blockedChatGptInvocation = JSON.parse(
 assert.equal(blockedChatGptInvocation.run.state, "awaiting_approval");
 assert.equal(blockedChatGptInvocation.providerResponses[0].status, "blocked");
 assert.ok(blockedChatGptInvocation.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli(
+  [
+    "approve",
+    blockedChatGptPlan.runId,
+    "--repo",
+    repoPath,
+    "--reason",
+    "I approve the next thing without the required phrase."
+  ],
+  { expectExitCode: 2 }
+);
+const stillBlockedChatGptInvocation = JSON.parse(
+  (await runCli(["status", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(stillBlockedChatGptInvocation.state, "awaiting_approval");
 await runCli([
   "approve",
   blockedChatGptPlan.runId,

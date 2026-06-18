@@ -38,6 +38,27 @@ const createApprovalEvent = (decision: ApprovalDecision, reason: string): Approv
   reason
 });
 
+const requiredApprovalPhrase = (run: RunRecord): string | undefined =>
+  run.approvalReason?.match(/Approval message must mention "([^"]+)"/)?.[1];
+
+const includesApprovalPhrase = (reason: string, phrase: string): boolean =>
+  reason.toLowerCase().includes(phrase.toLowerCase());
+
+const assertApprovalPhrase = (
+  run: RunRecord,
+  decision: ApprovalDecision,
+  reason: string
+): void => {
+  if (decision !== "approve" || !run.approvalRequired) {
+    return;
+  }
+
+  const phrase = requiredApprovalPhrase(run);
+  if (phrase && !includesApprovalPhrase(reason, phrase)) {
+    throw new InputError(`Approval message must mention "${phrase}" to continue run ${run.runId}.`);
+  }
+};
+
 const approvedStateForRun = (run: RunRecord): RunState => {
   if (run.state !== "awaiting_approval") {
     return run.state;
@@ -138,6 +159,8 @@ export const recordApproval = async (
   reason: string
 ): Promise<RunRecord> => {
   const run = await loadRun(repoPath, runId);
+  assertApprovalPhrase(run, decision, reason);
+
   const approval = createApprovalEvent(decision, reason);
   const updatedAt = nowIso();
   const { approvalReason: _approvalReason, ...runWithoutApprovalReason } = run;

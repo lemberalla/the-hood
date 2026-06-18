@@ -166,6 +166,7 @@ assert.equal(doctorContent.runtime.name, "thehood");
 assert.ok(doctorContent.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
+assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforcement"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);
@@ -306,6 +307,26 @@ assert.equal(
   fakeClaudeConsultGate[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
   "unclear"
 );
+
+const fakeClaudeBadApproval = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: fakeClaudeRunId,
+        repo_path: repoPath,
+        approval: "approve",
+        message: "I approve without the required provider phrase."
+      }
+    }
+  }
+]);
+assert.equal(fakeClaudeBadApproval[1].result.isError, true);
+assert.ok(fakeClaudeBadApproval[1].result.structuredContent.error.message.includes("invoke claude-code"));
 
 const fakeClaudeConsultPath = await runMcp([
   ...baseMessages,
@@ -542,6 +563,27 @@ assert.equal(isolatedPatchInspection.tool, "thehood_read_artifact");
 assert.equal(isolatedPatchInspection.arguments.ref, isolatedDiffArtifact.ref);
 assert.equal(isolatedPatchApproval.arguments.run_id, isolatedRunId);
 assert.ok(isolatedPatchApproval.arguments.message.includes("apply isolated patch"));
+await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
+
+const isolatedBadApply = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: isolatedRunId,
+        repo_path: isolatedRepoPath,
+        approval: "approve",
+        message: "I approve the patch without the phrase."
+      }
+    }
+  }
+]);
+assert.equal(isolatedBadApply[1].result.isError, true);
+assert.ok(isolatedBadApply[1].result.structuredContent.error.message.includes("apply isolated patch"));
 await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
 
 const isolatedPatch = await fs.readFile(isolatedDiffArtifact.ref, "utf8");
@@ -782,6 +824,26 @@ assert.deepEqual(protectedIntegrationReport.protectedChanges, [
     pattern: "**/tests/**"
   }
 ]);
+
+const protectedBadVerification = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: protectedRunId,
+        repo_path: protectedRepoPath,
+        approval: "approve",
+        message: "I approve verification without the phrase."
+      }
+    }
+  }
+]);
+assert.equal(protectedBadVerification[1].result.isError, true);
+assert.ok(protectedBadVerification[1].result.structuredContent.error.message.includes("protected test changes"));
 
 const protectedVerification = await runMcp([
   ...baseMessages,

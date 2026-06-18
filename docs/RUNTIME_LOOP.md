@@ -83,6 +83,8 @@ User approval is required before:
 - continuing to verification after an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - switching orchestrator or verifier mid-run for an active task
 
+When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
+
 ## Runtime-Owned Evidence
 
 The runtime captures evidence directly:
