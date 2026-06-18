@@ -153,7 +153,11 @@ export const buildAgentDirective = async (
           editRequiresApproval: config.defaults.editRequiresApproval,
           dependencyInstallRequiresApproval: config.defaults.dependencyInstallRequiresApproval,
           networkRequiresApproval: config.defaults.networkRequiresApproval,
-          protectedTestPaths: config.defaults.protectedTestPaths
+          protectedTestPaths: config.defaults.protectedTestPaths,
+          externalTransfers: {
+            mode: config.approvalPolicy.externalTransfers.mode,
+            maxAutoApproveBytes: config.approvalPolicy.externalTransfers.maxAutoApproveBytes
+          }
         },
         stopConditions: [
           "terminal_state",

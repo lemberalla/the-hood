@@ -86,6 +86,13 @@ export const createDefaultConfig = (): TheHoodConfig => ({
     networkRequiresApproval: true,
     protectedTestPaths: [...defaultProtectedTestPaths]
   },
+  approvalPolicy: {
+    externalTransfers: {
+      mode: "manual",
+      maxAutoApproveBytes: 200_000,
+      rules: []
+    }
+  },
   providers: structuredClone(builtinProviders),
   roles: structuredClone(defaultRoles)
 });

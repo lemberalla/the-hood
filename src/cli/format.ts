@@ -56,6 +56,10 @@ export const formatConfig = (config: TheHoodConfig): string => [
   `  editRequiresApproval: ${config.defaults.editRequiresApproval}`,
   `  networkRequiresApproval: ${config.defaults.networkRequiresApproval}`,
   "",
+  "approval policy:",
+  `  externalTransfers: ${config.approvalPolicy.externalTransfers.mode}`,
+  `  maxAutoApproveBytes: ${config.approvalPolicy.externalTransfers.maxAutoApproveBytes}`,
+  "",
   "roles:",
   formatRoles(config.roles)
     .split("\n")

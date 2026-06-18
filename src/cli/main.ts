@@ -21,7 +21,14 @@ import {
   recordApproval
 } from "../runtime/runtime.js";
 import { approvalMessageHint, pendingApprovalsFromRuns } from "../runtime/approvalInbox.js";
-import { approvalDecisions, runModes, type ApprovalDecision, type RoleMap, type RunMode } from "../runtime/types.js";
+import {
+  approvalDecisions,
+  runModes,
+  type ApprovalDecision,
+  type ExternalTransferApprovalMode,
+  type RoleMap,
+  type RunMode
+} from "../runtime/types.js";
 import {
   getBooleanOption,
   getStringListOption,
@@ -74,6 +81,7 @@ Usage:
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
   thehood revise <run-id> [--repo <path>] [--reason <text>]
+  thehood approvals policy [show|set external-transfers manual|auto-low-risk] [--repo <path>] [--json]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
   thehood transfer preview <run-id> [--repo <path>] [--json]
@@ -133,6 +141,16 @@ const parseDecision = (value: string): ApprovalDecision => {
   }
 
   throw new InputError(`Invalid approval decision "${value}".`);
+};
+
+const parseExternalTransferApprovalMode = (value: string): ExternalTransferApprovalMode => {
+  const normalized = value.replace(/-/g, "_");
+
+  if (normalized === "manual" || normalized === "auto_low_risk") {
+    return normalized;
+  }
+
+  throw new InputError("External transfer policy must be manual or auto-low-risk.");
 };
 
 const ensureRunId = (value: string | undefined): string => {
@@ -406,6 +424,45 @@ const handleApprovalCommand = async (
   shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
 };
 
+const handleApprovals = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const subcommand = args[0] ?? "policy";
+
+  if (subcommand !== "policy") {
+    throw new InputError(`Unknown approvals subcommand "${subcommand}".`);
+  }
+
+  const action = args[1] ?? "show";
+  const repoPath = repoFromOptions(options);
+  const config = await loadConfig(repoPath);
+
+  if (action === "show") {
+    shouldPrintJson(options) ? printJson(config.approvalPolicy) : process.stdout.write(`${formatConfig(config)}\n`);
+    return;
+  }
+
+  if (action !== "set" || args[2] !== "external-transfers") {
+    throw new InputError("Use: thehood approvals policy set external-transfers manual|auto-low-risk");
+  }
+
+  const mode = parseExternalTransferApprovalMode(args[3] ?? "");
+  const updated = {
+    ...config,
+    approvalPolicy: {
+      ...config.approvalPolicy,
+      externalTransfers: {
+        ...config.approvalPolicy.externalTransfers,
+        mode
+      }
+    }
+  };
+
+  await writeConfig(repoPath, updated);
+  shouldPrintJson(options) ? printJson(updated.approvalPolicy) : process.stdout.write(`${formatConfig(updated)}\n`);
+};
+
 const handleContinue = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -631,6 +688,9 @@ const runCli = async (argv: string[]): Promise<void> => {
     case "reject":
     case "revise":
       await handleApprovalCommand(command, args, parsed.options);
+      return;
+    case "approvals":
+      await handleApprovals(args, parsed.options);
       return;
     case "continue":
       await handleContinue(args, parsed.options);

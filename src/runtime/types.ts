@@ -53,6 +53,28 @@ export interface RuntimeDefaults {
   protectedTestPaths: string[];
 }
 
+export type ExternalTransferApprovalMode = "manual" | "auto_low_risk";
+export type ExternalTransferPolicyDecision = "manual" | "auto_approve";
+
+export interface ExternalTransferPolicyRule {
+  provider?: string;
+  model?: string;
+  purposes?: ExternalTransferPurpose[];
+  riskClasses?: ExternalTransferRiskClass[];
+  maxBytes?: number;
+  decision: ExternalTransferPolicyDecision;
+}
+
+export interface ExternalTransferApprovalPolicy {
+  mode: ExternalTransferApprovalMode;
+  maxAutoApproveBytes: number;
+  rules: ExternalTransferPolicyRule[];
+}
+
+export interface ApprovalPolicy {
+  externalTransfers: ExternalTransferApprovalPolicy;
+}
+
 export interface ProviderConfig {
   enabled: boolean;
   models: string[];
@@ -65,6 +87,7 @@ export interface ProviderConfig {
 export interface TheHoodConfig {
   version: 1;
   defaults: RuntimeDefaults;
+  approvalPolicy: ApprovalPolicy;
   providers: Record<string, ProviderConfig>;
   roles: RoleMap;
 }

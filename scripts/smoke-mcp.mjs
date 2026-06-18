@@ -194,6 +194,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforceme
 assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("progress_packet_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("external_transfer_manifests"));
+assert.ok(doctorContent.runtime.capabilities.includes("external_transfer_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("planner_reconciliation"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));

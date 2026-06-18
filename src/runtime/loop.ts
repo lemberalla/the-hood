@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { requiredAssignment, runAgent } from "./agentRunner.js";
+import { autoApprovalReason, evaluateExternalTransferPolicy } from "./approvalPolicy.js";
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
 import { loadConfig } from "./config.js";
@@ -16,6 +17,7 @@ import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
+  ApprovalEvent,
   JsonObject,
   JsonValue,
   RoleAssignment,
@@ -46,6 +48,13 @@ const createEvent = (type: string, message: string, data?: JsonObject): RunEvent
   type,
   message,
   ...(data ? { data } : {})
+});
+
+const createApprovalEvent = (reason: string): ApprovalEvent => ({
+  id: newId("approval"),
+  createdAt: nowIso(),
+  decision: "approve",
+  reason
 });
 
 const updateRun = async (
@@ -797,38 +806,81 @@ const executeReadOnlyRun = async (
       approvalPhrase,
       artifacts: [contextArtifact]
     });
+    const config = await loadConfig(run.repoPath);
+    const policyEvaluation = evaluateExternalTransferPolicy(config, transfer.manifest);
     const approvalReason = externalRepoContextApprovalReason(role, assignment, contextArtifact.summary, approvalPhrase);
-    const gated: RunRecord = {
-      ...run,
-      updatedAt: nowIso(),
-      state: "awaiting_approval",
-      approvalRequired: true,
-      approvalReason,
-      artifacts: [...run.artifacts, transfer.artifact],
-      events: [
-        ...run.events,
-        createEvent("approval_required", approvalReason, {
-          role,
-          provider: assignment.provider,
-          model: assignment.model,
-          reason: "repo_context_external_transfer",
-          artifactRef: transfer.artifact.ref,
-          artifactSummary: transfer.artifact.summary,
-          sourceArtifactRef: contextArtifact.ref,
-          sourceArtifactSummary: contextArtifact.summary,
-          transfer: transferManifestSummary(transfer.manifest)
-        })
-      ]
-    };
+    const transferEvent = createEvent("external_transfer_manifest_written", transfer.artifact.summary, {
+      role,
+      provider: assignment.provider,
+      model: assignment.model,
+      reason: "repo_context_external_transfer",
+      artifactRef: transfer.artifact.ref,
+      artifactSummary: transfer.artifact.summary,
+      sourceArtifactRef: contextArtifact.ref,
+      sourceArtifactSummary: contextArtifact.summary,
+      transfer: transferManifestSummary(transfer.manifest)
+    });
 
-    await saveRun(gated);
+    if (policyEvaluation.decision === "auto_approve") {
+      const approval = createApprovalEvent(autoApprovalReason(transfer.manifest, policyEvaluation));
+      run = {
+        ...run,
+        updatedAt: nowIso(),
+        approvalRequired: false,
+        artifacts: [...run.artifacts, transfer.artifact],
+        approvalEvents: [...run.approvalEvents, approval],
+        events: [
+          ...run.events,
+          transferEvent,
+          createEvent("approval_auto_approved", approval.reason, {
+            role,
+            provider: assignment.provider,
+            model: assignment.model,
+            reason: "repo_context_external_transfer",
+            policyDecision: policyEvaluation.decision,
+            policyReason: policyEvaluation.reason,
+            artifactRef: transfer.artifact.ref,
+            sourceArtifactRef: contextArtifact.ref,
+            transfer: transferManifestSummary(transfer.manifest)
+          })
+        ]
+      };
 
-    return {
-      run: gated,
-      response: createApprovalGateResponse(role, approvalReason),
-      advanced: true,
-      stopReason: approvalReason
-    };
+      await saveRun(run);
+    } else {
+      const gated: RunRecord = {
+        ...run,
+        updatedAt: nowIso(),
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason,
+        artifacts: [...run.artifacts, transfer.artifact],
+        events: [
+          ...run.events,
+          transferEvent,
+          createEvent("approval_required", approvalReason, {
+            role,
+            provider: assignment.provider,
+            model: assignment.model,
+            reason: "repo_context_external_transfer",
+            artifactRef: transfer.artifact.ref,
+            artifactSummary: transfer.artifact.summary,
+            sourceArtifactRef: contextArtifact.ref,
+            sourceArtifactSummary: contextArtifact.summary,
+            transfer: transferManifestSummary(transfer.manifest)
+          })
+        ]
+      };
+
+      await saveRun(gated);
+
+      return {
+        run: gated,
+        response: createApprovalGateResponse(role, approvalReason),
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
   }
 
   const result = await runAgent(run, role, await readOnlyContext(run));

@@ -79,15 +79,15 @@ User approval is required before:
 - running commands with external side effects
 - using network access when the policy requires approval
 - invoking model-backed providers such as `chatgpt-web`, `claude-code`, or `codex-cli` for read-only repo work
-- sending runtime-captured repo context to browser or API model providers such as `chatgpt-web`
-- sending runtime-captured progress or memory packets to browser or API model providers
+- sending runtime-captured repo context to browser or API model providers such as `chatgpt-web`, unless the user's external transfer policy auto-approves the manifest
+- sending runtime-captured progress or memory packets to browser or API model providers, unless the user's external transfer policy auto-approves the manifest
 - applying a worker patch to the main checkout
 - continuing to verification after an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - switching orchestrator or verifier mid-run for an active task
 
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
-Before sending repo context or a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine.
+Before sending repo context or a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine. If the user configures `externalTransfers: auto_low_risk`, bounded transfers that do not have `secret_risk` can be auto-approved; the runtime still records the manifest, approval event, and `approval_auto_approved` event.
 
 `maxIterations` is enforced from persisted provider responses. If the next transition would call another provider after the run has already recorded `maxIterations` agent responses, the runtime fails closed with reason `max_iterations`.
 
@@ -125,7 +125,7 @@ Provider status is also authoritative. A worker response with `blocked` pauses a
 
 ## Planner Reconciliation
 
-Planner reconciliation closes the loop after a plan has been implemented and verified. The runtime builds a progress packet from canonical artifacts, asks the user to approve any external context transfer, sends the packet to the selected planner or orchestrator, validates the response, and stores the result as a reconciliation artifact.
+Planner reconciliation closes the loop after a plan has been implemented and verified. The runtime builds a progress packet from canonical artifacts, applies the user's external transfer approval policy, sends the packet to the selected planner or orchestrator after approval, validates the response, and stores the result as a reconciliation artifact.
 
 Reconciliation should answer which plan items are complete, which criteria remain open, whether the implementation deviated from the plan, and what the next slice should be. It is advisory; runtime evidence and approval gates remain authoritative.
 

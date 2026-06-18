@@ -131,6 +131,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_manifests"));
+assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
@@ -622,6 +623,132 @@ assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().s
   "context",
   "progress"
 ]);
+
+const defaultApprovalPolicy = JSON.parse(
+  (await runCli(["approvals", "policy", "show", "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(defaultApprovalPolicy.externalTransfers.mode, "manual");
+const enabledApprovalPolicy = JSON.parse(
+  (
+    await runCli([
+      "approvals",
+      "policy",
+      "set",
+      "external-transfers",
+      "auto-low-risk",
+      "--repo",
+      repoPath,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(enabledApprovalPolicy.externalTransfers.mode, "auto_low_risk");
+const enabledApprovalPolicyText = await runCli(["config", "show", "--repo", repoPath]);
+assert.ok(enabledApprovalPolicyText.stdout.includes("externalTransfers: auto_low_risk"));
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const autoPolicyPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "auto-transfer-policy smoke provider milestone",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const autoPolicyInvocationGate = JSON.parse(
+  (await runCli(["continue", autoPolicyPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(autoPolicyInvocationGate.run.state, "awaiting_approval");
+assert.equal(autoPolicyInvocationGate.run.approvalRequired, true);
+assert.ok(autoPolicyInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+assert.equal(await fs.readFile(fakeExternalBridgeLogPath, "utf8"), "");
+await runCli([
+  "approve",
+  autoPolicyPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for auto transfer policy smoke."
+]);
+const autoPolicyContextApproved = JSON.parse(
+  (await runCli(["continue", autoPolicyPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(autoPolicyContextApproved.run.state, "completed");
+assert.equal(autoPolicyContextApproved.run.approvalRequired, false);
+assert.deepEqual(autoPolicyContextApproved.providerResponses.map((response) => response.data.decision.action), [
+  "delegate",
+  "complete"
+]);
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context"
+]);
+assert.ok(
+  autoPolicyContextApproved.run.approvalEvents.some(
+    (approval) =>
+      approval.reason.includes("Auto-approved by TheHood approval policy") &&
+      approval.reason.includes("send repo context to chatgpt-web")
+  )
+);
+assert.ok(
+  autoPolicyContextApproved.run.events.some(
+    (event) =>
+      event.type === "approval_auto_approved" &&
+      event.data?.reason === "repo_context_external_transfer" &&
+      event.data?.policyDecision === "auto_approve"
+  )
+);
+const autoPolicyProgressReconciled = JSON.parse(
+  (await runCli(["reconcile", autoPolicyPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(autoPolicyProgressReconciled.run.state, "completed");
+assert.equal(autoPolicyProgressReconciled.run.approvalRequired, false);
+assert.equal(autoPolicyProgressReconciled.reconciliationArtifact.kind, "reconciliation");
+assert.equal(autoPolicyProgressReconciled.providerResponses[0].data.decision.action, "complete");
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context",
+  "progress"
+]);
+assert.ok(
+  autoPolicyProgressReconciled.run.approvalEvents.some(
+    (approval) =>
+      approval.reason.includes("Auto-approved by TheHood approval policy") &&
+      approval.reason.includes("send progress packet to chatgpt-web")
+  )
+);
+assert.ok(
+  autoPolicyProgressReconciled.run.events.some(
+    (event) =>
+      event.type === "approval_auto_approved" &&
+      event.data?.reason === "progress_packet_external_transfer" &&
+      event.data?.policyDecision === "auto_approve"
+  )
+);
+const restoredApprovalPolicy = JSON.parse(
+  (
+    await runCli([
+      "approvals",
+      "policy",
+      "set",
+      "external-transfers",
+      "manual",
+      "--repo",
+      repoPath,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(restoredApprovalPolicy.externalTransfers.mode, "manual");
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
 const run = JSON.parse(plan.stdout);

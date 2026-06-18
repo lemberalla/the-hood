@@ -29,6 +29,15 @@ const mergeConfig = (base: TheHoodConfig, override: Partial<TheHoodConfig>): The
     protectedTestPaths:
       override.defaults?.protectedTestPaths ?? base.defaults.protectedTestPaths
   },
+  approvalPolicy: {
+    externalTransfers: {
+      ...base.approvalPolicy.externalTransfers,
+      ...(override.approvalPolicy?.externalTransfers ?? {}),
+      rules:
+        override.approvalPolicy?.externalTransfers?.rules ??
+        base.approvalPolicy.externalTransfers.rules
+    }
+  },
   providers: {
     ...base.providers,
     ...(override.providers ?? {})

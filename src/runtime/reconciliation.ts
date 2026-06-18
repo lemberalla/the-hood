@@ -1,5 +1,7 @@
 import { readRunArtifact } from "./artifacts.js";
 import { runAgent } from "./agentRunner.js";
+import { autoApprovalReason, evaluateExternalTransferPolicy } from "./approvalPolicy.js";
+import { loadConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import {
   transferManifestSummary,
@@ -10,6 +12,7 @@ import { writeProgressPacketArtifact } from "./progressPacket.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
+  ApprovalEvent,
   JsonObject,
   RoleAssignment,
   RunArtifact,
@@ -34,6 +37,11 @@ export interface ReconcileRunResult {
   providerResponses: AgentResponse[];
 }
 
+interface ProgressPacketTransferReview {
+  run: RunRecord;
+  gated?: ReconcileRunResult;
+}
+
 const providersRequiringProgressPacketApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
 
 const createEvent = (type: string, message: string, data?: JsonObject): RunEvent => ({
@@ -42,6 +50,13 @@ const createEvent = (type: string, message: string, data?: JsonObject): RunEvent
   type,
   message,
   ...(data ? { data } : {})
+});
+
+const createApprovalEvent = (reason: string): ApprovalEvent => ({
+  id: newId("approval"),
+  createdAt: nowIso(),
+  decision: "approve",
+  reason
 });
 
 const artifactSummary = (artifact: RunArtifact): JsonObject => ({
@@ -144,22 +159,27 @@ const gateProgressPacketTransfer = async (
   role: RuntimeRole,
   assignment: RoleAssignment,
   progressArtifact: RunArtifact
-): Promise<ReconcileRunResult | undefined> => {
+): Promise<ProgressPacketTransferReview> => {
   if (
     !providersRequiringProgressPacketApproval.has(assignment.provider) ||
     hasExternalProgressPacketApproval(run, assignment)
   ) {
-    return undefined;
+    return {
+      run
+    };
   }
 
   if (run.approvalRequired) {
     return {
       run,
-      advanced: false,
-      stopReason: run.approvalReason ?? "Approval is required before reconciliation can continue.",
-      role,
-      progressArtifact,
-      providerResponses: []
+      gated: {
+        run,
+        advanced: false,
+        stopReason: run.approvalReason ?? "Approval is required before reconciliation can continue.",
+        role,
+        progressArtifact,
+        providerResponses: []
+      }
     };
   }
 
@@ -172,7 +192,52 @@ const gateProgressPacketTransfer = async (
     approvalPhrase,
     artifacts: [progressArtifact]
   });
+  const config = await loadConfig(run.repoPath);
+  const policyEvaluation = evaluateExternalTransferPolicy(config, transfer.manifest);
   const approvalReason = externalProgressPacketApprovalReason(role, assignment, progressArtifact, approvalPhrase);
+  const transferEvent = createEvent("external_transfer_manifest_written", transfer.artifact.summary, {
+    role,
+    provider: assignment.provider,
+    model: assignment.model,
+    reason: "progress_packet_external_transfer",
+    artifactRef: transfer.artifact.ref,
+    artifactSummary: transfer.artifact.summary,
+    sourceArtifactRef: progressArtifact.ref,
+    sourceArtifactSummary: progressArtifact.summary,
+    transfer: transferManifestSummary(transfer.manifest)
+  });
+
+  if (policyEvaluation.decision === "auto_approve") {
+    const approval = createApprovalEvent(autoApprovalReason(transfer.manifest, policyEvaluation));
+    const approved: RunRecord = {
+      ...run,
+      updatedAt: nowIso(),
+      approvalRequired: false,
+      artifacts: [...run.artifacts, transfer.artifact],
+      approvalEvents: [...run.approvalEvents, approval],
+      events: [
+        ...run.events,
+        transferEvent,
+        createEvent("approval_auto_approved", approval.reason, {
+          role,
+          provider: assignment.provider,
+          model: assignment.model,
+          reason: "progress_packet_external_transfer",
+          policyDecision: policyEvaluation.decision,
+          policyReason: policyEvaluation.reason,
+          artifactRef: transfer.artifact.ref,
+          sourceArtifactRef: progressArtifact.ref,
+          transfer: transferManifestSummary(transfer.manifest)
+        })
+      ]
+    };
+
+    await saveRun(approved);
+    return {
+      run: approved
+    };
+  }
+
   const gated: RunRecord = {
     ...run,
     updatedAt: nowIso(),
@@ -181,6 +246,7 @@ const gateProgressPacketTransfer = async (
     artifacts: [...run.artifacts, transfer.artifact],
     events: [
       ...run.events,
+      transferEvent,
       createEvent("approval_required", approvalReason, {
         role,
         provider: assignment.provider,
@@ -199,11 +265,14 @@ const gateProgressPacketTransfer = async (
 
   return {
     run: gated,
-    advanced: true,
-    stopReason: approvalReason,
-    role,
-    progressArtifact,
-    providerResponses: []
+    gated: {
+      run: gated,
+      advanced: true,
+      stopReason: approvalReason,
+      role,
+      progressArtifact,
+      providerResponses: []
+    }
   };
 };
 
@@ -273,15 +342,15 @@ export const reconcileRun = async (input: ReconcileRunInput): Promise<ReconcileR
   const role = reconciliationRoleForRun(loaded, input.role);
   const assignment = requiredAssignment(loaded, role);
   const progress = await ensureProgressArtifact(loaded);
-  const gated = await gateProgressPacketTransfer(progress.run, role, assignment, progress.artifact);
+  const transferReview = await gateProgressPacketTransfer(progress.run, role, assignment, progress.artifact);
 
-  if (gated) {
-    return gated;
+  if (transferReview.gated) {
+    return transferReview.gated;
   }
 
-  const progressPacket = await readProgressPacket(progress.run, progress.artifact);
+  const progressPacket = await readProgressPacket(transferReview.run, progress.artifact);
   const result = await runAgent(
-    progress.run,
+    transferReview.run,
     role,
     {
       phase: "reconcile",

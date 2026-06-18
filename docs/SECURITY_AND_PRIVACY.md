@@ -32,8 +32,8 @@ Rules:
 - Redact environment variables by default.
 - Store provider credentials using OS keychain or provider CLI config when possible.
 - Require explicit user approval before invoking model-backed providers for read-only repo work.
-- Require explicit user approval before sending runtime-captured repo context to browser or API model providers.
-- Require explicit user approval before sending runtime-captured progress, memory, or reconciliation packets to browser or API model providers.
+- Require explicit user approval before sending runtime-captured repo context to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.
+- Require explicit user approval before sending runtime-captured progress, memory, or reconciliation packets to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.
 
 ## Browser-Based Providers
 
@@ -49,7 +49,7 @@ Rules:
 - Detect model availability visibly and fail if uncertain.
 - Capture only visible model outputs needed for the run.
 - Do not invoke ChatGPT Web for repo work until the user explicitly approves that provider invocation.
-- Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer.
+- Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer or has configured low-risk external transfer auto-approval.
 
 ## Filesystem Safety
 
@@ -136,7 +136,7 @@ The manifest records:
 - exact approval phrase
 - bounded preview of the artifact content
 
-Approval should be based on that manifest. The provider response, transfer manifest, and source artifacts remain separate so a later reviewer can distinguish what was sent from what the provider concluded.
+Approval should be based on that manifest. Manual approval is the default. When `externalTransfers` is set to `auto_low_risk`, the runtime can auto-approve bounded transfers whose risk class is not `secret_risk`; it still records the manifest and an approval event before sending. The provider response, transfer manifest, and source artifacts remain separate so a later reviewer can distinguish what was sent from what the provider concluded.
 
 ## Public Repo Boundary
 

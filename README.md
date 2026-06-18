@@ -35,6 +35,7 @@ It supports:
 - runtime-owned final reports for completed runs
 - runtime-owned progress packet artifacts for completed runs
 - runtime-owned external transfer manifests before repo context or progress packets leave the machine
+- user-configurable external transfer approval policy with manual and low-risk auto-approval modes
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
 - runtime-captured package validation command evidence during verifier review
@@ -78,6 +79,7 @@ node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
 node dist/cli/main.js transfer preview <run-id> --repo .
+node dist/cli/main.js approvals policy set external-transfers auto-low-risk --repo .
 node dist/cli/main.js ui approvals --repo .
 node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
