@@ -104,6 +104,7 @@ The runtime captures evidence directly:
 - tool permission decision
 - protected path classification
 - final report artifacts for completed runs
+- progress packet artifacts for later planner reconciliation
 
 Models may summarize evidence, but summaries are not authoritative.
 
@@ -115,7 +116,7 @@ Provider directives should assume that browser and API conversation context may 
 
 ## Final Reports
 
-Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, and approval events.
+Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, and approval events. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 
@@ -167,6 +168,7 @@ delegating
   -> package validation command capture
   -> verifier response
   -> verifier response schema validation
+  -> final report and progress packet artifacts
   -> completed or awaiting_approval
 ```
 

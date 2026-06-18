@@ -1,3 +1,6 @@
+import { writeRunArtifact } from "./artifacts.js";
+import { newId, nowIso } from "./ids.js";
+import { loadRun, saveRun } from "./store.js";
 import {
   runtimeRoles,
   type ApprovalEvent,
@@ -16,6 +19,7 @@ import {
   type ProgressPacketSourceRef,
   type ProgressPacketToolEvidence,
   type RunArtifact,
+  type RunArtifactKind,
   type RunEvent,
   type RunRecord,
   type RoleMap,
@@ -58,6 +62,14 @@ interface ProgressPacketBuildState {
 export interface BuildProgressPacketInput {
   limits?: Partial<ProgressPacketLimits>;
 }
+
+export interface WriteProgressPacketArtifactResult {
+  run: RunRecord;
+  artifact: RunArtifact;
+  packet: ProgressPacket;
+}
+
+const progressPacketArtifactKind: RunArtifactKind = "progress";
 
 const mergeLimits = (limits: Partial<ProgressPacketLimits> | undefined): ProgressPacketLimits => ({
   ...defaultProgressPacketLimits,
@@ -592,5 +604,49 @@ export const buildProgressPacket = (
       ]
     },
     bounds: state.bounds
+  };
+};
+
+export const writeProgressPacketArtifact = async (
+  run: RunRecord
+): Promise<WriteProgressPacketArtifactResult> => {
+  const latest = await loadRun(run.repoPath, run.runId);
+  const packet = buildProgressPacket(latest);
+  const artifact = await writeRunArtifact({
+    repoPath: latest.repoPath,
+    runId: latest.runId,
+    kind: progressPacketArtifactKind,
+    name: `progress-${newId("progress")}.json`,
+    content: `${JSON.stringify(packet, null, 2)}\n`,
+    summary: `Progress packet for ${latest.state} ${latest.mode} run.`
+  });
+  const current = await loadRun(latest.repoPath, latest.runId);
+  const eventCreatedAt = nowIso();
+  const updated: RunRecord = {
+    ...current,
+    updatedAt: eventCreatedAt,
+    artifacts: [...current.artifacts, artifact],
+    events: [
+      ...current.events,
+      {
+        id: newId("event"),
+        createdAt: eventCreatedAt,
+        type: "progress_packet_written",
+        message: "Wrote runtime progress packet.",
+        data: {
+          artifactRef: artifact.ref,
+          artifactSummary: artifact.summary,
+          packetKind: packet.kind
+        }
+      }
+    ]
+  };
+
+  await saveRun(updated);
+
+  return {
+    run: updated,
+    artifact,
+    packet
   };
 };

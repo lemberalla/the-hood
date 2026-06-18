@@ -78,7 +78,8 @@ export type RunArtifactKind =
   | "status"
   | "agent"
   | "directive"
-  | "context";
+  | "context"
+  | "progress";
 
 export interface RunArtifact {
   kind: RunArtifactKind;

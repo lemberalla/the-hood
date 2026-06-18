@@ -6,6 +6,7 @@ import { buildAgentDirective } from "./directives.js";
 import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
+import { writeProgressPacketArtifact } from "./progressPacket.js";
 import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } from "./repoContext.js";
 import { getProviderAdapter } from "../providers/router.js";
 import { validateAgentResponse } from "./responseContracts.js";
@@ -971,9 +972,10 @@ const executeReadOnlyRun = async (
     { state: "completed", stopReason },
     [createEvent("run_completed", `${role} run completed.`)]
   );
+  const progress = await writeProgressPacketArtifact(completed);
 
   return {
-    run: completed,
+    run: progress.run,
     response: result.response,
     advanced: true
   };
@@ -1151,9 +1153,10 @@ const advanceOneStep = async (
         { state: "completed", stopReason },
         [createEvent("run_completed", stopReason)]
       );
+      const progress = await writeProgressPacketArtifact(completed);
 
       return {
-        run: completed,
+        run: progress.run,
         response: result.response,
         advanced: true
       };
