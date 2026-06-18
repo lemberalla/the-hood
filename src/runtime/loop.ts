@@ -163,6 +163,67 @@ const actionFromResponse = (response: AgentResponse): string | undefined => {
   return typeof action === "string" ? action : undefined;
 };
 
+const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
+
+const latestRepoContextCapturedAt = (run: RunRecord): string | undefined =>
+  run.events.filter((event) => event.type === "repo_context_captured").at(-1)?.createdAt;
+
+const approvalMentionsRepoContextShare = (reason: string, assignment: RoleAssignment): boolean => {
+  const normalized = reason.toLowerCase();
+  const providerTokens = [
+    assignment.provider,
+    assignment.provider.replace(/-/g, " "),
+    assignment.model,
+    assignment.model.replace(/-/g, " ")
+  ];
+
+  return (
+    normalized.includes("repo context") &&
+    (normalized.includes("send") || normalized.includes("share")) &&
+    providerTokens.some((token) => token && normalized.includes(token.toLowerCase()))
+  );
+};
+
+const hasExternalRepoContextApproval = (run: RunRecord, assignment: RoleAssignment): boolean => {
+  const capturedAt = latestRepoContextCapturedAt(run);
+
+  return run.approvalEvents.some(
+    (approval) =>
+      approval.decision === "approve" &&
+      (!capturedAt || approval.createdAt >= capturedAt) &&
+      approvalMentionsRepoContextShare(approval.reason, assignment)
+  );
+};
+
+const externalRepoContextApprovalReason = (
+  role: RuntimeRole,
+  assignment: RoleAssignment,
+  artifactSummary: string
+): string =>
+  `Sending repo context to ${assignment.provider}:${assignment.model} for ${role} requires explicit approval. ` +
+  `Approval message must mention "send repo context to ${assignment.provider}". Context artifact: ${artifactSummary}`;
+
+const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentResponse => {
+  if (role === "orchestrator" || role === "planner") {
+    return {
+      status: "blocked",
+      summary,
+      data: {
+        decision: {
+          action: "request_approval",
+          reason: summary
+        }
+      }
+    };
+  }
+
+  return {
+    status: "blocked",
+    summary,
+    data: {}
+  };
+};
+
 const stopForProviderStatus = async (
   run: RunRecord,
   role: RuntimeRole,
@@ -250,6 +311,40 @@ const executeReadOnlyRun = async (
   run: RunRecord,
   role: RuntimeRole
 ): Promise<{ run: RunRecord; response: AgentResponse; advanced: boolean; stopReason?: string }> => {
+  const assignment = requiredAssignment(run, role);
+  const contextArtifact = latestRepoContextArtifact(run);
+
+  if (
+    contextArtifact &&
+    providersRequiringRepoContextApproval.has(assignment.provider) &&
+    !hasExternalRepoContextApproval(run, assignment)
+  ) {
+    const approvalReason = externalRepoContextApprovalReason(role, assignment, contextArtifact.summary);
+    const gated = await updateRun(
+      run,
+      {
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason
+      },
+      [
+        createEvent("approval_required", approvalReason, {
+          role,
+          provider: assignment.provider,
+          model: assignment.model,
+          artifactRef: contextArtifact.ref
+        })
+      ]
+    );
+
+    return {
+      run: gated,
+      response: createApprovalGateResponse(role, approvalReason),
+      advanced: true,
+      stopReason: approvalReason
+    };
+  }
+
   const result = await runAgent(run, role, await readOnlyContext(run));
   const stopped = await stopForProviderStatus(result.run, role, result.response);
 

@@ -77,6 +77,7 @@ User approval is required before:
 - installing dependencies
 - running commands with external side effects
 - using network access when the policy requires approval
+- sending runtime-captured repo context to browser or API model providers such as `chatgpt-web`
 - applying a worker patch to the main checkout
 - switching orchestrator or verifier mid-run for an active task
 
@@ -148,4 +149,4 @@ Read-only runs can also execute a mapped guest role directly:
 - `research` uses `researcher` when assigned, otherwise `orchestrator`
 - `review` uses `critic` when assigned, otherwise `orchestrator`
 
-When a read-only orchestrator or planner returns `action: "delegate"` before repo context exists, the runtime captures a bounded `repo_context` artifact using deterministic filesystem reads, then calls the role again with that context attached. If the role requests another delegation after a context pack exists, the runtime stops at an approval gate instead of looping indefinitely.
+When a read-only orchestrator or planner returns `action: "delegate"` before repo context exists, the runtime captures a bounded `repo_context` artifact using deterministic filesystem reads. For browser or API model providers such as `chatgpt-web`, the runtime stops at an approval gate before sending that context back to the provider. If the role requests another delegation after a context pack exists, the runtime stops at an approval gate instead of looping indefinitely.

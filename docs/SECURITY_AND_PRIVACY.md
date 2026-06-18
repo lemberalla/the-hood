@@ -31,6 +31,7 @@ Rules:
 - Do not include secrets in model context.
 - Redact environment variables by default.
 - Store provider credentials using OS keychain or provider CLI config when possible.
+- Require explicit user approval before sending runtime-captured repo context to browser or API model providers.
 
 ## Browser-Based Providers
 
@@ -44,6 +45,7 @@ Rules:
 - Do not bypass provider restrictions.
 - Detect model availability visibly and fail if uncertain.
 - Capture only visible model outputs needed for the run.
+- Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer.
 
 ## Filesystem Safety
 

@@ -78,8 +78,9 @@ First verification sequence from a Codex chat:
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
 2. Call `thehood_plan` for a harmless read-only goal.
 3. Call `thehood_continue` for that run and confirm ChatGPT Pro returns schema-valid JSON.
-4. Confirm any delegated repo inspection creates a bounded `context` artifact before Pro receives repo evidence.
-5. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
+4. If Pro delegates repo inspection, confirm the runtime creates a bounded `context` artifact and then stops for explicit approval before sending that context back to ChatGPT Web.
+5. Approve the context transfer only when the user accepts sending bounded repo evidence to ChatGPT Web, then continue the run.
+6. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
 
 ## Recommended First Codex Chat
 

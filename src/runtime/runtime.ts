@@ -38,6 +38,14 @@ const createApprovalEvent = (decision: ApprovalDecision, reason: string): Approv
   reason
 });
 
+const approvedStateForRun = (run: RunRecord): RunState => {
+  if (run.state !== "awaiting_approval") {
+    return run.state;
+  }
+
+  return run.mode === "implement" ? "delegating" : "planning";
+};
+
 const initialStateForMode = (mode: RunMode): { state: RunState; approvalRequired: boolean; reason?: string } => {
   if (mode === "implement") {
     return {
@@ -131,9 +139,7 @@ export const recordApproval = async (
       ? "aborted"
       : decision === "revise"
         ? "awaiting_approval"
-        : run.state === "awaiting_approval"
-          ? "delegating"
-          : run.state;
+        : approvedStateForRun(run);
 
   const base: RunRecord = {
     ...(decision === "revise" ? run : runWithoutApprovalReason),

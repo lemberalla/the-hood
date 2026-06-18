@@ -265,6 +265,94 @@ assert.equal(repoContext.kind, "repo_context");
 assert.ok(repoContext.tree.includes("README.md"));
 assert.ok(repoContext.files.some((file) => file.path === "README.md"));
 
+const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
+const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");
+await fs.writeFile(
+  fakeExternalBridgePath,
+  [
+    "#!/usr/bin/env node",
+    "import fs from 'node:fs/promises';",
+    "const logPath = process.env.THEHOOD_FAKE_CHATGPT_LOG;",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', async () => {",
+    "  const hasRepoContext = input.includes('\"repoContext\"');",
+    "  if (logPath) {",
+    "    await fs.appendFile(logPath, hasRepoContext ? 'context\\n' : 'no-context\\n', 'utf8');",
+    "  }",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    data: {",
+    "      decision: hasRepoContext ? {",
+    "        action: 'complete',",
+    "        reason: 'Approved repo context was enough for a plan.'",
+    "      } : {",
+    "        action: 'delegate',",
+    "        reason: 'Need bounded repo context before planning.',",
+    "        delegate: {",
+    "          role: 'repo_reader',",
+    "          task: 'Capture bounded repo context for external planning.'",
+    "        }",
+    "      }",
+    "    }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeExternalBridgePath, 0o755);
+const fakeExternalEnv = {
+  THEHOOD_CHATGPT_WEB_COMMAND: fakeExternalBridgePath,
+  THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath
+};
+const externalContextPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "external-context-smoke plan provider milestone",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const externalContextGate = JSON.parse(
+  (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(externalContextGate.run.state, "awaiting_approval");
+assert.equal(externalContextGate.run.approvalRequired, true);
+assert.ok(externalContextGate.run.approvalReason.includes("Sending repo context to chatgpt-web:chatgpt-pro"));
+assert.equal(externalContextGate.providerResponses[0].data.decision.action, "delegate");
+assert.equal(externalContextGate.providerResponses.at(-1).data.decision.action, "request_approval");
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), ["no-context"]);
+await runCli([
+  "approve",
+  externalContextPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve send repo context to chatgpt-web for this read-only smoke."
+]);
+const externalContextApproved = JSON.parse(
+  (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(externalContextApproved.run.state, "completed");
+assert.equal(externalContextApproved.providerResponses[0].data.decision.action, "complete");
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context"
+]);
+
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
 const run = JSON.parse(plan.stdout);
 
