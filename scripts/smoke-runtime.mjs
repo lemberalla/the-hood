@@ -460,26 +460,28 @@ await fs.writeFile(
     "  const hasProgressPacket = input.includes('\"progressPacket\"');",
     "  const isTargetedContextSmoke = input.includes('targeted-follow-up-context-smoke');",
     "  const hasTargetedEvidence = input.includes('Targeted follow-up context marker');",
+    "  const hasFinalTargetedEvidence = input.includes('Targeted follow-up context marker 7');",
+    "  const targetFiles = Array.from({ length: 8 }, (_, index) => `notes/targeted-evidence-${index}.md`);",
     "  if (logPath) {",
     "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTargetedEvidence ? 'fake ChatGPT received targeted repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
     "      decision: hasProgressPacket ? {",
     "        action: 'complete',",
     "        reason: 'Approved progress packet was reconciled.'",
-    "      } : hasTargetedEvidence ? {",
+    "      } : hasFinalTargetedEvidence ? {",
     "        action: 'complete',",
     "        reason: 'Targeted repo context was enough for a plan.'",
     "      } : hasRepoContext && isTargetedContextSmoke ? {",
     "        action: 'delegate',",
     "        reason: 'Need one targeted follow-up file before planning.',",
-    "        targetFiles: ['notes/targeted-evidence.md'],",
+    "        targetFiles,",
     "        delegate: {",
     "          role: 'repo_reader',",
-    "          task: 'Capture notes/targeted-evidence.md as a targeted follow-up repo context.'",
+    "          task: `Capture targeted follow-up repo context for ${targetFiles.join(', ')}.`",
     "        }",
     "      } : hasRepoContext ? {",
     "        action: 'complete',",
@@ -749,11 +751,13 @@ assert.ok(
   )
 );
 await fs.mkdir(path.join(repoPath, "notes"), { recursive: true });
-await fs.writeFile(
-  path.join(repoPath, "notes", "targeted-evidence.md"),
-  "# Targeted Evidence\n\nTargeted follow-up context marker.\n",
-  "utf8"
-);
+for (let index = 0; index < 8; index += 1) {
+  await fs.writeFile(
+    path.join(repoPath, "notes", `targeted-evidence-${index}.md`),
+    `# Targeted Evidence ${index}\n\nTargeted follow-up context marker ${index}.\n${"large requested context line\n".repeat(900)}`,
+    "utf8"
+  );
+}
 await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
 const targetedContextPlan = JSON.parse(
   (
@@ -793,44 +797,46 @@ assert.equal(targetedContextCompleted.run.state, "completed");
 assert.deepEqual(targetedContextCompleted.providerResponses.map((response) => response.data.decision.action), [
   "delegate",
   "delegate",
+  "delegate",
+  "delegate",
   "complete"
 ]);
 assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
   "no-context",
   "context",
+  "targeted-context",
+  "targeted-context",
   "targeted-context"
 ]);
 const targetedContextArtifacts = targetedContextCompleted.run.artifacts.filter(
   (artifact) => artifact.kind === "context"
 );
-assert.equal(targetedContextArtifacts.length, 2);
+assert.ok(targetedContextArtifacts.length >= 4);
 const latestTargetedContext = JSON.parse(await fs.readFile(targetedContextArtifacts.at(-1).ref, "utf8"));
 assert.ok(
   latestTargetedContext.files.some(
     (file) =>
-      file.path === "notes/targeted-evidence.md" &&
-      file.excerpt.includes("Targeted follow-up context marker") &&
+      file.path === "notes/targeted-evidence-7.md" &&
+      file.excerpt.includes("Targeted follow-up context marker 7") &&
       file.maxBytes === latestTargetedContext.limits.maxBytesPerRequestedFile
   ),
-  "targeted follow-up context should include newly requested file with requested-file budget"
+  "targeted follow-up context should prioritize newly requested files that were not already captured"
 );
-assert.equal(
-  targetedContextCompleted.run.events.filter((event) => event.type === "repo_context_captured").length,
-  2
+assert.ok(
+  targetedContextCompleted.run.events.filter((event) => event.type === "repo_context_captured").length >= 4
 );
 assert.ok(
   targetedContextCompleted.run.events.some(
     (event) =>
       event.type === "repo_context_captured" &&
       Array.isArray(event.data?.requestedPaths) &&
-      event.data.requestedPaths.includes("notes/targeted-evidence.md")
+      event.data.requestedPaths.includes("notes/targeted-evidence-7.md")
   )
 );
-assert.equal(
+assert.ok(
   targetedContextCompleted.run.events.filter(
     (event) => event.type === "approval_auto_approved" && event.data?.reason === "repo_context_external_transfer"
-  ).length,
-  2
+  ).length >= 4
 );
 const restoredApprovalPolicy = JSON.parse(
   (

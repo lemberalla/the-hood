@@ -228,6 +228,17 @@ const selectCandidateFiles = (tree: string[], requestedValues: JsonValue[]): str
   return Array.from(new Set([...requested, ...priority, ...scored])).slice(0, maxFiles);
 };
 
+const selectCandidateFilesWithPreferred = (
+  tree: string[],
+  requestedValues: JsonValue[],
+  preferredPaths: string[]
+): string[] => {
+  const files = new Set(tree.filter((relativePath) => !relativePath.endsWith("/")));
+  const preferred = preferredPaths.filter((relativePath) => files.has(relativePath));
+
+  return Array.from(new Set([...preferred, ...selectCandidateFiles(tree, requestedValues)])).slice(0, maxFiles);
+};
+
 const readContextFile = async (
   repoPath: string,
   relativePath: string,
@@ -322,7 +333,8 @@ export const analyzeRepoContextRequest = async (
 
 export const captureRepoContext = async (
   run: RunRecord,
-  delegate: JsonValue | undefined
+  delegate: JsonValue | undefined,
+  options: { preferredPaths?: string[] } = {}
 ): Promise<CaptureRepoContextResult> => {
   const repoPath = resolveRepoPath(run.repoPath);
   const tree = await walkRepo(repoPath);
@@ -348,7 +360,7 @@ export const captureRepoContext = async (
     omittedTreePathCount: Math.max(0, tree.length - maxTreePaths),
     files: await boundedFileExcerpts(
       repoPath,
-      selectCandidateFiles(tree, [run.userGoal, normalizedDelegate]),
+      selectCandidateFilesWithPreferred(tree, [run.userGoal, normalizedDelegate], options.preferredPaths ?? []),
       requested
     ),
     notes: [

@@ -903,9 +903,11 @@ const executeReadOnlyRun = async (
   if (actionFromResponse(result.response) === "delegate") {
     const existingContextArtifact = latestRepoContextArtifact(result.run);
     const decision = decisionFromResponse(result.response);
+    let preferredPaths: string[] = [];
 
     if (existingContextArtifact) {
       const analysis = await analyzeRepoContextRequest(result.run, decision);
+      preferredPaths = analysis.newRequestedPaths;
 
       if (analysis.newRequestedPaths.length === 0) {
         const approvalReason =
@@ -939,7 +941,7 @@ const executeReadOnlyRun = async (
       }
     }
 
-    const repoContext = await captureRepoContext(result.run, decision);
+    const repoContext = await captureRepoContext(result.run, decision, { preferredPaths });
 
     return {
       run: repoContext.run,
