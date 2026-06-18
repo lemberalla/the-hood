@@ -64,7 +64,16 @@ export interface TheHoodConfig {
   roles: RoleMap;
 }
 
-export type RunArtifactKind = "plan" | "diff" | "log" | "report" | "metadata" | "status" | "agent" | "directive";
+export type RunArtifactKind =
+  | "plan"
+  | "diff"
+  | "log"
+  | "report"
+  | "metadata"
+  | "status"
+  | "agent"
+  | "directive"
+  | "context";
 
 export interface RunArtifact {
   kind: RunArtifactKind;

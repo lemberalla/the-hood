@@ -35,6 +35,7 @@ It supports:
 - schema-bound agent directives and response validation before runtime state advances
 - guarded local CLI adapters for Codex CLI and Claude Code
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
+- runtime-captured repo context packs when read-only orchestrators request evidence
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 
 ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.

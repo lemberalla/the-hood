@@ -147,3 +147,5 @@ Read-only runs can also execute a mapped guest role directly:
 - `plan` uses `planner` when assigned, otherwise `orchestrator`
 - `research` uses `researcher` when assigned, otherwise `orchestrator`
 - `review` uses `critic` when assigned, otherwise `orchestrator`
+
+When a read-only orchestrator or planner returns `action: "delegate"` before repo context exists, the runtime captures a bounded `repo_context` artifact using deterministic filesystem reads, then calls the role again with that context attached. If the role requests another delegation after a context pack exists, the runtime stops at an approval gate instead of looping indefinitely.

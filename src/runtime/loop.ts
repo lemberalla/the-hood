@@ -2,6 +2,7 @@ import { writeRunArtifact } from "./artifacts.js";
 import { buildAgentDirective } from "./directives.js";
 import { captureGitEvidence } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
+import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } from "./repoContext.js";
 import { getProviderAdapter } from "../providers/router.js";
 import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
@@ -151,6 +152,16 @@ const verdictFromResponse = (response: AgentResponse): string | undefined => {
   return undefined;
 };
 
+const decisionFromResponse = (response: AgentResponse): JsonObject | undefined => {
+  const value = response.data.decision;
+  return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+};
+
+const actionFromResponse = (response: AgentResponse): string | undefined => {
+  const action = decisionFromResponse(response)?.action;
+  return typeof action === "string" ? action : undefined;
+};
+
 const stopForProviderStatus = async (
   run: RunRecord,
   role: RuntimeRole,
@@ -215,13 +226,30 @@ const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
   return "orchestrator";
 };
 
+const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
+  const repoContext = await readLatestRepoContext(run);
+  const contextArtifact = latestRepoContextArtifact(run);
+
+  return {
+    phase: run.mode,
+    ...(repoContext ? { repoContext: repoContext as unknown as JsonObject } : {}),
+    ...(contextArtifact
+      ? {
+          repoContextArtifact: {
+            kind: contextArtifact.kind,
+            ref: contextArtifact.ref,
+            summary: contextArtifact.summary
+          }
+        }
+      : {})
+  };
+};
+
 const executeReadOnlyRun = async (
   run: RunRecord,
   role: RuntimeRole
 ): Promise<{ run: RunRecord; response: AgentResponse; advanced: boolean; stopReason?: string }> => {
-  const result = await runAgent(run, role, {
-    phase: run.mode
-  });
+  const result = await runAgent(run, role, await readOnlyContext(run));
   const stopped = await stopForProviderStatus(result.run, role, result.response);
 
   if (stopped) {
@@ -230,6 +258,59 @@ const executeReadOnlyRun = async (
       response: result.response,
       advanced: true,
       stopReason: stopped.stopReason
+    };
+  }
+
+  if (actionFromResponse(result.response) === "delegate") {
+    if (latestRepoContextArtifact(result.run)) {
+      const approvalReason = `${role} requested another delegation after repo context was already captured.`;
+      const gated = await updateRun(
+        result.run,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [createEvent("approval_required", approvalReason)]
+      );
+
+      return {
+        run: gated,
+        response: result.response,
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
+
+    const repoContext = await captureRepoContext(result.run, decisionFromResponse(result.response)?.delegate);
+
+    return {
+      run: repoContext.run,
+      response: result.response,
+      advanced: true,
+      stopReason: "Captured repo context for delegated read-only planning."
+    };
+  }
+
+  if (actionFromResponse(result.response) === "request_approval") {
+    const decision = decisionFromResponse(result.response);
+    const approvalReason =
+      typeof decision?.reason === "string" ? decision.reason : `${role} requested approval.`;
+    const gated = await updateRun(
+      result.run,
+      {
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason
+      },
+      [createEvent("approval_required", approvalReason)]
+    );
+
+    return {
+      run: gated,
+      response: result.response,
+      advanced: true,
+      stopReason: approvalReason
     };
   }
 

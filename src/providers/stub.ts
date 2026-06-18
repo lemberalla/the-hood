@@ -6,12 +6,33 @@ const response = (summary: string, data: AgentResponse["data"]): AgentResponse =
   data
 });
 
-const orchestratorResponse = (request: AgentRequest): AgentResponse =>
-  response("Stub orchestrator created a deterministic delegation plan.", {
+const hasRepoContext = (request: AgentRequest): boolean =>
+  request.context.repoContext !== undefined || request.context.repoContextArtifact !== undefined;
+
+const shouldExerciseRepoContext = (request: AgentRequest): boolean =>
+  request.run.mode === "plan" && request.run.userGoal.includes("repo-context-smoke");
+
+const orchestratorResponse = (request: AgentRequest): AgentResponse => {
+  if (shouldExerciseRepoContext(request) && !hasRepoContext(request)) {
+    return response("Stub orchestrator requested deterministic repo context.", {
+      decision: {
+        action: "delegate",
+        reason: "Stub provider is exercising repo context capture before planning.",
+        delegate: {
+          role: "repo_reader",
+          task: "Capture bounded repository context for planning."
+        }
+      }
+    });
+  }
+
+  return response("Stub orchestrator created a deterministic delegation plan.", {
     decision: {
       action: request.run.mode === "implement" ? "delegate" : "complete",
-      reason: "Stub provider is exercising the loop without external model calls.",
-      nextRole: request.run.mode === "implement" ? "implementer" : null,
+      reason: hasRepoContext(request)
+        ? "Stub provider received runtime repo context and completed planning."
+        : "Stub provider is exercising the loop without external model calls.",
+      nextRole: request.run.mode === "implement" ? "implementer" : null
     },
     plan: [
       "Capture baseline evidence.",
@@ -25,6 +46,7 @@ const orchestratorResponse = (request: AgentRequest): AgentResponse =>
       "Evidence artifacts are available for inspection."
     ]
   });
+};
 
 const researcherResponse = (): AgentResponse =>
   response("Stub researcher returned deterministic findings.", {

@@ -179,6 +179,8 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, and verifier phases without external model calls.
 
+For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads, then calls the same role again with that context attached.
+
 When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing.
 
 ## Doctor Command

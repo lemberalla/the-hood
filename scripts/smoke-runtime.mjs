@@ -158,6 +158,40 @@ assert.equal(resumedPlan.run.state, "completed");
 assert.equal(resumedPlan.providerResponses.length, 1);
 assert.equal(resumedPlan.providerResponses[0].status, "ok");
 
+await fs.writeFile(path.join(repoPath, "README.md"), "# Smoke Repo\n\nProvider milestone notes.\n", "utf8");
+await fs.mkdir(path.join(repoPath, "src", "providers"), { recursive: true });
+await fs.writeFile(
+  path.join(repoPath, "src", "providers", "example.ts"),
+  "export const provider = 'context-smoke';\n",
+  "utf8"
+);
+const repoContextPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "repo-context-smoke plan provider milestone",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+const repoContextContinue = JSON.parse(
+  (await runCli(["continue", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(repoContextContinue.run.state, "completed");
+assert.equal(repoContextContinue.providerResponses.length, 2);
+assert.equal(repoContextContinue.providerResponses[0].data.decision.action, "delegate");
+assert.equal(repoContextContinue.providerResponses[1].data.decision.action, "complete");
+const contextArtifact = repoContextContinue.run.artifacts.find((artifact) => artifact.kind === "context");
+assert.ok(contextArtifact, "repo context artifact should be captured after delegate response");
+const repoContext = JSON.parse(await fs.readFile(contextArtifact.ref, "utf8"));
+assert.equal(repoContext.kind, "repo_context");
+assert.ok(repoContext.tree.includes("README.md"));
+assert.ok(repoContext.files.some((file) => file.path === "README.md"));
+
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
 const run = JSON.parse(plan.stdout);
 

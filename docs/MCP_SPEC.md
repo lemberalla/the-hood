@@ -191,7 +191,7 @@ Output:
   "approval_reason": "string",
   "artifacts": [
     {
-      "kind": "plan | diff | log | report",
+      "kind": "plan | diff | log | report | metadata | status | agent | directive | context",
       "ref": "string"
     }
   ]
@@ -274,7 +274,7 @@ Input:
 ## Tool Design Rules
 
 - Tools return run references and compact summaries.
-- Large logs and diffs are artifacts, not giant inline payloads.
+- Large logs, diffs, and repo context packs are artifacts, not giant inline payloads.
 - Tool outputs include approval state.
 - MCP tools do not bypass CLI/runtime policies.
 - MCP tools never expose secrets.
