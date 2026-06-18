@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/prepare-bin.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:codex-config": "node scripts/smoke-codex-config.mjs",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
     "smoke:runtime": "node scripts/smoke-runtime.mjs",
     "clean": "rm -rf dist"
