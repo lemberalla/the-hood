@@ -50,6 +50,7 @@ Implemented tools:
 ### `thehood_doctor`
 
 Inspect provider and role readiness without invoking model calls.
+The output includes `runtime.capabilities` so Codex can detect stale MCP server processes after local development builds.
 
 Input:
 

@@ -162,6 +162,9 @@ const doctorPath = await runMcp([
 ]);
 
 const doctorContent = doctorPath[1].result.structuredContent;
+assert.equal(doctorContent.runtime.name, "thehood");
+assert.ok(doctorContent.runtime.capabilities.includes("approval_artifact_next_actions"));
+assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patch_gate"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);

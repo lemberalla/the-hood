@@ -26,6 +26,9 @@ export const formatProviders = (providers: ProviderDescriptor[]): string =>
     .join("\n");
 
 export const formatDoctorReport = (report: RuntimeHealthReport): string => [
+  `runtime: ${report.runtime.name} ${report.runtime.version}`,
+  `capabilities: ${report.runtime.capabilities.join(", ")}`,
+  "",
   "providers:",
   ...report.providers.map((provider) => {
     const state = provider.issues.length > 0 ? provider.issues.join(", ") : "ready";

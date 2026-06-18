@@ -190,6 +190,7 @@ When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in 
 
 It checks:
 
+- runtime name, package version, and capability flags for stale-process detection
 - whether providers are configured and enabled
 - whether the provider adapter is implemented
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`

@@ -102,6 +102,9 @@ assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120")
 await runCli(["init", "--repo", repoPath]);
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
+assert.equal(doctorResult.runtime.name, "thehood");
+assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
+assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);

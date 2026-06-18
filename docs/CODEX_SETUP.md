@@ -75,6 +75,8 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, and `protected_integrated_patch_gate`, the chat is still connected to an older MCP server process.
+
 First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.

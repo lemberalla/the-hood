@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { listProviders } from "./providers.js";
+import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
 import type { ProviderDescriptor } from "./providers.js";
 import type { RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
 
@@ -26,6 +27,7 @@ export interface RoleHealth {
 }
 
 export interface RuntimeHealthReport {
+  runtime: RuntimeInfo;
   providers: ProviderHealth[];
   roles: RoleHealth[];
 }
@@ -229,6 +231,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
     });
 
   return {
+    runtime: runtimeInfo,
     providers: providerHealth,
     roles: roleHealth
   };
