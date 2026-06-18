@@ -38,6 +38,13 @@ interface CdpClient {
   close(): void;
 }
 
+interface ResponseDiagnostics {
+  assistantCount: number;
+  candidateCount: number;
+  latestLength: number;
+  elapsedMs: number;
+}
+
 const defaultOptions: BridgeOptions = {
   model: "chatgpt-pro",
   schemaPath: "",
@@ -193,28 +200,104 @@ const fallback = (requiredDataKey: string, summary: string, status: AgentRespons
   }
 });
 
-const parseJsonCandidate = (text: string): unknown | undefined => {
-  const trimmed = text.trim();
-  if (!trimmed) {
+const tryParseJson = (text: string): unknown | undefined => {
+  try {
+    return JSON.parse(text);
+  } catch {
     return undefined;
   }
+};
 
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
+const fencedCodeBlocks = (text: string): string[] => {
+  const blocks: string[] = [];
+  const pattern = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let match: RegExpExecArray | null;
 
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(trimmed.slice(start, end + 1));
-      } catch {
-        return undefined;
+  while ((match = pattern.exec(text)) !== null) {
+    const block = match[1]?.trim();
+    if (block) {
+      blocks.push(block);
+    }
+  }
+
+  return blocks;
+};
+
+const balancedJsonObjects = (text: string): string[] => {
+  const objects: string[] = [];
+
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{") {
+      continue;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+
+        if (char === "\\") {
+          escaped = true;
+          continue;
+        }
+
+        if (char === "\"") {
+          inString = false;
+        }
+
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = true;
+        continue;
+      }
+
+      if (char === "{") {
+        depth += 1;
+        continue;
+      }
+
+      if (char === "}") {
+        depth -= 1;
+
+        if (depth === 0) {
+          objects.push(text.slice(start, index + 1));
+          break;
+        }
       }
     }
   }
 
-  return undefined;
+  return objects;
+};
+
+const jsonCandidateStrings = (text: string): string[] => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const lines = trimmed
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .reverse();
+
+  return [
+    trimmed,
+    ...fencedCodeBlocks(trimmed).reverse(),
+    ...balancedJsonObjects(trimmed).reverse(),
+    ...lines
+  ];
 };
 
 const isAgentResponse = (value: unknown): value is AgentResponse => {
@@ -230,6 +313,45 @@ const isAgentResponse = (value: unknown): value is AgentResponse => {
     typeof candidate.data === "object" &&
     !Array.isArray(candidate.data)
   );
+};
+
+const unwrapAgentResponse = (value: unknown): unknown => {
+  if (isAgentResponse(value)) {
+    return value;
+  }
+
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const candidate = value as { result?: unknown; message?: unknown };
+
+  if (typeof candidate.result === "string") {
+    return parseAgentResponse(candidate.result) ?? value;
+  }
+
+  if (candidate.result !== undefined) {
+    return candidate.result;
+  }
+
+  if (typeof candidate.message === "string") {
+    return parseAgentResponse(candidate.message) ?? value;
+  }
+
+  return value;
+};
+
+const parseAgentResponse = (text: string): AgentResponse | undefined => {
+  for (const candidate of jsonCandidateStrings(text)) {
+    const parsed = tryParseJson(candidate);
+    const unwrapped = unwrapAgentResponse(parsed);
+
+    if (isAgentResponse(unwrapped)) {
+      return unwrapped;
+    }
+  }
+
+  return undefined;
 };
 
 const listTargets = async (cdpUrl: string): Promise<ChromeTarget[]> => {
@@ -363,7 +485,16 @@ const promptEditorReadyExpression = (promptSelector: string): string => `
 
 const assistantSnapshotExpression = (responseSelector: string): string => `
 (() => {
-  const nodes = Array.from(document.querySelectorAll(${JSON.stringify(responseSelector)}));
+  const selected = Array.from(document.querySelectorAll(${JSON.stringify(responseSelector)}));
+  const fallbackNodes = selected.length > 0
+    ? []
+    : Array.from(document.querySelectorAll('[data-message-author-role="assistant"], [data-testid^="conversation-turn-"]'))
+      .filter((node) => {
+        const role = node.getAttribute('data-message-author-role')
+          || node.querySelector('[data-message-author-role]')?.getAttribute('data-message-author-role');
+        return role === 'assistant';
+      });
+  const nodes = selected.length > 0 ? selected : fallbackNodes;
   return nodes.map((node) => (node.textContent || '').trim()).filter(Boolean);
 })()
 `;
@@ -395,7 +526,12 @@ const sendPromptExpression = (prompt: string, promptSelector: string, sendSelect
   editor.focus();
 
   if ('value' in editor) {
-    editor.value = prompt;
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(editor), 'value')?.set;
+    if (setter) {
+      setter.call(editor, prompt);
+    } else {
+      editor.value = prompt;
+    }
   } else {
     editor.textContent = prompt;
     const selection = window.getSelection();
@@ -415,21 +551,24 @@ const sendPromptExpression = (prompt: string, promptSelector: string, sendSelect
     .find((candidate) => candidate && !candidate.disabled && candidate.getAttribute('aria-disabled') !== 'true');
   let button = findEnabledButton();
 
-  for (let attempt = 0; !button && attempt < 20; attempt += 1) {
+  for (let attempt = 0; !button && attempt < 50; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 100));
     button = findEnabledButton();
   }
 
   if (button) {
     button.click();
-    return { ok: true };
+    return { ok: true, method: 'button' };
   }
 
+  editor.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter' }));
+  editor.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter' }));
+  await new Promise((resolve) => setTimeout(resolve, 300));
   editor.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', metaKey: true }));
   editor.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter', metaKey: true }));
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
-  return { ok: false, error: 'send button not found or disabled' };
+  return { ok: true, method: 'keyboard' };
 })()
 `;
 
@@ -461,20 +600,38 @@ const waitForPromptEditor = async (
 const waitForAgentResponse = async (
   client: CdpClient,
   responseSelector: string,
-  previousCount: number,
+  previousResponses: string[],
   timeoutMs: number
-): Promise<{ response?: AgentResponse; browserError?: string }> => {
+): Promise<{ response?: AgentResponse; browserError?: string; diagnostics: ResponseDiagnostics }> => {
+  const startedAt = Date.now();
   const deadline = Date.now() + timeoutMs;
+  const previousText = new Set(previousResponses);
+  let diagnostics: ResponseDiagnostics = {
+    assistantCount: previousResponses.length,
+    candidateCount: 0,
+    latestLength: previousResponses.at(-1)?.length ?? 0,
+    elapsedMs: 0
+  };
 
   while (Date.now() < deadline) {
     const responses = await client.evaluate<string[]>(assistantSnapshotExpression(responseSelector));
-    const candidates = responses.slice(previousCount).reverse();
+    const newByPosition = responses.slice(previousResponses.length);
+    const changedOrNew = responses.filter((response, index) => index >= previousResponses.length || !previousText.has(response));
+    const candidates = Array.from(new Set([...newByPosition, ...changedOrNew])).reverse();
+
+    diagnostics = {
+      assistantCount: responses.length,
+      candidateCount: candidates.length,
+      latestLength: responses.at(-1)?.length ?? 0,
+      elapsedMs: Date.now() - startedAt
+    };
 
     for (const candidate of candidates) {
-      const parsed = parseJsonCandidate(candidate);
-      if (isAgentResponse(parsed)) {
+      const response = parseAgentResponse(candidate);
+      if (response) {
         return {
-          response: parsed
+          response,
+          diagnostics
         };
       }
     }
@@ -482,14 +639,20 @@ const waitForAgentResponse = async (
     const browserError = await client.evaluate<string | null>(chatGptErrorExpression());
     if (browserError) {
       return {
-        browserError
+        browserError,
+        diagnostics
       };
     }
 
     await sleep(1_000);
   }
 
-  return {};
+  return {
+    diagnostics: {
+      ...diagnostics,
+      elapsedMs: Date.now() - startedAt
+    }
+  };
 };
 
 const run = async (): Promise<AgentResponse> => {
@@ -521,7 +684,7 @@ const run = async (): Promise<AgentResponse> => {
     }
 
     const before = await client.evaluate<string[]>(assistantSnapshotExpression(options.responseSelector));
-    const sent = await client.evaluate<{ ok: boolean; error?: string }>(
+    const sent = await client.evaluate<{ ok: boolean; error?: string; method?: string }>(
       sendPromptExpression(prompt, options.promptSelector, options.sendSelector)
     );
 
@@ -529,7 +692,7 @@ const run = async (): Promise<AgentResponse> => {
       return fallback(requiredDataKey, `ChatGPT Web bridge could not send prompt: ${sent.error ?? "unknown error"}`);
     }
 
-    const result = await waitForAgentResponse(client, options.responseSelector, before.length, options.timeoutMs);
+    const result = await waitForAgentResponse(client, options.responseSelector, before, options.timeoutMs);
 
     if (result.response) {
       return result.response;
@@ -539,7 +702,15 @@ const run = async (): Promise<AgentResponse> => {
       return fallback(requiredDataKey, `ChatGPT reported: ${result.browserError}.`);
     }
 
-    return fallback(requiredDataKey, "ChatGPT Web bridge timed out waiting for AgentResponse JSON.");
+    return fallback(
+      requiredDataKey,
+      [
+        "ChatGPT Web bridge timed out waiting for AgentResponse JSON.",
+        `Observed ${result.diagnostics.assistantCount} assistant message(s),`,
+        `${result.diagnostics.candidateCount} changed/new candidate(s),`,
+        `latest visible response length ${result.diagnostics.latestLength}.`
+      ].join(" ")
+    );
   } finally {
     client.close();
   }
