@@ -6,7 +6,8 @@ export const runtimeCapabilities = [
   "repo_context_external_approval",
   "chatgpt_web_bridge",
   "cli_artifact_reads",
-  "approval_phrase_enforcement"
+  "approval_phrase_enforcement",
+  "final_report_artifacts"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];

@@ -99,8 +99,13 @@ The runtime captures evidence directly:
 - duration
 - tool permission decision
 - protected path classification
+- final report artifacts for completed runs
 
 Models may summarize evidence, but summaries are not authoritative.
+
+## Final Reports
+
+Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, and approval events.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

@@ -107,6 +107,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_act
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
+assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -292,6 +293,10 @@ assert.equal(repoContextContinue.run.state, "completed");
 assert.equal(repoContextContinue.providerResponses.length, 2);
 assert.equal(repoContextContinue.providerResponses[0].data.decision.action, "delegate");
 assert.equal(repoContextContinue.providerResponses[1].data.decision.action, "complete");
+const repoContextFinalReportArtifact = repoContextContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+);
+assert.ok(repoContextFinalReportArtifact, "read-only completed run should attach a final report");
 const contextArtifact = repoContextContinue.run.artifacts.find((artifact) => artifact.kind === "context");
 assert.ok(contextArtifact, "repo context artifact should be captured after delegate response");
 const repoContext = JSON.parse(await fs.readFile(contextArtifact.ref, "utf8"));
@@ -486,6 +491,15 @@ const loopContinue = await runCli(["continue", loopRun.runId, "--repo", loopRepo
 const loopResult = JSON.parse(loopContinue.stdout);
 assert.equal(loopResult.run.state, "completed");
 assert.equal(loopResult.providerResponses.length, 3);
+const finalReportArtifact = loopResult.run.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+);
+assert.ok(finalReportArtifact, "verified completed run should attach a final report");
+const finalReport = JSON.parse(await fs.readFile(finalReportArtifact.ref, "utf8"));
+assert.equal(finalReport.kind, "final_report");
+assert.equal(finalReport.finalState, "completed");
+assert.equal(finalReport.completedBy.role, "verifier");
+assert.equal(finalReport.stopReason, "Verifier approved runtime evidence.");
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
 assert.equal(directiveArtifacts.length, 3);
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));

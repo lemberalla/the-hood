@@ -273,7 +273,8 @@ for (const expectedCapability of [
   "approval_artifact_next_actions",
   "protected_integrated_patch_gate",
   "cli_artifact_reads",
-  "approval_phrase_enforcement"
+  "approval_phrase_enforcement",
+  "final_report_artifacts"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),

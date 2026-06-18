@@ -394,6 +394,86 @@ const attachRunArtifact = async (
   return updated;
 };
 
+const artifactKindCounts = (artifacts: RunArtifact[]): JsonObject => {
+  const counts: Record<string, number> = {};
+
+  for (const artifact of artifacts) {
+    counts[artifact.kind] = (counts[artifact.kind] ?? 0) + 1;
+  }
+
+  return counts;
+};
+
+const writeFinalReport = async (
+  run: RunRecord,
+  input: {
+    role: RuntimeRole;
+    response: AgentResponse;
+    stopReason: string;
+  }
+): Promise<RunRecord> => {
+  const latest = await loadRun(run.repoPath, run.runId);
+  const reportArtifact = await writeRunArtifact({
+    repoPath: latest.repoPath,
+    runId: latest.runId,
+    kind: "report",
+    name: `final-${newId("report")}.json`,
+    content: `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        kind: "final_report",
+        runId: latest.runId,
+        repoPath: latest.repoPath,
+        goal: latest.userGoal,
+        mode: latest.mode,
+        finalState: "completed",
+        stopReason: input.stopReason,
+        completedBy: {
+          role: input.role,
+          responseStatus: input.response.status,
+          responseSummary: input.response.summary
+        },
+        roleMapping: latest.roleMapping,
+        artifactCounts: artifactKindCounts(latest.artifacts),
+        artifacts: latest.artifacts.map((artifact) => ({
+          kind: artifact.kind,
+          ref: artifact.ref,
+          summary: artifact.summary
+        })),
+        toolEvents: latest.toolEvents.map((event) => ({
+          id: event.id,
+          tool: event.tool,
+          command: event.command,
+          args: event.args,
+          cwd: event.cwd,
+          exitCode: event.exitCode,
+          safetyCategory: event.safetyCategory,
+          stdoutRef: event.stdoutRef,
+          stderrRef: event.stderrRef
+        })),
+        approvalEvents: latest.approvalEvents.map((event) => ({
+          id: event.id,
+          decision: event.decision,
+          reason: event.reason
+        }))
+      },
+      null,
+      2
+    )}\n`,
+    summary: `Final report for completed ${latest.mode} run.`
+  });
+
+  return attachRunArtifact(
+    latest,
+    reportArtifact,
+    createEvent("final_report_written", "Wrote runtime final report.", {
+      artifactRef: reportArtifact.ref,
+      role: input.role,
+      responseStatus: input.response.status
+    })
+  );
+};
+
 const protectedPatchApprovalReason = (protectedChanges: ProtectedPathMatch[]): string =>
   `Applied patch changed ${protectedChanges.length} protected test, fixture, snapshot, or eval path(s). ` +
   `Review before verification. Approval message must mention "protected test changes".`;
@@ -839,9 +919,15 @@ const executeReadOnlyRun = async (
     };
   }
 
+  const stopReason = `${role} run completed by provider response.`;
+  const runWithFinalReport = await writeFinalReport(result.run, {
+    role,
+    response: result.response,
+    stopReason
+  });
   const completed = await updateRun(
-    result.run,
-    { state: "completed", stopReason: `${role} run completed by provider response.` },
+    runWithFinalReport,
+    { state: "completed", stopReason },
     [createEvent("run_completed", `${role} run completed.`)]
   );
 
@@ -1000,10 +1086,16 @@ const advanceOneStep = async (
     const verdict = verdictFromResponse(result.response);
 
     if (verdict === "approve") {
+      const stopReason = "Verifier approved runtime evidence.";
+      const runWithFinalReport = await writeFinalReport(result.run, {
+        role: "verifier",
+        response: result.response,
+        stopReason
+      });
       const completed = await updateRun(
-        result.run,
-        { state: "completed", stopReason: "Verifier approved runtime evidence." },
-        [createEvent("run_completed", "Verifier approved runtime evidence.")]
+        runWithFinalReport,
+        { state: "completed", stopReason },
+        [createEvent("run_completed", stopReason)]
       );
 
       return {
