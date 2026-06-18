@@ -132,6 +132,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcemen
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_manifests"));
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_approval_policy"));
+assert.ok(doctorResult.runtime.capabilities.includes("targeted_repo_context_followups"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
@@ -457,16 +458,29 @@ await fs.writeFile(
     "process.stdin.on('end', async () => {",
     "  const hasRepoContext = input.includes('\"repoContext\"');",
     "  const hasProgressPacket = input.includes('\"progressPacket\"');",
+    "  const isTargetedContextSmoke = input.includes('targeted-follow-up-context-smoke');",
+    "  const hasTargetedEvidence = input.includes('Targeted follow-up context marker');",
     "  if (logPath) {",
-    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? 'context\\n' : 'no-context\\n', 'utf8');",
+    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTargetedEvidence ? 'fake ChatGPT received targeted repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
     "      decision: hasProgressPacket ? {",
     "        action: 'complete',",
     "        reason: 'Approved progress packet was reconciled.'",
+    "      } : hasTargetedEvidence ? {",
+    "        action: 'complete',",
+    "        reason: 'Targeted repo context was enough for a plan.'",
+    "      } : hasRepoContext && isTargetedContextSmoke ? {",
+    "        action: 'delegate',",
+    "        reason: 'Need one targeted follow-up file before planning.',",
+    "        targetFiles: ['notes/targeted-evidence.md'],",
+    "        delegate: {",
+    "          role: 'repo_reader',",
+    "          task: 'Capture notes/targeted-evidence.md as a targeted follow-up repo context.'",
+    "        }",
     "      } : hasRepoContext ? {",
     "        action: 'complete',",
     "        reason: 'Approved repo context was enough for a plan.'",
@@ -733,6 +747,90 @@ assert.ok(
       event.data?.reason === "progress_packet_external_transfer" &&
       event.data?.policyDecision === "auto_approve"
   )
+);
+await fs.mkdir(path.join(repoPath, "notes"), { recursive: true });
+await fs.writeFile(
+  path.join(repoPath, "notes", "targeted-evidence.md"),
+  "# Targeted Evidence\n\nTargeted follow-up context marker.\n",
+  "utf8"
+);
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const targetedContextPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "targeted-follow-up-context-smoke provider milestone",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const targetedInvocationGate = JSON.parse(
+  (await runCli(["continue", targetedContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(targetedInvocationGate.run.state, "awaiting_approval");
+assert.ok(targetedInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli([
+  "approve",
+  targetedContextPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for targeted follow-up context smoke."
+]);
+const targetedContextCompleted = JSON.parse(
+  (await runCli(["continue", targetedContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(targetedContextCompleted.run.state, "completed");
+assert.deepEqual(targetedContextCompleted.providerResponses.map((response) => response.data.decision.action), [
+  "delegate",
+  "delegate",
+  "complete"
+]);
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context",
+  "targeted-context"
+]);
+const targetedContextArtifacts = targetedContextCompleted.run.artifacts.filter(
+  (artifact) => artifact.kind === "context"
+);
+assert.equal(targetedContextArtifacts.length, 2);
+const latestTargetedContext = JSON.parse(await fs.readFile(targetedContextArtifacts.at(-1).ref, "utf8"));
+assert.ok(
+  latestTargetedContext.files.some(
+    (file) =>
+      file.path === "notes/targeted-evidence.md" &&
+      file.excerpt.includes("Targeted follow-up context marker") &&
+      file.maxBytes === latestTargetedContext.limits.maxBytesPerRequestedFile
+  ),
+  "targeted follow-up context should include newly requested file with requested-file budget"
+);
+assert.equal(
+  targetedContextCompleted.run.events.filter((event) => event.type === "repo_context_captured").length,
+  2
+);
+assert.ok(
+  targetedContextCompleted.run.events.some(
+    (event) =>
+      event.type === "repo_context_captured" &&
+      Array.isArray(event.data?.requestedPaths) &&
+      event.data.requestedPaths.includes("notes/targeted-evidence.md")
+  )
+);
+assert.equal(
+  targetedContextCompleted.run.events.filter(
+    (event) => event.type === "approval_auto_approved" && event.data?.reason === "repo_context_external_transfer"
+  ).length,
+  2
 );
 const restoredApprovalPolicy = JSON.parse(
   (

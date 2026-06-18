@@ -12,6 +12,7 @@ export const runtimeCapabilities = [
   "progress_packet_artifacts",
   "external_transfer_manifests",
   "external_transfer_approval_policy",
+  "targeted_repo_context_followups",
   "planner_reconciliation",
   "mcp_final_report_next_action",
   "max_iteration_enforcement",

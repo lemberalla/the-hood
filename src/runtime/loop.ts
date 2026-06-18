@@ -12,7 +12,12 @@ import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
-import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } from "./repoContext.js";
+import {
+  analyzeRepoContextRequest,
+  captureRepoContext,
+  latestRepoContextArtifact,
+  readLatestRepoContext
+} from "./repoContext.js";
 import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
@@ -896,34 +901,53 @@ const executeReadOnlyRun = async (
   }
 
   if (actionFromResponse(result.response) === "delegate") {
-    if (latestRepoContextArtifact(result.run)) {
-      const approvalReason = `${role} requested another delegation after repo context was already captured.`;
-      const gated = await updateRun(
-        result.run,
-        {
-          state: "awaiting_approval",
-          approvalRequired: true,
-          approvalReason
-        },
-        [createEvent("approval_required", approvalReason)]
-      );
+    const existingContextArtifact = latestRepoContextArtifact(result.run);
+    const decision = decisionFromResponse(result.response);
 
-      return {
-        run: gated,
-        response: result.response,
-        advanced: true,
-        stopReason: approvalReason
-      };
+    if (existingContextArtifact) {
+      const analysis = await analyzeRepoContextRequest(result.run, decision);
+
+      if (analysis.newRequestedPaths.length === 0) {
+        const approvalReason =
+          analysis.requestedPaths.length > 0
+            ? `${role} requested another delegation, but all requested repo paths were already captured.`
+            : `${role} requested another delegation after repo context was already captured.`;
+        const gated = await updateRun(
+          result.run,
+          {
+            state: "awaiting_approval",
+            approvalRequired: true,
+            approvalReason
+          },
+          [
+            createEvent("approval_required", approvalReason, {
+              role,
+              reason: "repeated_repo_context_delegate",
+              requestedPaths: analysis.requestedPaths,
+              alreadyCapturedPaths: analysis.alreadyCapturedPaths,
+              existingContextArtifactRef: existingContextArtifact.ref
+            })
+          ]
+        );
+
+        return {
+          run: gated,
+          response: result.response,
+          advanced: true,
+          stopReason: approvalReason
+        };
+      }
     }
 
-    const decision = decisionFromResponse(result.response);
-    const repoContext = await captureRepoContext(result.run, decision?.delegate ?? decision);
+    const repoContext = await captureRepoContext(result.run, decision);
 
     return {
       run: repoContext.run,
       response: result.response,
       advanced: true,
-      stopReason: "Captured repo context for delegated read-only planning."
+      stopReason: existingContextArtifact
+        ? "Captured follow-up repo context for targeted delegated read-only planning."
+        : "Captured repo context for delegated read-only planning."
     };
   }
 

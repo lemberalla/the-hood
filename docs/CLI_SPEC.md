@@ -215,7 +215,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood approvals policy show` prints the configured approval policy. `thehood approvals policy set external-transfers manual|auto-low-risk` controls whether repo context and progress packet transfers always stop for manual approval or can be auto-approved when the manifest is bounded and does not have `secret_risk`.
 
-For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact and pause at an approval gate before that repo context is sent back to the provider.
+For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact and pause at an approval gate before that repo context is sent back to the provider. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
 When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call.
 

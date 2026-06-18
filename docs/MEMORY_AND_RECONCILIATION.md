@@ -147,7 +147,7 @@ The runtime should include a bounded tree, then prioritize files explicitly name
 
 Generic high-priority files such as `README.md`, `AGENTS.md`, architecture docs, runtime contracts, and key runtime modules should fill the remaining budget after requested files.
 
-Huge files should not silently consume the packet. When a source file is too large to include fully, the runtime should preserve refs and excerpts, then allow a follow-up targeted read through CLI or MCP rather than pretending the model has complete evidence.
+Huge files should not silently consume the packet. When a source file is too large to include fully, the runtime preserves refs and excerpts, then allows a follow-up targeted context capture when the provider delegates concrete repo paths that were not already captured. Broad or duplicate follow-up delegations still stop rather than pretending the model has complete evidence.
 
 ## Planner Reconciliation
 

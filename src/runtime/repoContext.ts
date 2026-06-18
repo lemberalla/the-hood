@@ -41,6 +41,12 @@ export interface CaptureRepoContextResult {
   context: RepoContextPack;
 }
 
+export interface RepoContextRequestAnalysis {
+  requestedPaths: string[];
+  alreadyCapturedPaths: string[];
+  newRequestedPaths: string[];
+}
+
 const priorityPaths = [
   "AGENTS.md",
   "README.md",
@@ -275,6 +281,45 @@ const boundedFileExcerpts = async (
 const normalizeDelegate = (delegate: JsonValue | undefined): JsonObject =>
   delegate && typeof delegate === "object" && !Array.isArray(delegate) ? delegate : {};
 
+const contextArtifacts = (run: RunRecord): RunArtifact[] =>
+  run.artifacts.filter((artifact) => artifact.kind === "context");
+
+const readRepoContextArtifact = async (artifact: RunArtifact): Promise<RepoContextPack> => {
+  const raw = await fs.readFile(artifact.ref, "utf8");
+  return JSON.parse(raw) as RepoContextPack;
+};
+
+const previouslyCapturedPaths = async (run: RunRecord): Promise<Set<string>> => {
+  const paths = new Set<string>();
+
+  for (const artifact of contextArtifacts(run)) {
+    const context = await readRepoContextArtifact(artifact);
+    for (const file of context.files) {
+      paths.add(file.path);
+    }
+  }
+
+  return paths;
+};
+
+export const analyzeRepoContextRequest = async (
+  run: RunRecord,
+  delegate: JsonValue | undefined
+): Promise<RepoContextRequestAnalysis> => {
+  const repoPath = resolveRepoPath(run.repoPath);
+  const tree = await walkRepo(repoPath);
+  const candidateFiles = tree.filter((relativePath) => !relativePath.endsWith("/"));
+  const requested = requestedPaths(candidateFiles, [normalizeDelegate(delegate)]);
+  const captured = await previouslyCapturedPaths(run);
+  const alreadyCapturedPaths = requested.filter((relativePath) => captured.has(relativePath));
+
+  return {
+    requestedPaths: requested,
+    alreadyCapturedPaths,
+    newRequestedPaths: requested.filter((relativePath) => !captured.has(relativePath))
+  };
+};
+
 export const captureRepoContext = async (
   run: RunRecord,
   delegate: JsonValue | undefined
@@ -336,6 +381,7 @@ export const captureRepoContext = async (
         data: {
           fileCount: context.files.length,
           treePathCount: context.tree.length,
+          requestedPaths: Array.from(requested),
           artifactRef: artifact.ref
         }
       }
@@ -352,7 +398,7 @@ export const captureRepoContext = async (
 };
 
 export const latestRepoContextArtifact = (run: RunRecord): RunArtifact | undefined =>
-  run.artifacts.filter((artifact) => artifact.kind === "context").at(-1);
+  contextArtifacts(run).at(-1);
 
 export const readLatestRepoContext = async (run: RunRecord): Promise<RepoContextPack | undefined> => {
   const artifact = latestRepoContextArtifact(run);
@@ -361,6 +407,5 @@ export const readLatestRepoContext = async (run: RunRecord): Promise<RepoContext
     return undefined;
   }
 
-  const raw = await fs.readFile(artifact.ref, "utf8");
-  return JSON.parse(raw) as RepoContextPack;
+  return readRepoContextArtifact(artifact);
 };
