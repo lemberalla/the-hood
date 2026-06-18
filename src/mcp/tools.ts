@@ -47,6 +47,62 @@ const approvalMessageHint = (run: RunRecord): string => {
   return `I approve the next TheHood transition for run ${run.runId}.`;
 };
 
+const artifactReadAction = (run: RunRecord, artifactRef: string, description: string): JsonObject | undefined => {
+  const artifact = run.artifacts.find((candidate) => candidate.ref === artifactRef);
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  return {
+    action: "inspect_artifact",
+    description,
+    tool: "thehood_read_artifact",
+    arguments: {
+      repo_path: run.repoPath,
+      run_id: run.runId,
+      ref: artifact.ref,
+      max_bytes: 20000
+    },
+    artifact: {
+      kind: artifact.kind,
+      ref: artifact.ref,
+      summary: artifact.summary
+    }
+  };
+};
+
+const approvalArtifactActionsForRun = (run: RunRecord): JsonObject[] => {
+  const actions: JsonObject[] = [];
+  const refs = new Set<string>();
+  const addArtifactAction = (artifactRef: unknown, description: string): void => {
+    if (typeof artifactRef !== "string" || refs.has(artifactRef)) {
+      return;
+    }
+
+    const action = artifactReadAction(run, artifactRef, description);
+    if (action) {
+      refs.add(artifactRef);
+      actions.push(action);
+    }
+  };
+
+  const approvalEvent = run.events.filter((event) => event.type === "approval_required").at(-1);
+  addArtifactAction(approvalEvent?.data?.artifactRef, "Inspect the artifact that triggered this approval gate.");
+
+  if (run.approvalReason?.includes("protected test changes")) {
+    const integrationReportEvent = run.events
+      .filter((event) => event.type === "integration_report_written")
+      .at(-1);
+    addArtifactAction(
+      integrationReportEvent?.data?.artifactRef,
+      "Inspect the integration report before approving protected path verification."
+    );
+  }
+
+  return actions;
+};
+
 const nextActionsForRun = (run: RunRecord): JsonObject[] => {
   if (run.approvalRequired) {
     return [
@@ -54,6 +110,7 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
         action: "review_approval_reason",
         description: run.approvalReason ?? "Approval is required before this run can continue."
       },
+      ...approvalArtifactActionsForRun(run),
       {
         action: "continue_with_approval",
         description: "After the user explicitly approves this boundary, call thehood_continue with approval=approve.",

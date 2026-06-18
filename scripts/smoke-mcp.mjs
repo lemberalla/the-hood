@@ -523,6 +523,9 @@ const isolatedDiffArtifact = isolatedPatchGate.artifacts.find((artifact) => arti
 const isolatedPatchApproval = isolatedPatchGate.next_actions.find(
   (action) => action.action === "continue_with_approval"
 );
+const isolatedPatchInspection = isolatedPatchGate.next_actions.find(
+  (action) => action.action === "inspect_artifact" && action.artifact?.ref === isolatedDiffArtifact.ref
+);
 
 assert.equal(isolatedCreate[1].result.structuredContent.status, "awaiting_approval");
 assert.equal(isolatedPatchGate.status, "awaiting_approval");
@@ -531,6 +534,8 @@ assert.ok(isolatedPatchGate.approval_reason.includes("apply isolated patch"));
 assert.equal(isolatedImplementation.status, "changed");
 assert.equal(isolatedImplementation.isolatedWorkspace.mode, "isolated_git_worktree");
 assert.equal(isolatedImplementation.patchArtifact.ref, isolatedDiffArtifact.ref);
+assert.equal(isolatedPatchInspection.tool, "thehood_read_artifact");
+assert.equal(isolatedPatchInspection.arguments.ref, isolatedDiffArtifact.ref);
 assert.equal(isolatedPatchApproval.arguments.run_id, isolatedRunId);
 assert.ok(isolatedPatchApproval.arguments.message.includes("apply isolated patch"));
 await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
@@ -723,6 +728,11 @@ assert.equal(
   "expect(true).toBe(true);\n"
 );
 assert.ok(protectedIntegrationReportArtifact, "protected patch integration report should be attached");
+const protectedReportInspection = protectedResult.next_actions.find(
+  (action) => action.action === "inspect_artifact" && action.artifact?.ref === protectedIntegrationReportArtifact.ref
+);
+assert.equal(protectedReportInspection.tool, "thehood_read_artifact");
+assert.equal(protectedReportInspection.arguments.ref, protectedIntegrationReportArtifact.ref);
 
 const protectedIntegrationReportRead = await runMcp([
   ...baseMessages,
