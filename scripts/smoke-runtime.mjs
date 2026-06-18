@@ -136,6 +136,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
+assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -375,6 +376,17 @@ const contextArtifactJson = JSON.parse(
 );
 assert.equal(contextArtifactJson.artifact.kind, "context");
 assert.equal(contextArtifactJson.truncated, false);
+const repoContextStatus = JSON.parse(
+  (await runCli(["status", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(repoContextStatus.insights.latestAgentResponse.status, "ok");
+assert.equal(repoContextStatus.insights.latestAgentResponse.decision.action, "complete");
+assert.equal(repoContextStatus.insights.latestAgentResponse.primaryOutputKey, "decision");
+assert.equal(repoContextStatus.insights.finalReport.artifact.ref, repoContextFinalReportArtifact.ref);
+const repoContextStatusText = await runCli(["status", repoContextPlan.runId, "--repo", repoPath]);
+assert.ok(repoContextStatusText.stdout.includes("latest agent response:"));
+assert.ok(repoContextStatusText.stdout.includes("action: complete"));
+assert.ok(repoContextStatusText.stdout.includes("final report:"));
 
 const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
 const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");

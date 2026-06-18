@@ -10,6 +10,7 @@ import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { listProviders } from "../runtime/providers.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
+import { getRunInsights } from "../runtime/runInsights.js";
 import {
   abortRun,
   createRun,
@@ -303,7 +304,10 @@ const handleStatus = async (
   }
 
   const run = await getRun(repoPath, args[0]);
-  shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
+  const insights = await getRunInsights(run);
+  shouldPrintJson(options)
+    ? printJson({ ...run, insights })
+    : process.stdout.write(`${formatRunSummary(run, insights)}\n`);
 };
 
 const handleLogs = async (

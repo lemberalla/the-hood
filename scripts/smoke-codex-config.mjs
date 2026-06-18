@@ -279,7 +279,8 @@ for (const expectedCapability of [
   "max_iteration_enforcement",
   "validation_command_capture",
   "chatgpt_browser_manager",
-  "branded_tui_shell"
+  "branded_tui_shell",
+  "run_status_insights"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),

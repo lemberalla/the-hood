@@ -14,6 +14,7 @@ export const runtimeCapabilities = [
   "validation_command_capture",
   "branded_tui_shell",
   "approval_inbox_tui",
+  "run_status_insights",
   "provider_access_modes",
   "mcp_repo_gateway_tools",
   "chatgpt_mcp_connector_mode"

@@ -6,11 +6,15 @@ import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
+import type { RunInsights } from "../runtime/runInsights.js";
 import type { RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
 
 export const printJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 };
+
+const quoteArg = (value: string): string =>
+  /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 
 export const formatRoles = (roles: RoleMap): string =>
   Object.entries(roles)
@@ -57,7 +61,92 @@ export const formatConfig = (config: TheHoodConfig): string => [
     .join("\n")
 ].join("\n");
 
-export const formatRunSummary = (run: RunRecord): string => {
+const formatStringList = (label: string, values: unknown): string[] =>
+  Array.isArray(values) && values.every((value) => typeof value === "string")
+    ? [
+        `${label}:`,
+        ...values.map((value) => `  - ${value}`)
+      ]
+    : [];
+
+const formatDecisionLines = (decision: Record<string, unknown>): string[] => [
+  ...(typeof decision.action === "string" ? [`action: ${decision.action}`] : []),
+  ...(typeof decision.reason === "string" ? [`reason: ${decision.reason}`] : []),
+  ...(typeof decision.milestone === "string" ? [`milestone: ${decision.milestone}`] : []),
+  ...formatStringList("buildNext", decision.buildNext),
+  ...formatStringList("acceptanceCriteria", decision.acceptanceCriteria),
+  ...formatStringList("validationHints", decision.validationHints),
+  ...(decision.suggestedDelegation && typeof decision.suggestedDelegation === "object" && !Array.isArray(decision.suggestedDelegation)
+    ? [
+        "suggestedDelegation:",
+        ...Object.entries(decision.suggestedDelegation as Record<string, unknown>)
+          .filter(([, value]) => typeof value === "string" || typeof value === "boolean")
+          .map(([key, value]) => `  ${key}: ${String(value)}`)
+      ]
+    : [])
+];
+
+const formatPrimaryOutputLines = (insights: RunInsights): string[] => {
+  const response = insights.latestAgentResponse;
+
+  if (!response) {
+    return [];
+  }
+
+  const primary = response.primaryOutput;
+  if (!primary) {
+    return [];
+  }
+
+  if (response.primaryOutputKey === "decision") {
+    return formatDecisionLines(primary);
+  }
+
+  return Object.entries(primary)
+    .filter(([, value]) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    .map(([key, value]) => `${key}: ${String(value)}`);
+};
+
+const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => {
+  if (!insights) {
+    return [];
+  }
+
+  const response = insights.latestAgentResponse;
+  const finalReport = insights.finalReport;
+
+  return [
+    ...(response
+      ? [
+          "",
+          "latest agent response:",
+          `  status: ${response.status}`,
+          `  summary: ${response.summary}`,
+          `  artifact: ${response.artifact.ref}`,
+          ...formatPrimaryOutputLines(insights).map((line) => `  ${line}`)
+        ]
+      : []),
+    ...(finalReport
+      ? [
+          "",
+          "final report:",
+          `  summary: ${finalReport.artifact.summary}`,
+          `  artifact: ${finalReport.artifact.ref}`,
+          ...(finalReport.stopReason ? [`  stopReason: ${finalReport.stopReason}`] : []),
+          `  inspect: thehood artifact ${run.runId} ${quoteArg(finalReport.artifact.ref)} --repo ${quoteArg(run.repoPath)}`
+        ]
+      : []),
+    ...(insights.issues.length > 0
+      ? [
+          "",
+          "insight issues:",
+          ...insights.issues.map((issue) => `  - ${issue}`)
+        ]
+      : [])
+  ];
+};
+
+export const formatRunSummary = (run: RunRecord, insights?: RunInsights): string => {
   const approval = run.approvalRequired
     ? `\napproval: required (${run.approvalReason ?? "no reason recorded"})`
     : "\napproval: not required";
@@ -74,7 +163,8 @@ export const formatRunSummary = (run: RunRecord): string => {
     formatRoles(run.roleMapping)
       .split("\n")
       .map((line) => `  ${line}`)
-      .join("\n")
+      .join("\n"),
+    ...formatRunInsights(run, insights)
   ].join("\n");
 };
 

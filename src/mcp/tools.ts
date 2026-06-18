@@ -13,6 +13,7 @@ import {
   searchRepo
 } from "../runtime/repoGateway.js";
 import { approvalMessageHint } from "../runtime/approvalInbox.js";
+import { getRunInsights } from "../runtime/runInsights.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -171,7 +172,7 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
   ];
 };
 
-const runSummary = (run: RunRecord): JsonObject => ({
+const runSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
   run_id: run.runId,
   status: run.state,
   mode: run.mode,
@@ -187,6 +188,7 @@ const runSummary = (run: RunRecord): JsonObject => ({
     ref: artifact.ref,
     summary: artifact.summary
   })),
+  ...(insights ? { insights } : {}),
   next_actions: nextActionsForRun(run)
 });
 
@@ -671,9 +673,10 @@ const createStatusTool = (): McpTool => ({
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
       const run = await getRun(requiredString(args, "repo_path"), requiredString(args, "run_id"));
+      const insights = toJsonObject(await getRunInsights(run));
 
       return {
-        ...runSummary(run),
+        ...runSummary(run, insights),
         events: run.events.map((event) => ({
           created_at: event.createdAt,
           type: event.type,
@@ -711,7 +714,7 @@ const createRunsTool = (): McpTool => ({
       const runs = await listRuns(requiredString(args, "repo_path"));
 
       return {
-        runs: runs.slice(0, Math.min(limit, 100)).map(runSummary)
+        runs: runs.slice(0, Math.min(limit, 100)).map((run) => runSummary(run))
       };
     })
 });

@@ -263,6 +263,8 @@ Input:
 
 Inspect a run.
 
+Output includes run fields, events, `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, and final report artifact when present, so Codex can show a completed Pro plan without manually reading artifacts first.
+
 Input:
 
 ```json

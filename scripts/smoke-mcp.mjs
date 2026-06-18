@@ -189,6 +189,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
+assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -353,6 +354,26 @@ const consultFinalReportAction = consultPath[1].result.structuredContent.next_ac
 );
 assert.equal(consultFinalReportAction.tool, "thehood_read_artifact");
 assert.equal(consultFinalReportAction.arguments.ref, consultFinalReportArtifact.ref);
+
+const consultStatusPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_status",
+      arguments: {
+        run_id: consultPath[1].result.structuredContent.run_id,
+        repo_path: repoPath
+      }
+    }
+  }
+]);
+const consultStatus = consultStatusPath[1].result.structuredContent;
+assert.equal(consultStatus.insights.latestAgentResponse.status, "ok");
+assert.equal(consultStatus.insights.latestAgentResponse.primaryOutputKey, "critiqueResult");
+assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReportArtifact.ref);
 
 const consultAgentArtifact = consultPath[1].result.structuredContent.artifacts.find(
   (artifact) => artifact.kind === "agent"
