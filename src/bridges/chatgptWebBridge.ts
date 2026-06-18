@@ -22,6 +22,7 @@ interface BridgeOptions {
   promptSelector: string;
   sendSelector: string;
   responseSelector: string;
+  reuseChat: boolean;
   allowUnverifiedModel: boolean;
 }
 
@@ -33,6 +34,7 @@ interface ChromeTarget {
 
 interface CdpClient {
   evaluate<T>(expression: string): Promise<T>;
+  navigate(url: string): Promise<void>;
   close(): void;
 }
 
@@ -40,7 +42,7 @@ const defaultOptions: BridgeOptions = {
   model: "chatgpt-pro",
   schemaPath: "",
   cdpUrl: process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222",
-  timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 120_000),
+  timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 300_000),
   promptSelector:
     process.env.THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR ?? "#prompt-textarea,[contenteditable='true'],textarea",
   sendSelector:
@@ -48,6 +50,7 @@ const defaultOptions: BridgeOptions = {
     "button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']",
   responseSelector:
     process.env.THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR ?? "[data-message-author-role='assistant']",
+  reuseChat: process.env.THEHOOD_CHATGPT_WEB_REUSE_CHAT === "1",
   allowUnverifiedModel:
     process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
     process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1"
@@ -72,6 +75,11 @@ const parseArgs = (argv: string[]): BridgeOptions => {
 
     if (arg === "--allow-unverified-model") {
       options.allowUnverifiedModel = true;
+      continue;
+    }
+
+    if (arg === "--reuse-chat") {
+      options.reuseChat = true;
       continue;
     }
 
@@ -335,16 +343,41 @@ const connectCdp = async (webSocketUrl: string): Promise<CdpClient> => {
 
       return result.result?.value as T;
     },
+    async navigate(url: string): Promise<void> {
+      await send("Page.navigate", {
+        url
+      });
+    },
     close() {
       socket.close();
     }
   };
 };
 
+const promptEditorReadyExpression = (promptSelector: string): string => `
+(() => {
+  const promptSelectors = ${JSON.stringify(promptSelector)}.split(',').map((selector) => selector.trim()).filter(Boolean);
+  return promptSelectors.some((selector) => Boolean(document.querySelector(selector)));
+})()
+`;
+
 const assistantSnapshotExpression = (responseSelector: string): string => `
 (() => {
   const nodes = Array.from(document.querySelectorAll(${JSON.stringify(responseSelector)}));
   return nodes.map((node) => (node.textContent || '').trim()).filter(Boolean);
+})()
+`;
+
+const chatGptErrorExpression = (): string => `
+(() => {
+  const text = document.body?.innerText || '';
+  const messages = [
+    'Message delivery timed out',
+    'Something went wrong',
+    'There was an error generating a response',
+    'Unable to load conversation'
+  ];
+  return messages.find((message) => text.includes(message)) || null;
 })()
 `;
 
@@ -403,12 +436,34 @@ const sendPromptExpression = (prompt: string, promptSelector: string, sendSelect
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitForPromptEditor = async (
+  client: CdpClient,
+  promptSelector: string,
+  timeoutMs: number
+): Promise<boolean> => {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      if (await client.evaluate<boolean>(promptEditorReadyExpression(promptSelector))) {
+        return true;
+      }
+    } catch {
+      // Navigation can briefly invalidate the execution context.
+    }
+
+    await sleep(500);
+  }
+
+  return false;
+};
+
 const waitForAgentResponse = async (
   client: CdpClient,
   responseSelector: string,
   previousCount: number,
   timeoutMs: number
-): Promise<AgentResponse | undefined> => {
+): Promise<{ response?: AgentResponse; browserError?: string }> => {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
@@ -418,14 +473,23 @@ const waitForAgentResponse = async (
     for (const candidate of candidates) {
       const parsed = parseJsonCandidate(candidate);
       if (isAgentResponse(parsed)) {
-        return parsed;
+        return {
+          response: parsed
+        };
       }
+    }
+
+    const browserError = await client.evaluate<string | null>(chatGptErrorExpression());
+    if (browserError) {
+      return {
+        browserError
+      };
     }
 
     await sleep(1_000);
   }
 
-  return undefined;
+  return {};
 };
 
 const run = async (): Promise<AgentResponse> => {
@@ -448,6 +512,14 @@ const run = async (): Promise<AgentResponse> => {
   const client = await connectCdp(target.webSocketDebuggerUrl ?? "");
 
   try {
+    if (!options.reuseChat) {
+      await client.navigate("https://chatgpt.com/");
+
+      if (!await waitForPromptEditor(client, options.promptSelector, Math.min(options.timeoutMs, 30_000))) {
+        return fallback(requiredDataKey, "ChatGPT Web bridge could not open a fresh ChatGPT composer.");
+      }
+    }
+
     const before = await client.evaluate<string[]>(assistantSnapshotExpression(options.responseSelector));
     const sent = await client.evaluate<{ ok: boolean; error?: string }>(
       sendPromptExpression(prompt, options.promptSelector, options.sendSelector)
@@ -457,9 +529,17 @@ const run = async (): Promise<AgentResponse> => {
       return fallback(requiredDataKey, `ChatGPT Web bridge could not send prompt: ${sent.error ?? "unknown error"}`);
     }
 
-    return (
-      await waitForAgentResponse(client, options.responseSelector, before.length, options.timeoutMs)
-    ) ?? fallback(requiredDataKey, "ChatGPT Web bridge timed out waiting for AgentResponse JSON.");
+    const result = await waitForAgentResponse(client, options.responseSelector, before.length, options.timeoutMs);
+
+    if (result.response) {
+      return result.response;
+    }
+
+    if (result.browserError) {
+      return fallback(requiredDataKey, `ChatGPT reported: ${result.browserError}.`);
+    }
+
+    return fallback(requiredDataKey, "ChatGPT Web bridge timed out waiting for AgentResponse JSON.");
   } finally {
     client.close();
   }

@@ -116,11 +116,14 @@ Optional bridge settings:
 
 ```bash
 export THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222
-export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=120000
+export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000
 export THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR="#prompt-textarea,[contenteditable='true'],textarea"
 export THEHOOD_CHATGPT_WEB_SEND_SELECTOR="button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']"
 export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assistant']"
+# export THEHOOD_CHATGPT_WEB_REUSE_CHAT=1
 ```
+
+By default, the bridge opens a fresh ChatGPT composer for each request so prior conversation state or delivery errors do not affect the run. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation.
 
 Example persistent role assignment:
 
