@@ -130,6 +130,25 @@ The packet may include compact descriptions for navigation, but every important 
 
 Provider directives should tell the model to ignore stale browser or conversation memory and reason only from TheHood-provided state.
 
+## Repo Context Retrieval
+
+Repo context retrieval should behave like an evidence-led repository inspection, not a one-shot dump.
+
+The default pattern is:
+
+```text
+repo map
+targeted reads
+follow-up evidence
+verification
+```
+
+The runtime should include a bounded tree, then prioritize files explicitly named by the user goal, provider decision, or source-of-truth instructions. Explicitly requested files may receive a larger per-file budget than generic files, but they still count against the total packet budget and must retain truncation metadata.
+
+Generic high-priority files such as `README.md`, `AGENTS.md`, architecture docs, runtime contracts, and key runtime modules should fill the remaining budget after requested files.
+
+Huge files should not silently consume the packet. When a source file is too large to include fully, the runtime should preserve refs and excerpts, then allow a follow-up targeted read through CLI or MCP rather than pretending the model has complete evidence.
+
 ## Planner Reconciliation
 
 Planner reconciliation is the missing loop after implementation.

@@ -9,6 +9,7 @@ import type { JsonObject, JsonValue, RunArtifact, RunRecord } from "./types.js";
 export interface RepoContextFile {
   path: string;
   bytes: number;
+  maxBytes: number;
   truncated: boolean;
   excerpt: string;
 }
@@ -25,6 +26,7 @@ export interface RepoContextPack {
     maxTreePaths: number;
     maxFiles: number;
     maxBytesPerFile: number;
+    maxBytesPerRequestedFile: number;
     maxTotalBytes: number;
   };
   tree: string[];
@@ -90,6 +92,7 @@ const secretPathPatterns = [
 const maxTreePaths = 300;
 const maxFiles = 24;
 const maxBytesPerFile = 4_000;
+const maxBytesPerRequestedFile = 16_000;
 const maxTotalBytes = 60_000;
 const pathLikePattern =
   /[A-Za-z0-9_.@+-]+(?:\/[A-Za-z0-9_.@+-]+)+|[A-Za-z0-9_.@+-]+\.(?:md|markdown|ts|tsx|js|mjs|cjs|json|toml|yaml|yml|lock|txt|sh|swift|py|go|rs)/g;
@@ -219,7 +222,11 @@ const selectCandidateFiles = (tree: string[], requestedValues: JsonValue[]): str
   return Array.from(new Set([...requested, ...priority, ...scored])).slice(0, maxFiles);
 };
 
-const readContextFile = async (repoPath: string, relativePath: string): Promise<RepoContextFile | undefined> => {
+const readContextFile = async (
+  repoPath: string,
+  relativePath: string,
+  maxBytes: number
+): Promise<RepoContextFile | undefined> => {
   const absolutePath = path.join(repoPath, relativePath);
   const buffer = await fs.readFile(absolutePath);
 
@@ -227,22 +234,28 @@ const readContextFile = async (repoPath: string, relativePath: string): Promise<
     return undefined;
   }
 
-  const sliced = buffer.subarray(0, maxBytesPerFile);
+  const sliced = buffer.subarray(0, maxBytes);
 
   return {
     path: relativePath,
     bytes: buffer.byteLength,
-    truncated: buffer.byteLength > maxBytesPerFile,
+    maxBytes,
+    truncated: buffer.byteLength > maxBytes,
     excerpt: sliced.toString("utf8")
   };
 };
 
-const boundedFileExcerpts = async (repoPath: string, candidates: string[]): Promise<RepoContextFile[]> => {
+const boundedFileExcerpts = async (
+  repoPath: string,
+  candidates: string[],
+  requested: Set<string>
+): Promise<RepoContextFile[]> => {
   const files: RepoContextFile[] = [];
   let totalBytes = 0;
 
   for (const relativePath of candidates) {
-    const file = await readContextFile(repoPath, relativePath);
+    const maxBytes = requested.has(relativePath) ? maxBytesPerRequestedFile : maxBytesPerFile;
+    const file = await readContextFile(repoPath, relativePath, maxBytes);
     if (!file) {
       continue;
     }
@@ -269,6 +282,8 @@ export const captureRepoContext = async (
   const repoPath = resolveRepoPath(run.repoPath);
   const tree = await walkRepo(repoPath);
   const normalizedDelegate = normalizeDelegate(delegate);
+  const candidateFiles = tree.filter((relativePath) => !relativePath.endsWith("/"));
+  const requested = new Set(requestedPaths(candidateFiles, [run.userGoal, normalizedDelegate]));
   const context: RepoContextPack = {
     schemaVersion: 1,
     kind: "repo_context",
@@ -281,15 +296,21 @@ export const captureRepoContext = async (
       maxTreePaths,
       maxFiles,
       maxBytesPerFile,
+      maxBytesPerRequestedFile,
       maxTotalBytes
     },
     tree: tree.slice(0, maxTreePaths),
     omittedTreePathCount: Math.max(0, tree.length - maxTreePaths),
-    files: await boundedFileExcerpts(repoPath, selectCandidateFiles(tree, [run.userGoal, normalizedDelegate])),
+    files: await boundedFileExcerpts(
+      repoPath,
+      selectCandidateFiles(tree, [run.userGoal, normalizedDelegate]),
+      requested
+    ),
     notes: [
       "This context pack was captured by deterministic runtime code.",
       "Ignored paths include .git, .thehood, node_modules, dist, build, coverage, and secret-looking filenames.",
-      "File excerpts are bounded and may be truncated."
+      "File excerpts are bounded and may be truncated.",
+      "Files explicitly requested by the run goal or provider decision receive a larger per-file budget."
     ]
   };
   const artifact = await writeRunArtifact({

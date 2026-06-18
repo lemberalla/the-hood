@@ -335,7 +335,7 @@ for (let index = 0; index < 30; index += 1) {
 }
 await fs.writeFile(
   path.join(repoPath, "docs", "zz-source-of-truth.md"),
-  "# Source Of Truth\n\nExplicitly requested context marker.\n",
+  `# Source Of Truth\n\nExplicitly requested context marker.\n${"requested evidence line\n".repeat(260)}`,
   "utf8"
 );
 const repoContextPlan = JSON.parse(
@@ -380,9 +380,11 @@ assert.ok(
   repoContext.files.some(
     (file) =>
       file.path === "docs/zz-source-of-truth.md" &&
-      file.excerpt.includes("Explicitly requested context marker")
+      file.excerpt.includes("Explicitly requested context marker") &&
+      file.maxBytes > repoContext.limits.maxBytesPerFile &&
+      file.truncated === false
   ),
-  "explicitly requested files should be prioritized ahead of generic context candidates"
+  "explicitly requested files should receive a larger budget and avoid normal-cap truncation"
 );
 const contextArtifactRead = await runCli([
   "artifact",
