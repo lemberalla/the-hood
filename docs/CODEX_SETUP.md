@@ -41,6 +41,7 @@ This adds:
 - `THEHOOD_CHATGPT_WEB_COMMAND`
 - `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1`
 - `THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222`
+- `THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000`
 
 Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
 

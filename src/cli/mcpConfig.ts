@@ -3,6 +3,7 @@ import path from "node:path";
 export interface McpLaunchConfig {
   command: string;
   args: string[];
+  startupTimeoutSec?: number;
   env?: Record<string, string>;
 }
 
@@ -25,6 +26,7 @@ const formatToml = (config: McpLaunchConfig): string => [
   "[mcp_servers.thehood]",
   `command = ${quoteTomlString(config.command)}`,
   `args = [${config.args.map(quoteTomlString).join(", ")}]`,
+  ...(config.startupTimeoutSec === undefined ? [] : [`startup_timeout_sec = ${config.startupTimeoutSec}`]),
   ...(config.env
     ? [
         `env = { ${Object.entries(config.env)
@@ -37,7 +39,8 @@ const formatToml = (config: McpLaunchConfig): string => [
 const chatGptEnv = (command: string, cdpUrl: string): Record<string, string> => ({
   THEHOOD_CHATGPT_WEB_COMMAND: command,
   THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
-  THEHOOD_CHATGPT_WEB_CDP_URL: cdpUrl
+  THEHOOD_CHATGPT_WEB_CDP_URL: cdpUrl,
+  THEHOOD_CHATGPT_WEB_TIMEOUT_MS: "300000"
 });
 
 const localBridgePath = (cliPath: string | undefined): string =>
@@ -51,6 +54,7 @@ export const getMcpConfigReport = (
   const installed: McpLaunchConfig = {
     command: "thehood",
     args: ["mcp"],
+    startupTimeoutSec: 120,
     ...(options.includeChatGptWeb
       ? {
           env: chatGptEnv("thehood-chatgpt-web-bridge", cdpUrl)
@@ -60,6 +64,7 @@ export const getMcpConfigReport = (
   const local: McpLaunchConfig = {
     command: process.execPath,
     args: [path.resolve(cliPath ?? "dist/cli/main.js"), "mcp"],
+    startupTimeoutSec: 120,
     ...(options.includeChatGptWeb
       ? {
           env: chatGptEnv(localBridgePath(cliPath), cdpUrl)

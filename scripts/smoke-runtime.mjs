@@ -91,8 +91,14 @@ assert.equal(
 );
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_CDP_URL, "http://127.0.0.1:9222");
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.installed.startupTimeoutSec, 120);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_COMMAND, chatGptBridgePath);
+assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.local.startupTimeoutSec, 120);
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_COMMAND"));
+assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_TIMEOUT_MS"));
+assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120"));
 await runCli(["init", "--repo", repoPath]);
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
