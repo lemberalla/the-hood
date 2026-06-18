@@ -111,6 +111,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
+assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
+assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -155,6 +157,17 @@ const readyDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
     THEHOOD_CHATGPT_WEB_CDP_URL: `http://127.0.0.1:${cdpAddress.port}`
   }
 });
+const browserStatus = JSON.parse(
+  (await runCli(["browser", "status", "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`, "--json"])).stdout
+);
+assert.equal(browserStatus.provider, "chatgpt-web");
+assert.equal(browserStatus.cdpReachable, true);
+assert.equal(browserStatus.chatGptTabFound, true);
+assert.equal(browserStatus.readyForBridge, true);
+const dashboard = await runCli(["ui", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(dashboard.stdout.includes("THEHOOD"));
+assert.ok(dashboard.stdout.includes("ChatGPT Web"));
+assert.ok(dashboard.stdout.includes("CDP         reachable"));
 await new Promise((resolve, reject) => {
   cdpServer.close((error) => {
     if (error) {

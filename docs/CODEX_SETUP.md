@@ -30,7 +30,16 @@ The command prints two TOML snippets:
 
 Use one snippet in Codex's MCP server configuration.
 
-For ChatGPT Pro through the included browser bridge, use the opt-in config generator after launching the debug Chrome profile and selecting the intended model:
+For ChatGPT Pro through the included browser bridge, start the TheHood-managed browser profile and select the intended model:
+
+```bash
+node dist/cli/main.js browser start
+node dist/cli/main.js browser status
+```
+
+The browser manager uses a persistent isolated Chrome profile under `~/Library/Application Support/TheHood/ChromeProfiles/chatgpt-web` on macOS. The user signs into ChatGPT in that profile once; TheHood does not copy cookies, local storage, or tokens.
+
+Then use the opt-in config generator:
 
 ```bash
 node dist/cli/main.js mcp config --chatgpt-web
@@ -75,7 +84,7 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `max_iteration_enforcement`, and `validation_command_capture`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `max_iteration_enforcement`, `validation_command_capture`, `chatgpt_browser_manager`, and `branded_tui_shell`, the chat is still connected to an older MCP server process.
 
 First verification sequence from a Codex chat:
 
@@ -133,12 +142,10 @@ npm run build
 export THEHOOD_CHATGPT_WEB_COMMAND=/path/to/thehood/dist/bridges/chatgptWebBridge.js
 ```
 
-Launch a separate browser profile with remote debugging enabled, open ChatGPT, sign in, and select the model you want the bridge to use:
+Start the TheHood-managed browser profile, open ChatGPT, sign in if needed, and select the model you want the bridge to use:
 
 ```bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/thehood-chatgpt-profile
+node dist/cli/main.js browser start
 ```
 
 After you have visibly selected the intended model in ChatGPT, enable the model confirmation guard:

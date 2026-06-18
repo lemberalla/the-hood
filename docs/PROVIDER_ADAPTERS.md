@@ -108,7 +108,7 @@ Included bridge:
 
 - Binary: `thehood-chatgpt-web-bridge`
 - Source: `src/bridges/chatgptWebBridge.ts`
-- Uses Chrome DevTools Protocol against a user-launched browser profile.
+- Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
 

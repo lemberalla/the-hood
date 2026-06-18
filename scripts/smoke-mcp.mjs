@@ -171,6 +171,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"))
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
+assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
+assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);

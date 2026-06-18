@@ -41,6 +41,8 @@ It supports:
 - schema-bound agent directives and response validation before runtime state advances
 - guarded local CLI adapters for Codex CLI and Claude Code
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
+- persistent TheHood Chrome profile manager for the ChatGPT Web bridge
+- branded terminal dashboard shell for runtime, role, and browser readiness
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 
@@ -61,6 +63,8 @@ node dist/cli/main.js status --repo .
 node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
+node dist/cli/main.js browser status
+node dist/cli/main.js ui --repo .
 ```
 
 ## Product Shape

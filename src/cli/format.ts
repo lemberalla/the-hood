@@ -1,5 +1,6 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
+import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../runtime/browserManager.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
 import type { McpConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
@@ -128,4 +129,27 @@ export const formatMcpConfigReport = (report: McpConfigReport): string => [
   "",
   "local build:",
   report.localToml
+].join("\n");
+
+export const formatBrowserStatus = (status: BrowserStatus): string => [
+  `provider: ${status.provider}`,
+  `readyForBridge: ${status.readyForBridge}`,
+  `cdp: ${status.cdpReachable ? "reachable" : "unreachable"} (${status.cdpUrl})`,
+  `chatgptTab: ${status.chatGptTabFound ? "found" : "not found"}`,
+  `profile: ${status.profilePath}`,
+  ...(status.chromePath ? [`chrome: ${status.chromePath}`] : []),
+  ...(status.pid ? [`pid: ${status.pid}`] : []),
+  `targets: ${status.targetCount}`,
+  `issues: ${status.issues.length > 0 ? status.issues.join(", ") : "none"}`
+].join("\n");
+
+export const formatBrowserStartResult = (result: BrowserStartResult): string => [
+  `launched: ${result.launched}`,
+  formatBrowserStatus(result.status)
+].join("\n");
+
+export const formatBrowserStopResult = (result: BrowserStopResult): string => [
+  `stopped: ${result.stopped}`,
+  ...(result.reason ? [`reason: ${result.reason}`] : []),
+  formatBrowserStatus(result.status)
 ].join("\n");

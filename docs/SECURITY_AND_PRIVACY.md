@@ -41,6 +41,7 @@ The ChatGPT Web adapter is sensitive because it depends on a user-authenticated 
 Rules:
 
 - Use an isolated browser profile when possible.
+- Prefer the TheHood-managed persistent Chrome profile over the user's main Chrome profile.
 - Do not export cookies.
 - Do not write session tokens to disk.
 - Do not bypass provider restrictions.

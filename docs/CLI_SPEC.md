@@ -31,6 +31,10 @@ thehood abort <run-id>
 thehood mcp
 thehood mcp config
 thehood mcp config --chatgpt-web
+thehood browser start
+thehood browser status
+thehood browser stop
+thehood ui
 ```
 
 ## Run Modes
@@ -201,3 +205,15 @@ It checks:
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
 - whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, and ChatGPT tab are ready when `chatgpt-web` is configured
 - whether configured role models are listed for their providers
+
+## Browser Manager Commands
+
+`thehood browser start` launches a persistent isolated Chrome profile for ChatGPT Web at the default CDP endpoint `http://127.0.0.1:9222`.
+
+`thehood browser status` reports CDP reachability, profile path, ChatGPT tab presence, and whether the bridge is ready.
+
+`thehood browser stop` stops the Chrome process only when it can verify that the recorded process belongs to the TheHood-managed profile.
+
+## TUI Command
+
+`thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.

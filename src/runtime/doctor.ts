@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { inspectBrowser } from "./browserManager.js";
 import { listProviders } from "./providers.js";
 import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
 import type { ProviderDescriptor } from "./providers.js";
@@ -33,11 +34,6 @@ export interface RuntimeHealthReport {
 }
 
 const implementedProviderIds = new Set(["stub", "chatgpt-web", "codex-cli", "claude-code"]);
-
-interface ChromeTarget {
-  url?: string;
-  webSocketDebuggerUrl?: string;
-}
 
 const commandForProvider = (providerId: string): string | undefined => {
   if (providerId === "chatgpt-web") {
@@ -112,25 +108,8 @@ const chatGptModelConfirmed = (): boolean =>
 const chatGptCdpUrl = (): string => process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222";
 
 const chatGptCdpIssues = async (): Promise<string[]> => {
-  try {
-    const response = await fetch(new URL("/json/list", chatGptCdpUrl()), {
-      signal: AbortSignal.timeout(1_000)
-    });
-
-    if (!response.ok) {
-      return [`cdp_http_${response.status}`];
-    }
-
-    const targets = await response.json() as ChromeTarget[];
-    const hasChatGptTarget = targets.some((target) => {
-      const url = target.url ?? "";
-      return target.webSocketDebuggerUrl && (url.includes("chatgpt.com") || url.includes("chat.openai.com"));
-    });
-
-    return hasChatGptTarget ? [] : ["chatgpt_tab_not_found"];
-  } catch {
-    return ["cdp_unreachable"];
-  }
+  const status = await inspectBrowser({ cdpUrl: chatGptCdpUrl() });
+  return status.issues;
 };
 
 const chatGptWebIssues = async (command?: string): Promise<string[]> => {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
+import { inspectBrowser, startBrowser, stopBrowser, type BrowserManagerOptions } from "../runtime/browserManager.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
@@ -26,6 +27,9 @@ import {
 } from "./args.js";
 import { getMcpConfigReport } from "./mcpConfig.js";
 import {
+  formatBrowserStartResult,
+  formatBrowserStatus,
+  formatBrowserStopResult,
   formatConfig,
   formatAdvanceRunResult,
   formatCommandResult,
@@ -39,6 +43,7 @@ import {
   formatRunSummary,
   printJson
 } from "./format.js";
+import { renderDashboard } from "../tui/dashboard.js";
 import type { RunArtifact } from "../runtime/types.js";
 
 const helpText = `TheHood local agent runtime
@@ -63,6 +68,10 @@ Usage:
   thehood reject <run-id> [--repo <path>] [--reason <text>]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
+  thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
+  thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
+  thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
+  thehood ui [--repo <path>] [--port <n>] [--cdp-url <url>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
 
@@ -146,6 +155,24 @@ const artifactReadOptions = (
 ): { maxBytes?: number } => {
   const maxBytes = parsePositiveIntegerOption(options, "maxBytes");
   return maxBytes === undefined ? {} : { maxBytes };
+};
+
+const browserOptionsFromCli = (options: Record<string, CliOptionValue>): BrowserManagerOptions => {
+  const port = parsePositiveIntegerOption(options, "port");
+  const cdpUrl = getStringOption(options, "cdpUrl");
+  const profile = getStringOption(options, "profile");
+  const profilePath = getStringOption(options, "profilePath");
+  const url = getStringOption(options, "url");
+  const chromePath = getStringOption(options, "chromePath");
+
+  return {
+    ...(port === undefined ? {} : { port }),
+    ...(cdpUrl ? { cdpUrl } : {}),
+    ...(profile ? { profile } : {}),
+    ...(profilePath ? { profilePath } : {}),
+    ...(url ? { url } : {}),
+    ...(chromePath ? { chromePath } : {})
+  };
 };
 
 const writeArtifactReadResult = (
@@ -407,6 +434,48 @@ const handleMcp = async (
   await startMcpServer();
 };
 
+const handleBrowser = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const subcommand = args[0] ?? "status";
+  const browserOptions = browserOptionsFromCli(options);
+
+  if (subcommand === "status") {
+    const status = await inspectBrowser(browserOptions);
+    shouldPrintJson(options) ? printJson(status) : process.stdout.write(`${formatBrowserStatus(status)}\n`);
+    return;
+  }
+
+  if (subcommand === "start") {
+    const result = await startBrowser(browserOptions);
+    shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatBrowserStartResult(result)}\n`);
+    return;
+  }
+
+  if (subcommand === "stop") {
+    const result = await stopBrowser(browserOptions);
+    shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatBrowserStopResult(result)}\n`);
+    return;
+  }
+
+  throw new InputError(`Unknown browser subcommand "${subcommand}".`);
+};
+
+const handleUi = async (options: Record<string, CliOptionValue>): Promise<void> => {
+  const repoPath = repoFromOptions(options);
+  const config = await loadConfig(repoPath);
+  const health = await inspectRuntimeHealth(config);
+  const browser = await inspectBrowser(browserOptionsFromCli(options));
+  const dashboard = {
+    repoPath,
+    health,
+    browser
+  };
+
+  shouldPrintJson(options) ? printJson(dashboard) : process.stdout.write(`${renderDashboard(dashboard)}\n`);
+};
+
 const runCli = async (argv: string[]): Promise<void> => {
   const parsed = parseArgs(argv);
   const [command, ...args] = parsed.positionals;
@@ -464,6 +533,12 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "abort":
       await handleAbort(args, parsed.options);
+      return;
+    case "browser":
+      await handleBrowser(args, parsed.options);
+      return;
+    case "ui":
+      await handleUi(parsed.options);
       return;
     case "mcp":
       await handleMcp(args, parsed.options);
