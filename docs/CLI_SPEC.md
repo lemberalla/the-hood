@@ -133,12 +133,12 @@ Initial config shape:
       "model": "default"
     },
     "verifier": {
-      "provider": "anthropic-api",
-      "model": "claude-opus"
+      "provider": "claude-code",
+      "model": "default"
     },
     "critic": {
-      "provider": "anthropic-api",
-      "model": "claude-sonnet"
+      "provider": "claude-code",
+      "model": "default"
     }
   }
 }

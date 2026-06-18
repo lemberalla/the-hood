@@ -146,11 +146,11 @@ roles:
     provider: codex-cli
     model: gpt-5.5-low
   verifier:
-    provider: anthropic-api
-    model: claude-opus
+    provider: claude-code
+    model: default
   critic:
-    provider: anthropic-api
-    model: claude-sonnet
+    provider: claude-code
+    model: default
 ```
 
 ### Agent Contracts
@@ -223,4 +223,3 @@ Runtime integrates approved output
 ```
 
 No model should be trusted as the only source of truth for its own work.
-
