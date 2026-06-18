@@ -165,6 +165,7 @@ const doctorContent = doctorPath[1].result.structuredContent;
 assert.equal(doctorContent.runtime.name, "thehood");
 assert.ok(doctorContent.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patch_gate"));
+assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);
@@ -546,6 +547,25 @@ await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
 const isolatedPatch = await fs.readFile(isolatedDiffArtifact.ref, "utf8");
 assert.ok(isolatedPatch.includes("implemented.txt"));
 assert.ok(isolatedPatch.includes("isolated implementation"));
+const isolatedCliArtifact = await runCommand([
+  "artifact",
+  isolatedRunId,
+  isolatedDiffArtifact.ref,
+  "--repo",
+  isolatedRepoPath,
+  "--max-bytes",
+  "50000"
+]);
+assert.ok(isolatedCliArtifact.includes("implemented.txt"));
+const isolatedCliDiff = await runCommand([
+  "diff",
+  isolatedRunId,
+  "--repo",
+  isolatedRepoPath,
+  "--max-bytes",
+  "50000"
+]);
+assert.ok(isolatedCliDiff.includes("isolated implementation"));
 
 const isolatedApply = await runMcp([
   ...baseMessages,

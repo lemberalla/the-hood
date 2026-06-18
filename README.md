@@ -26,6 +26,7 @@ It supports:
 - role mapping updates
 - run creation for `plan` and `implement`
 - approval, rejection, abort, status, and log inspection
+- bounded CLI artifact and diff inspection
 - hard enforcement that implementer and verifier cannot be the same agent
 - a real stdio MCP server exposing TheHood runtime tools
 - runtime-owned command log artifacts
@@ -54,6 +55,7 @@ node dist/cli/main.js doctor --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js status --repo .
+node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
 ```

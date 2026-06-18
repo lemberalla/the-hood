@@ -105,6 +105,7 @@ const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
 assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
+assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -281,6 +282,32 @@ const repoContext = JSON.parse(await fs.readFile(contextArtifact.ref, "utf8"));
 assert.equal(repoContext.kind, "repo_context");
 assert.ok(repoContext.tree.includes("README.md"));
 assert.ok(repoContext.files.some((file) => file.path === "README.md"));
+const contextArtifactRead = await runCli([
+  "artifact",
+  repoContextPlan.runId,
+  contextArtifact.ref,
+  "--repo",
+  repoPath,
+  "--max-bytes",
+  "100000"
+]);
+assert.ok(contextArtifactRead.stdout.includes('"kind": "repo_context"'));
+const contextArtifactJson = JSON.parse(
+  (
+    await runCli([
+      "artifact",
+      repoContextPlan.runId,
+      contextArtifact.ref,
+      "--repo",
+      repoPath,
+      "--max-bytes",
+      "100000",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(contextArtifactJson.artifact.kind, "context");
+assert.equal(contextArtifactJson.truncated, false);
 
 const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
 const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");

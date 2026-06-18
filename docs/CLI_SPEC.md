@@ -20,6 +20,7 @@ thehood plan "Design the feature" --repo .
 thehood status
 thehood status <run-id>
 thehood logs <run-id>
+thehood artifact <run-id> <artifact-ref>
 thehood evidence <run-id>
 thehood exec <run-id> -- npm run build
 thehood diff <run-id>
@@ -175,6 +176,10 @@ The CLI should support:
 - protected path matches from configured test, fixture, snapshot, and eval patterns
 
 TheHood excludes its own `.thehood` runtime directory from this evidence.
+
+`thehood artifact <run-id> <artifact-ref>` reads a bounded artifact that is already attached to the run. It uses the same safety boundary as `thehood_read_artifact`: refs must stay inside that run's artifact directory and must already be recorded on the run.
+
+`thehood diff <run-id>` reads the latest attached `diff` artifact for a run. This is mainly useful for reviewing isolated worker patches before approval.
 
 `thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.
 

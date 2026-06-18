@@ -6,6 +6,7 @@ import { InputError, TheHoodError } from "../runtime/errors.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { startMcpServer } from "../mcp/server.js";
+import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { listProviders } from "../runtime/providers.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import {
@@ -38,6 +39,7 @@ import {
   formatRunSummary,
   printJson
 } from "./format.js";
+import type { RunArtifact } from "../runtime/types.js";
 
 const helpText = `TheHood local agent runtime
 
@@ -53,7 +55,9 @@ Usage:
   thehood run <goal> [--repo <path>] [--mode <mode>] [--json]
   thehood status [run-id] [--repo <path>] [--json]
   thehood logs <run-id> [--repo <path>] [--json]
+  thehood artifact <run-id> <artifact-ref> [--repo <path>] [--max-bytes <n>] [--json]
   thehood evidence <run-id> [--repo <path>] [--json]
+  thehood diff <run-id> [--repo <path>] [--max-bytes <n>] [--json]
   thehood exec <run-id> [--repo <path>] [--cwd <path>] [--allow-risky] -- <command> [args...]
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
@@ -117,6 +121,59 @@ const ensureRunId = (value: string | undefined): string => {
   }
 
   return value;
+};
+
+const parsePositiveIntegerOption = (
+  options: Record<string, CliOptionValue>,
+  key: string
+): number | undefined => {
+  const raw = getStringOption(options, key);
+
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw.trim()) {
+    throw new InputError(`Option --${key} must be a positive integer.`);
+  }
+
+  return parsed;
+};
+
+const artifactReadOptions = (
+  options: Record<string, CliOptionValue>
+): { maxBytes?: number } => {
+  const maxBytes = parsePositiveIntegerOption(options, "maxBytes");
+  return maxBytes === undefined ? {} : { maxBytes };
+};
+
+const writeArtifactReadResult = (
+  result: ReadArtifactResult,
+  options: Record<string, CliOptionValue>
+): void => {
+  if (shouldPrintJson(options)) {
+    printJson(result);
+    return;
+  }
+
+  process.stdout.write(result.content);
+  if (result.truncated) {
+    const prefix = result.content.endsWith("\n") ? "" : "\n";
+    process.stderr.write(
+      `${prefix}thehood: artifact truncated from ${result.byteLength} byte(s). Use --max-bytes to read more.\n`
+    );
+  }
+};
+
+const latestDiffArtifact = (artifacts: RunArtifact[]): RunArtifact => {
+  const artifact = artifacts.filter((candidate) => candidate.kind === "diff").at(-1);
+
+  if (!artifact) {
+    throw new InputError("Run does not have a diff artifact.");
+  }
+
+  return artifact;
 };
 
 const handleInit = async (options: Record<string, CliOptionValue>): Promise<void> => {
@@ -224,6 +281,45 @@ const handleLogs = async (
 ): Promise<void> => {
   const run = await getRun(repoFromOptions(options), ensureRunId(args[0]));
   shouldPrintJson(options) ? printJson(run.events) : process.stdout.write(`${formatRunEvents(run)}\n`);
+};
+
+const handleArtifact = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const runId = ensureRunId(args[0]);
+  const ref = args[1];
+
+  if (!ref) {
+    throw new InputError("Artifact ref is required. Use: thehood artifact <run-id> <artifact-ref>");
+  }
+
+  const result = await readRunArtifact({
+    repoPath: repoFromOptions(options),
+    runId,
+    ref,
+    ...artifactReadOptions(options)
+  });
+
+  writeArtifactReadResult(result, options);
+};
+
+const handleDiff = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const repoPath = repoFromOptions(options);
+  const runId = ensureRunId(args[0]);
+  const run = await getRun(repoPath, runId);
+  const artifact = latestDiffArtifact(run.artifacts);
+  const result = await readRunArtifact({
+    repoPath,
+    runId,
+    ref: artifact.ref,
+    ...artifactReadOptions(options)
+  });
+
+  writeArtifactReadResult(result, options);
 };
 
 const handleEvidence = async (
@@ -347,8 +443,14 @@ const runCli = async (argv: string[]): Promise<void> => {
     case "logs":
       await handleLogs(args, parsed.options);
       return;
+    case "artifact":
+      await handleArtifact(args, parsed.options);
+      return;
     case "evidence":
       await handleEvidence(args, parsed.options);
+      return;
+    case "diff":
+      await handleDiff(args, parsed.options);
       return;
     case "exec":
       await handleExec(args, parsed.options);

@@ -4,7 +4,8 @@ export const runtimeCapabilities = [
   "isolated_patch_integration",
   "protected_integrated_patch_gate",
   "repo_context_external_approval",
-  "chatgpt_web_bridge"
+  "chatgpt_web_bridge",
+  "cli_artifact_reads"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];
