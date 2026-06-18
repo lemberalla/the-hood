@@ -1,0 +1,596 @@
+import {
+  runtimeRoles,
+  type ApprovalEvent,
+  type JsonObject,
+  type JsonValue,
+  type ProgressPacket,
+  type ProgressPacketApproval,
+  type ProgressPacketArtifactRef,
+  type ProgressPacketBoundedSection,
+  type ProgressPacketBounds,
+  type ProgressPacketEvidenceGroup,
+  type ProgressPacketLimits,
+  type ProgressPacketOpenQuestion,
+  type ProgressPacketProviderResponse,
+  type ProgressPacketRunEvent,
+  type ProgressPacketSourceRef,
+  type ProgressPacketToolEvidence,
+  type RunArtifact,
+  type RunEvent,
+  type RunRecord,
+  type RoleMap,
+  type RuntimeRole,
+  type ToolEvent
+} from "./types.js";
+
+export const defaultProgressPacketLimits: ProgressPacketLimits = {
+  maxArtifacts: 40,
+  maxProviderResponses: 20,
+  maxApprovalEvents: 20,
+  maxToolEvents: 40,
+  maxRunEvents: 60,
+  maxOpenQuestions: 20,
+  maxStringLength: 1000
+};
+
+const ontologyTerms = [
+  "Run",
+  "Plan",
+  "Slice",
+  "Task",
+  "Agent",
+  "Role",
+  "Artifact",
+  "Evidence",
+  "Approval",
+  "Commit",
+  "Validation",
+  "VerifierVerdict",
+  "Reconciliation",
+  "Decision"
+];
+
+interface ProgressPacketBuildState {
+  limits: ProgressPacketLimits;
+  bounds: ProgressPacketBounds;
+}
+
+export interface BuildProgressPacketInput {
+  limits?: Partial<ProgressPacketLimits>;
+}
+
+const mergeLimits = (limits: Partial<ProgressPacketLimits> | undefined): ProgressPacketLimits => ({
+  ...defaultProgressPacketLimits,
+  ...limits
+});
+
+const createBuildState = (limits: ProgressPacketLimits): ProgressPacketBuildState => ({
+  limits,
+  bounds: {
+    limits,
+    sections: {},
+    truncated: false,
+    textFieldsTruncated: 0
+  }
+});
+
+const markTextTruncated = (state: ProgressPacketBuildState): void => {
+  state.bounds.truncated = true;
+  state.bounds.textFieldsTruncated += 1;
+};
+
+const truncateText = (value: string, state: ProgressPacketBuildState): string => {
+  if (value.length <= state.limits.maxStringLength) {
+    return value;
+  }
+
+  markTextTruncated(state);
+  const suffix = "...[truncated]";
+  const prefixLength = Math.max(0, state.limits.maxStringLength - suffix.length);
+  return `${value.slice(0, prefixLength)}${suffix}`;
+};
+
+const boundedSection = <Input, Output>(
+  name: string,
+  items: Input[],
+  limit: number,
+  state: ProgressPacketBuildState,
+  mapItem: (item: Input) => Output
+): ProgressPacketBoundedSection<Output> => {
+  const omitted = Math.max(0, items.length - limit);
+  const selected = items.slice(omitted);
+  const truncated = omitted > 0;
+
+  if (truncated) {
+    state.bounds.truncated = true;
+  }
+
+  state.bounds.sections[name] = {
+    included: selected.length,
+    omitted,
+    truncated
+  };
+
+  return {
+    items: selected.map(mapItem),
+    omitted,
+    truncated
+  };
+};
+
+const runSource = (run: RunRecord): ProgressPacketSourceRef => ({
+  kind: "run_record",
+  runId: run.runId
+});
+
+const artifactSource = (run: RunRecord, artifact: RunArtifact): ProgressPacketSourceRef => ({
+  kind: "run_artifact",
+  runId: run.runId,
+  ref: artifact.ref
+});
+
+const approvalSource = (run: RunRecord, event: ApprovalEvent): ProgressPacketSourceRef => ({
+  kind: "approval_event",
+  runId: run.runId,
+  id: event.id
+});
+
+const toolSource = (run: RunRecord, event: ToolEvent): ProgressPacketSourceRef => ({
+  kind: "tool_event",
+  runId: run.runId,
+  id: event.id
+});
+
+const eventSource = (run: RunRecord, event: RunEvent): ProgressPacketSourceRef => ({
+  kind: "run_event",
+  runId: run.runId,
+  id: event.id,
+  eventType: event.type
+});
+
+const artifactRef = (
+  run: RunRecord,
+  artifact: RunArtifact,
+  state: ProgressPacketBuildState
+): ProgressPacketArtifactRef => ({
+  kind: artifact.kind,
+  ref: artifact.ref,
+  summary: truncateText(artifact.summary, state),
+  canonical: true,
+  source: artifactSource(run, artifact)
+});
+
+const compactJsonObject = (
+  value: JsonObject | undefined,
+  state: ProgressPacketBuildState
+): JsonObject | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  const raw = JSON.stringify(value);
+  if (raw.length <= state.limits.maxStringLength) {
+    return JSON.parse(raw) as JsonObject;
+  }
+
+  return {
+    truncated: true,
+    preview: truncateText(raw, state)
+  };
+};
+
+const runEventRef = (
+  run: RunRecord,
+  event: RunEvent,
+  state: ProgressPacketBuildState
+): ProgressPacketRunEvent => {
+  const data = compactJsonObject(event.data, state);
+  const mapped: ProgressPacketRunEvent = {
+    id: event.id,
+    createdAt: event.createdAt,
+    type: event.type,
+    message: truncateText(event.message, state),
+    source: eventSource(run, event)
+  };
+
+  if (data) {
+    mapped.data = data;
+  }
+
+  return mapped;
+};
+
+const approvalRef = (
+  run: RunRecord,
+  event: ApprovalEvent,
+  state: ProgressPacketBuildState
+): ProgressPacketApproval => ({
+  id: event.id,
+  createdAt: event.createdAt,
+  decision: event.decision,
+  reason: truncateText(event.reason, state),
+  source: approvalSource(run, event)
+});
+
+const toolEventRef = (
+  run: RunRecord,
+  event: ToolEvent,
+  state: ProgressPacketBuildState
+): ProgressPacketToolEvidence => {
+  const mapped: ProgressPacketToolEvidence = {
+    id: event.id,
+    createdAt: event.createdAt,
+    tool: truncateText(event.tool, state),
+    command: truncateText(event.command, state),
+    args: event.args.map((arg) => truncateText(arg, state)),
+    cwd: truncateText(event.cwd, state),
+    exitCode: event.exitCode,
+    durationMs: event.durationMs,
+    safetyCategory: event.safetyCategory,
+    permissionDecision: event.permissionDecision,
+    source: toolSource(run, event)
+  };
+
+  if (event.stdoutRef) {
+    mapped.stdoutRef = event.stdoutRef;
+  }
+
+  if (event.stderrRef) {
+    mapped.stderrRef = event.stderrRef;
+  }
+
+  return mapped;
+};
+
+const stringField = (value: JsonValue | undefined): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
+const roleField = (value: JsonValue | undefined): RuntimeRole | undefined =>
+  typeof value === "string" && runtimeRoles.includes(value as RuntimeRole)
+    ? value as RuntimeRole
+    : undefined;
+
+const providerResponseArtifacts = (run: RunRecord): RunArtifact[] =>
+  run.artifacts.filter((artifact) => artifact.kind === "plan" || artifact.kind === "agent");
+
+const providerResponseEvents = (run: RunRecord): RunEvent[] =>
+  run.events.filter((event) => event.type === "agent_response");
+
+const cloneRoleMapping = (roleMapping: RoleMap): RoleMap =>
+  Object.fromEntries(
+    Object.entries(roleMapping).map(([role, assignment]) => [
+      role,
+      {
+        ...assignment
+      }
+    ])
+  ) as RoleMap;
+
+const mapProviderResponses = (
+  run: RunRecord,
+  state: ProgressPacketBuildState
+): ProgressPacketProviderResponse[] => {
+  const artifacts = providerResponseArtifacts(run);
+
+  return providerResponseEvents(run).map((event, index) => {
+    const artifact = artifacts[index];
+    const data = event.data ?? {};
+    const mappedEvent = runEventRef(run, event, state);
+    const mappedArtifact = artifact ? artifactRef(run, artifact, state) : undefined;
+    const sourceRefs = [
+      mappedEvent.source,
+      ...(mappedArtifact ? [mappedArtifact.source] : [])
+    ];
+    const response: ProgressPacketProviderResponse = {
+      summary: mappedArtifact?.summary ?? mappedEvent.message,
+      event: mappedEvent,
+      sourceRefs
+    };
+    const role = roleField(data.role);
+    const provider = stringField(data.provider);
+    const model = stringField(data.model);
+    const status = stringField(data.status);
+
+    if (role) {
+      response.role = role;
+    }
+
+    if (provider) {
+      response.provider = truncateText(provider, state);
+    }
+
+    if (model) {
+      response.model = truncateText(model, state);
+    }
+
+    if (status) {
+      response.status = truncateText(status, state);
+    }
+
+    if (mappedArtifact) {
+      response.artifact = mappedArtifact;
+    }
+
+    return response;
+  });
+};
+
+const latestArtifact = (
+  artifacts: ProgressPacketArtifactRef[],
+  predicate: (artifact: ProgressPacketArtifactRef) => boolean
+): ProgressPacketArtifactRef | undefined => artifacts.filter(predicate).at(-1);
+
+const finalReportArtifact = (artifacts: ProgressPacketArtifactRef[]): ProgressPacketArtifactRef | undefined =>
+  artifacts
+    .filter((artifact) => artifact.kind === "report" && artifact.summary.includes("Final report"))
+    .at(-1);
+
+const createEvidenceGroup = (
+  name: string,
+  input: {
+    artifacts: RunArtifact[];
+    events: RunEvent[];
+    toolEvents: ToolEvent[];
+  },
+  run: RunRecord,
+  state: ProgressPacketBuildState
+): ProgressPacketEvidenceGroup => ({
+  artifacts: boundedSection(
+    `${name}.artifacts`,
+    input.artifacts,
+    state.limits.maxArtifacts,
+    state,
+    (artifact) => artifactRef(run, artifact, state)
+  ),
+  events: boundedSection(
+    `${name}.events`,
+    input.events,
+    state.limits.maxRunEvents,
+    state,
+    (event) => runEventRef(run, event, state)
+  ),
+  toolEvents: boundedSection(
+    `${name}.toolEvents`,
+    input.toolEvents,
+    state.limits.maxToolEvents,
+    state,
+    (event) => toolEventRef(run, event, state)
+  )
+});
+
+const isGitToolEvent = (event: ToolEvent): boolean => event.tool === "git_status" || event.tool === "git_diff";
+
+const isGitArtifact = (artifact: RunArtifact): boolean => artifact.summary.includes("Git evidence summary");
+
+const isValidationToolEvent = (event: ToolEvent): boolean => event.tool.startsWith("validation_");
+
+const isValidationArtifact = (artifact: RunArtifact): boolean => artifact.summary.includes("Validation summary");
+
+const openQuestions = (
+  run: RunRecord,
+  providerResponses: ProgressPacketProviderResponse[],
+  state: ProgressPacketBuildState
+): ProgressPacketOpenQuestion[] => {
+  const questions: ProgressPacketOpenQuestion[] = [];
+  const source = runSource(run);
+
+  if (run.approvalRequired) {
+    questions.push({
+      severity: "blocking",
+      question: truncateText(`Run is waiting for approval: ${run.approvalReason ?? "no reason recorded"}`, state),
+      sourceRefs: [source]
+    });
+  }
+
+  if (run.state !== "completed") {
+    questions.push({
+      severity: "info",
+      question: truncateText(`Run state is ${run.state}; do not assume implementation is accepted.`, state),
+      sourceRefs: [source]
+    });
+  }
+
+  if (run.stopReason && run.state !== "completed") {
+    questions.push({
+      severity: run.state === "failed" || run.state === "aborted" ? "blocking" : "risk",
+      question: truncateText(`Stop reason is still active: ${run.stopReason}`, state),
+      sourceRefs: [source]
+    });
+  }
+
+  for (const event of run.toolEvents.filter((candidate) => candidate.exitCode !== 0)) {
+    questions.push({
+      severity: "blocking",
+      question: truncateText(`Tool ${event.tool} exited with ${event.exitCode}.`, state),
+      sourceRefs: [toolSource(run, event)]
+    });
+  }
+
+  for (const response of providerResponses.filter((candidate) => candidate.status === "blocked" || candidate.status === "failed")) {
+    questions.push({
+      severity: response.status === "failed" ? "blocking" : "risk",
+      question: truncateText(`Provider response is ${response.status}: ${response.summary}`, state),
+      sourceRefs: response.sourceRefs
+    });
+  }
+
+  return questions;
+};
+
+const uniqueSources = (sources: ProgressPacketSourceRef[]): ProgressPacketSourceRef[] => {
+  const seen = new Set<string>();
+  const unique: ProgressPacketSourceRef[] = [];
+
+  for (const source of sources) {
+    const key = [
+      source.kind,
+      source.runId,
+      source.id ?? "",
+      source.ref ?? "",
+      source.eventType ?? ""
+    ].join("\u0000");
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(source);
+  }
+
+  return unique;
+};
+
+export const buildProgressPacket = (
+  run: RunRecord,
+  input: BuildProgressPacketInput = {}
+): ProgressPacket => {
+  const state = createBuildState(mergeLimits(input.limits));
+  const artifacts = boundedSection(
+    "artifacts",
+    run.artifacts,
+    state.limits.maxArtifacts,
+    state,
+    (artifact) => artifactRef(run, artifact, state)
+  );
+  const approvals = boundedSection(
+    "approvals",
+    run.approvalEvents,
+    state.limits.maxApprovalEvents,
+    state,
+    (event) => approvalRef(run, event, state)
+  );
+  const toolEvents = boundedSection(
+    "toolEvents",
+    run.toolEvents,
+    state.limits.maxToolEvents,
+    state,
+    (event) => toolEventRef(run, event, state)
+  );
+  const runEvents = boundedSection(
+    "runEvents",
+    run.events,
+    state.limits.maxRunEvents,
+    state,
+    (event) => runEventRef(run, event, state)
+  );
+  const providerResponses = boundedSection(
+    "providerResponses",
+    mapProviderResponses(run, state),
+    state.limits.maxProviderResponses,
+    state,
+    (response) => response
+  );
+  const verifierVerdicts = boundedSection(
+    "verifierVerdicts",
+    providerResponses.items.filter((response) => response.role === "verifier"),
+    state.limits.maxProviderResponses,
+    state,
+    (response) => response
+  );
+  const git = createEvidenceGroup(
+    "git",
+    {
+      artifacts: run.artifacts.filter(isGitArtifact),
+      events: run.events.filter((event) => event.type === "git_evidence_captured"),
+      toolEvents: run.toolEvents.filter(isGitToolEvent)
+    },
+    run,
+    state
+  );
+  const validation = createEvidenceGroup(
+    "validation",
+    {
+      artifacts: run.artifacts.filter(isValidationArtifact),
+      events: run.events.filter((event) => event.type === "validation_evidence_captured"),
+      toolEvents: run.toolEvents.filter(isValidationToolEvent)
+    },
+    run,
+    state
+  );
+  const questions = boundedSection(
+    "openQuestions",
+    openQuestions(run, providerResponses.items, state),
+    state.limits.maxOpenQuestions,
+    state,
+    (question) => question
+  );
+  const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
+  const latestProviderResponse = providerResponses.items.at(-1);
+  const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
+  const latestFinalReport = finalReportArtifact(artifacts.items);
+  const latestRepoContext = latestArtifact(artifacts.items, (artifact) => artifact.kind === "context");
+  const latest = {
+    ...(latestPlan ? { plan: latestPlan } : {}),
+    ...(latestProviderResponse ? { providerResponse: latestProviderResponse } : {}),
+    ...(latestVerifierResponse ? { verifierResponse: latestVerifierResponse } : {}),
+    ...(latestFinalReport ? { finalReport: latestFinalReport } : {}),
+    ...(latestRepoContext ? { repoContext: latestRepoContext } : {})
+  };
+  const canonicalSources = uniqueSources([
+    runSource(run),
+    ...artifacts.items.map((artifact) => artifact.source),
+    ...approvals.items.map((approval) => approval.source),
+    ...toolEvents.items.map((event) => event.source),
+    ...runEvents.items.map((event) => event.source),
+    ...providerResponses.items.flatMap((response) => response.sourceRefs),
+    ...questions.items.flatMap((question) => question.sourceRefs)
+  ]);
+
+  return {
+    schemaVersion: 1,
+    kind: "progress_packet",
+    ontologyVersion: "initial",
+    ontologyTerms,
+    run: {
+      runId: run.runId,
+      repoPath: run.repoPath,
+      userGoal: truncateText(run.userGoal, state),
+      mode: run.mode,
+      state: run.state,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+      approvalRequired: run.approvalRequired,
+      ...(run.approvalReason ? { approvalReason: truncateText(run.approvalReason, state) } : {}),
+      ...(run.stopReason ? { stopReason: truncateText(run.stopReason, state) } : {}),
+      maxIterations: run.maxIterations,
+      artifactCount: run.artifacts.length,
+      approvalEventCount: run.approvalEvents.length,
+      toolEventCount: run.toolEvents.length,
+      runEventCount: run.events.length,
+      providerResponseCount: providerResponseEvents(run).length,
+      source: runSource(run)
+    },
+    roleMapping: cloneRoleMapping(run.roleMapping),
+    latest,
+    evidence: {
+      artifacts,
+      providerResponses,
+      approvals,
+      toolEvents,
+      runEvents,
+      git,
+      validation,
+      verifierVerdicts
+    },
+    openQuestions: questions,
+    provenance: {
+      canonicalSources,
+      derivedFields: [
+        "latest",
+        "evidence.providerResponses",
+        "evidence.git",
+        "evidence.validation",
+        "evidence.verifierVerdicts",
+        "openQuestions"
+      ],
+      notes: [
+        "Progress packet was built from the RunRecord passed to buildProgressPacket.",
+        "Artifact refs, event ids, approval ids, and tool event ids are canonical evidence.",
+        "Summaries and open questions are derived navigation aids and are not authoritative without their source refs.",
+        "No providers, commands, network requests, or artifact file reads are performed by this builder."
+      ]
+    },
+    bounds: state.bounds
+  };
+};

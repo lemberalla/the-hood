@@ -145,3 +145,170 @@ export interface RunRecord {
   toolEvents: ToolEvent[];
   events: RunEvent[];
 }
+
+export type ProgressPacketSourceKind =
+  | "run_record"
+  | "run_artifact"
+  | "run_event"
+  | "approval_event"
+  | "tool_event";
+
+export interface ProgressPacketSourceRef {
+  kind: ProgressPacketSourceKind;
+  runId: string;
+  id?: string;
+  ref?: string;
+  eventType?: string;
+}
+
+export interface ProgressPacketLimits {
+  maxArtifacts: number;
+  maxProviderResponses: number;
+  maxApprovalEvents: number;
+  maxToolEvents: number;
+  maxRunEvents: number;
+  maxOpenQuestions: number;
+  maxStringLength: number;
+}
+
+export interface ProgressPacketSectionBounds {
+  included: number;
+  omitted: number;
+  truncated: boolean;
+}
+
+export interface ProgressPacketBounds {
+  limits: ProgressPacketLimits;
+  sections: Record<string, ProgressPacketSectionBounds>;
+  truncated: boolean;
+  textFieldsTruncated: number;
+}
+
+export interface ProgressPacketBoundedSection<T> {
+  items: T[];
+  omitted: number;
+  truncated: boolean;
+}
+
+export interface ProgressPacketArtifactRef {
+  kind: RunArtifactKind;
+  ref: string;
+  summary: string;
+  canonical: true;
+  source: ProgressPacketSourceRef;
+}
+
+export interface ProgressPacketApproval {
+  id: string;
+  createdAt: string;
+  decision: ApprovalDecision;
+  reason: string;
+  source: ProgressPacketSourceRef;
+}
+
+export interface ProgressPacketToolEvidence {
+  id: string;
+  createdAt: string;
+  tool: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  exitCode: number;
+  durationMs: number;
+  safetyCategory: CommandSafetyCategory;
+  permissionDecision: ToolEvent["permissionDecision"];
+  stdoutRef?: string;
+  stderrRef?: string;
+  source: ProgressPacketSourceRef;
+}
+
+export interface ProgressPacketRunEvent {
+  id: string;
+  createdAt: string;
+  type: string;
+  message: string;
+  data?: JsonObject;
+  source: ProgressPacketSourceRef;
+}
+
+export interface ProgressPacketProviderResponse {
+  role?: RuntimeRole;
+  provider?: string;
+  model?: string;
+  status?: string;
+  summary: string;
+  artifact?: ProgressPacketArtifactRef;
+  event?: ProgressPacketRunEvent;
+  sourceRefs: ProgressPacketSourceRef[];
+}
+
+export interface ProgressPacketEvidenceGroup {
+  artifacts: ProgressPacketBoundedSection<ProgressPacketArtifactRef>;
+  events: ProgressPacketBoundedSection<ProgressPacketRunEvent>;
+  toolEvents: ProgressPacketBoundedSection<ProgressPacketToolEvidence>;
+}
+
+export interface ProgressPacketOpenQuestion {
+  severity: "info" | "risk" | "blocking";
+  question: string;
+  sourceRefs: ProgressPacketSourceRef[];
+}
+
+export interface ProgressPacketRunSnapshot {
+  runId: string;
+  repoPath: string;
+  userGoal: string;
+  mode: RunMode;
+  state: RunState;
+  createdAt: string;
+  updatedAt: string;
+  approvalRequired: boolean;
+  approvalReason?: string;
+  stopReason?: string;
+  maxIterations: number;
+  artifactCount: number;
+  approvalEventCount: number;
+  toolEventCount: number;
+  runEventCount: number;
+  providerResponseCount: number;
+  source: ProgressPacketSourceRef;
+}
+
+export interface ProgressPacketLatestState {
+  plan?: ProgressPacketArtifactRef;
+  providerResponse?: ProgressPacketProviderResponse;
+  verifierResponse?: ProgressPacketProviderResponse;
+  finalReport?: ProgressPacketArtifactRef;
+  repoContext?: ProgressPacketArtifactRef;
+}
+
+export interface ProgressPacketEvidence {
+  artifacts: ProgressPacketBoundedSection<ProgressPacketArtifactRef>;
+  providerResponses: ProgressPacketBoundedSection<ProgressPacketProviderResponse>;
+  approvals: ProgressPacketBoundedSection<ProgressPacketApproval>;
+  toolEvents: ProgressPacketBoundedSection<ProgressPacketToolEvidence>;
+  runEvents: ProgressPacketBoundedSection<ProgressPacketRunEvent>;
+  git: ProgressPacketEvidenceGroup;
+  validation: ProgressPacketEvidenceGroup;
+  verifierVerdicts: ProgressPacketBoundedSection<ProgressPacketProviderResponse>;
+}
+
+export interface ProgressPacketProvenance {
+  canonicalSources: ProgressPacketSourceRef[];
+  derivedFields: string[];
+  notes: string[];
+}
+
+export interface ProgressPacket {
+  schemaVersion: 1;
+  kind: "progress_packet";
+  ontologyVersion: "initial";
+  ontologyTerms: string[];
+  run: ProgressPacketRunSnapshot;
+  roleMapping: RoleMap;
+  latest: ProgressPacketLatestState;
+  evidence: ProgressPacketEvidence;
+  openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
+  provenance: ProgressPacketProvenance;
+  bounds: ProgressPacketBounds;
+}
