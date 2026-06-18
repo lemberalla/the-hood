@@ -28,6 +28,33 @@ Later option:
 
 - SQLite for querying run history and UI state
 
+## Memory Store
+
+Current direction:
+
+- exact run records and artifacts are canonical
+- summaries, embeddings, graphs, and provider reflections are derived memory
+- derived memory must preserve source refs and be rebuildable
+
+Open options:
+
+- SQLite plus full-text search for the first local index
+- vector index for semantic retrieval
+- graph index for ontology relationships
+- external or embedded memory engines after canonical artifacts and reconciliation are stable
+
+## Planner Reconciliation
+
+Current direction:
+
+- after implementation and verification, TheHood can send an approved progress packet back to the original planner or orchestrator
+- the provider returns a schema-bound reconciliation result
+- runtime stores the result as an artifact and uses it to inform the next slice
+
+Open question:
+
+- should reconciliation attach to the original plan run, create a child run, or both?
+
 ## First Provider Adapters
 
 Recommended order:

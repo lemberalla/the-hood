@@ -14,6 +14,7 @@ The runtime is the product core. The CLI, MCP server, and macOS menubar app are 
 - Support Claude, GPT, Codex, Claude Code, and local models as interchangeable role participants.
 - Keep verification independent from implementation.
 - Make runs inspectable and reproducible enough for public, trusted use.
+- Make provider session context disposable by preserving canonical runtime memory and rehydrating models from exact artifacts.
 
 ## Non-Goals
 
@@ -120,6 +121,12 @@ The runner is responsible for:
 - environment redaction
 - artifact storage
 
+### Memory Store
+
+Preserves canonical project memory as exact run records, events, approvals, provider directives, provider responses, diffs, command logs, validation results, verifier verdicts, final reports, and reconciliation artifacts.
+
+Index and retrieval layers can make memory searchable, but they are derived from canonical artifacts. If an index, reflection, or summary disagrees with a source artifact, the artifact wins.
+
 ### Worktree Manager
 
 Keeps implementer work isolated from the user's active checkout when possible.
@@ -176,6 +183,12 @@ Each role has a schema-bound contract:
 - evidence requirements
 
 The runtime validates structured outputs before acting on them.
+
+### Rehydration And Reconciliation
+
+Before calling a model provider, the runtime can build a bounded context packet from canonical memory. The packet includes exact refs and selected excerpts so a provider can reason without relying on browser or API session history.
+
+After implementation and verification, the runtime can send an approved progress packet back to the planner or orchestrator for reconciliation. The provider may update its plan state or recommend the next slice, but the runtime still owns approvals, evidence, and state transitions.
 
 ## Control Surfaces
 

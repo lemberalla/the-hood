@@ -33,6 +33,7 @@ Rules:
 - Store provider credentials using OS keychain or provider CLI config when possible.
 - Require explicit user approval before invoking model-backed providers for read-only repo work.
 - Require explicit user approval before sending runtime-captured repo context to browser or API model providers.
+- Require explicit user approval before sending runtime-captured progress, memory, or reconciliation packets to browser or API model providers.
 
 ## Browser-Based Providers
 
@@ -107,6 +108,19 @@ Logs should not include:
 - API keys
 - hidden browser state
 - full secret-bearing environment
+
+## Memory Safety
+
+Memory is a control channel. Retrieved memories, reflections, and summaries can influence model decisions, so they must be treated as derived data rather than authority.
+
+Rules:
+
+- Preserve exact source artifacts before creating derived memories.
+- Keep provenance for every derived memory: source refs, run id, created timestamp, commit or repo state when applicable, and derivation method.
+- Prefer exact excerpts and artifact refs over summary-only memory packets.
+- Mark superseded or invalidated plan state instead of silently overwriting it.
+- Tell browser-backed providers to ignore stale provider session context and use only TheHood-supplied state.
+- Keep advanced memory engines pluggable and rebuildable from canonical artifacts.
 
 ## Public Repo Boundary
 

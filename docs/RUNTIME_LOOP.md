@@ -16,6 +16,7 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 9. Ask critic when risk or ambiguity warrants it
 10. Replan, revise, ask user, abort, or integrate
 11. Produce final report with evidence
+12. Reconcile planner state against implementation evidence when needed
 ```
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
@@ -79,6 +80,7 @@ User approval is required before:
 - using network access when the policy requires approval
 - invoking model-backed providers such as `chatgpt-web`, `claude-code`, or `codex-cli` for read-only repo work
 - sending runtime-captured repo context to browser or API model providers such as `chatgpt-web`
+- sending runtime-captured progress or memory packets to browser or API model providers
 - applying a worker patch to the main checkout
 - continuing to verification after an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - switching orchestrator or verifier mid-run for an active task
@@ -105,11 +107,23 @@ The runtime captures evidence directly:
 
 Models may summarize evidence, but summaries are not authoritative.
 
+## Memory
+
+TheHood's memory is canonical runtime state, not provider session context. Exact artifacts, run records, command logs, diffs, approvals, verifier verdicts, and final reports are authoritative. Summaries, vector memories, graph memories, and model reflections are derived navigation layers.
+
+Provider directives should assume that browser and API conversation context may be stale or empty. The runtime rehydrates providers from bounded packets that point back to exact artifacts.
+
 ## Final Reports
 
 Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, and approval events.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
+
+## Planner Reconciliation
+
+Planner reconciliation closes the loop after a plan has been implemented and verified. The runtime builds a progress packet from canonical artifacts, asks the user to approve any external context transfer, sends the packet to the selected planner or orchestrator, validates the response, and stores the result as a reconciliation artifact.
+
+Reconciliation should answer which plan items are complete, which criteria remain open, whether the implementation deviated from the plan, and what the next slice should be. It is advisory; runtime evidence and approval gates remain authoritative.
 
 ## Failure Classes
 

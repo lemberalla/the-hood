@@ -63,7 +63,16 @@ The roadmap is documentation-first, runtime-second, UI-last.
 - Separate verifier flow
 - Patch integration
 
-## Phase 6: macOS Menubar Companion
+## Phase 6: Memory And Reconciliation
+
+- Canonical progress packet builder
+- Planner reconciliation provider call
+- Reconciliation artifacts
+- CLI and MCP reconciliation status
+- Local index for run memory queries
+- Pluggable derived memory engines
+
+## Phase 7: macOS Menubar Companion
 
 - Active run list
 - Approval prompts
@@ -74,7 +83,7 @@ The roadmap is documentation-first, runtime-second, UI-last.
 
 The menubar app should talk to the local runtime. It should not own orchestration logic.
 
-## Phase 7: Public Hardening
+## Phase 8: Public Hardening
 
 - Example configs
 - Synthetic fixtures
@@ -83,4 +92,3 @@ The menubar app should talk to the local runtime. It should not own orchestratio
 - Contributor docs
 - License
 - Release workflow
-

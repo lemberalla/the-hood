@@ -132,6 +132,52 @@ verifier:
   recommendation: approve | revise | abort | ask_user
 ```
 
+## Memory Variables
+
+```yaml
+memory:
+  canonical_refs:
+    - kind: run | plan | directive | response | diff | log | validation | verifier_verdict | final_report | reconciliation
+      ref: string
+      summary: string
+  repo_state:
+    git_head: string | null
+    dirty: boolean
+    changed_files:
+      - string
+  plan_state:
+    plan_ref: string | null
+    completed_items:
+      - string
+    open_items:
+      - string
+    superseded_by: string | null
+  retrieval_policy:
+    source_artifacts_are_authoritative: true
+    summaries_are_non_authoritative: true
+    ignore_provider_session_memory: true
+```
+
+## Reconciliation Variables
+
+```yaml
+reconciliation:
+  role: orchestrator | planner
+  original_plan_ref: string
+  latest_plan_state_ref: string | null
+  progress_packet_ref: string
+  implementation_refs:
+    - string
+  validation_refs:
+    - string
+  verifier_refs:
+    - string
+  acceptance_criteria:
+    - string
+  open_questions:
+    - string
+```
+
 ## Orchestrator Output
 
 ```yaml
@@ -219,4 +265,26 @@ critique_result:
   alternative_paths:
     - string
   recommended_next_action: string
+```
+
+## Reconciliation Output
+
+```yaml
+reconciliation_result:
+  status: complete | partial | off_plan | blocked
+  completed_plan_items:
+    - string
+  satisfied_criteria:
+    - string
+  missing_plan_items:
+    - string
+  deviations:
+    - string
+  next_recommended_slice:
+    objective: string
+    rationale: string
+    acceptance_criteria:
+      - string
+  needs_user_decision: boolean
+  user_decision_reason: string | null
 ```

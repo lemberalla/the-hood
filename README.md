@@ -107,6 +107,7 @@ Agents
 - The implementer and verifier must not be the same agent.
 - The verifier does not get edit tools.
 - Runtime-captured logs are the source of truth, not model summaries.
+- Model session context is disposable; TheHood preserves exact artifacts and rehydrates providers from runtime state.
 - Test changes require separate classification and review.
 - The frontend never owns orchestration logic. It triggers runtime actions.
 - Provider choice is user-controlled per role.
@@ -119,6 +120,7 @@ Agents
 - [Runtime Loop](docs/RUNTIME_LOOP.md)
 - [Role Contracts](docs/ROLE_CONTRACTS.md)
 - [Prompt Schemas](docs/PROMPT_SCHEMAS.md)
+- [Memory And Reconciliation](docs/MEMORY_AND_RECONCILIATION.md)
 - [CLI Spec](docs/CLI_SPEC.md)
 - [MCP Spec](docs/MCP_SPEC.md)
 - [Provider Adapters](docs/PROVIDER_ADAPTERS.md)
