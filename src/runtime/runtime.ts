@@ -43,6 +43,10 @@ const approvedStateForRun = (run: RunRecord): RunState => {
     return run.state;
   }
 
+  if (run.approvalReason?.includes("apply isolated patch")) {
+    return "integrating";
+  }
+
   return run.mode === "implement" ? "delegating" : "planning";
 };
 

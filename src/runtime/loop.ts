@@ -1,4 +1,6 @@
+import fs from "node:fs/promises";
 import { writeRunArtifact } from "./artifacts.js";
+import { runRuntimeCommand } from "./commandRunner.js";
 import { buildAgentDirective } from "./directives.js";
 import { captureGitEvidence } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
@@ -7,7 +9,7 @@ import { getProviderAdapter } from "../providers/router.js";
 import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
-import type { JsonObject, RoleAssignment, RunEvent, RunRecord, RunState, RuntimeRole } from "./types.js";
+import type { JsonObject, JsonValue, RoleAssignment, RunArtifact, RunEvent, RunRecord, RunState, RuntimeRole } from "./types.js";
 
 export interface AdvanceRunInput {
   repoPath: string;
@@ -301,6 +303,189 @@ const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentRe
     status: "blocked",
     summary,
     data: dataForRole()
+  };
+};
+
+const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const implementationPatchArtifact = (response: AgentResponse): RunArtifact | undefined => {
+  const implementationResult = response.data.implementationResult;
+
+  if (!isJsonObject(implementationResult)) {
+    return undefined;
+  }
+
+  const patchArtifact = implementationResult.patchArtifact;
+
+  if (!isJsonObject(patchArtifact)) {
+    return undefined;
+  }
+
+  if (
+    patchArtifact.kind !== "diff" ||
+    typeof patchArtifact.ref !== "string" ||
+    typeof patchArtifact.summary !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: "diff",
+    ref: patchArtifact.ref,
+    summary: patchArtifact.summary
+  };
+};
+
+const isolatedPatchApprovalReason = (artifact: RunArtifact): string =>
+  `Implementer produced an isolated patch artifact. Review it before applying to the target checkout. ` +
+  `Approval message must mention "apply isolated patch". Patch artifact: ${artifact.summary}`;
+
+const latestIsolatedPatchArtifact = (run: RunRecord): RunArtifact | undefined => {
+  const event = run.events
+    .filter((candidate) => candidate.type === "approval_required" && candidate.data?.reason === "isolated_patch_application")
+    .at(-1);
+  const artifactRef = event?.data?.artifactRef;
+
+  if (typeof artifactRef !== "string") {
+    return undefined;
+  }
+
+  return run.artifacts.find((artifact) => artifact.ref === artifactRef && artifact.kind === "diff");
+};
+
+const patchBodyFromArtifact = async (artifact: RunArtifact): Promise<string> => {
+  const raw = await fs.readFile(artifact.ref, "utf8");
+  const markerIndex = raw.indexOf("diff --git ");
+
+  if (markerIndex < 0) {
+    throw new Error(`Patch artifact does not contain a git diff: ${artifact.ref}`);
+  }
+
+  return raw.slice(markerIndex);
+};
+
+const attachRunArtifact = async (
+  run: RunRecord,
+  artifact: RunArtifact,
+  event: RunEvent
+): Promise<RunRecord> => {
+  const latest = await loadRun(run.repoPath, run.runId);
+  const updated: RunRecord = {
+    ...latest,
+    updatedAt: nowIso(),
+    artifacts: [...latest.artifacts, artifact],
+    events: [...latest.events, event]
+  };
+
+  await saveRun(updated);
+  return updated;
+};
+
+const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRecord; stopReason?: string }> => {
+  const artifact = latestIsolatedPatchArtifact(run);
+
+  if (!artifact) {
+    const stopReason = "No isolated patch artifact is available for integration.";
+    const failed = await updateRun(
+      run,
+      {
+        state: "failed",
+        approvalRequired: false,
+        stopReason
+      },
+      [createEvent("run_failed", stopReason)]
+    );
+
+    return {
+      run: failed,
+      stopReason
+    };
+  }
+
+  const status = await runRuntimeCommand({
+    repoPath: run.repoPath,
+    runId: run.runId,
+    tool: "pre_apply_git_status",
+    command: "git",
+    args: ["status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude).thehood"]
+  });
+
+  if (status.stdout.trim()) {
+    const approvalReason = "Target checkout must be clean before applying isolated patch artifact.";
+    const gated = await updateRun(
+      status.run,
+      {
+        state: "awaiting_approval",
+        approvalRequired: true,
+        approvalReason
+      },
+      [createEvent("approval_required", approvalReason)]
+    );
+
+    return {
+      run: gated,
+      stopReason: approvalReason
+    };
+  }
+
+  const patchBody = await patchBodyFromArtifact(artifact);
+  const patchInput = await writeRunArtifact({
+    repoPath: run.repoPath,
+    runId: run.runId,
+    kind: "diff",
+    name: `approved-${newId("patch")}.patch`,
+    content: patchBody,
+    summary: `Approved isolated patch body from ${artifact.summary}`
+  });
+  const runWithPatchInput = await attachRunArtifact(
+    status.run,
+    patchInput,
+    createEvent("integration_patch_prepared", "Prepared isolated patch for target checkout application.", {
+      sourceArtifactRef: artifact.ref,
+      patchArtifactRef: patchInput.ref
+    })
+  );
+  const applied = await runRuntimeCommand({
+    repoPath: runWithPatchInput.repoPath,
+    runId: runWithPatchInput.runId,
+    tool: "git_apply_patch",
+    command: "git",
+    args: ["apply", "--whitespace=nowarn", patchInput.ref]
+  });
+
+  if (applied.event.exitCode !== 0) {
+    const stopReason = "Applying isolated patch artifact failed.";
+    const failed = await updateRun(
+      applied.run,
+      {
+        state: "failed",
+        approvalRequired: false,
+        stopReason
+      },
+      [createEvent("run_failed", stopReason)]
+    );
+
+    return {
+      run: failed,
+      stopReason
+    };
+  }
+
+  const verifying = await updateRun(
+    applied.run,
+    { state: "verifying" },
+    [
+      createEvent("patch_applied", "Applied isolated patch artifact to target checkout.", {
+        sourceArtifactRef: artifact.ref,
+        patchArtifactRef: patchInput.ref
+      }),
+      createEvent("state_changed", "Run entered verification.")
+    ]
+  );
+
+  return {
+    run: verifying
   };
 };
 
@@ -627,6 +812,34 @@ const advanceOneStep = async (
       };
     }
 
+    const patchArtifact = implementationPatchArtifact(result.response);
+
+    if (patchArtifact) {
+      const approvalReason = isolatedPatchApprovalReason(patchArtifact);
+      const gated = await updateRun(
+        result.run,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [
+          createEvent("approval_required", approvalReason, {
+            reason: "isolated_patch_application",
+            artifactRef: patchArtifact.ref,
+            artifactSummary: patchArtifact.summary
+          })
+        ]
+      );
+
+      return {
+        run: gated,
+        response: result.response,
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
+
     const next = await updateRun(
       result.run,
       { state: "verifying" },
@@ -637,6 +850,16 @@ const advanceOneStep = async (
       run: next,
       response: result.response,
       advanced: true
+    };
+  }
+
+  if (run.state === "integrating") {
+    const integrated = await applyIsolatedPatchArtifact(run);
+
+    return {
+      run: integrated.run,
+      advanced: true,
+      stopReason: integrated.stopReason ?? "Applied isolated patch artifact."
     };
   }
 

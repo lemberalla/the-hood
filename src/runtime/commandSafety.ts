@@ -59,6 +59,13 @@ export const classifyCommand = (command: string, args: string[]): CommandSafety 
     };
   }
 
+  if (name === "git" && subcommand === "apply") {
+    return {
+      category: "local_write",
+      requiresApproval: false
+    };
+  }
+
   if (name === "npm" && subcommand === "run") {
     return {
       category: "local_write",
@@ -71,4 +78,3 @@ export const classifyCommand = (command: string, args: string[]): CommandSafety 
     requiresApproval: false
   };
 };
-

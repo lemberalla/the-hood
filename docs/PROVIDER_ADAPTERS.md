@@ -61,6 +61,7 @@ Rules:
 - It does not use dangerous bypass flags.
 - For read-only repo work, model-backed local command providers require an explicit provider-invocation approval before the first call.
 - It runs edit-capable local agents in an isolated git worktree by default and captures the resulting patch as a `diff` artifact.
+- It does not apply isolated patches itself; the runtime asks for approval and applies the patch deterministically during integration.
 - It requires a clean target checkout before isolated edit execution so uncommitted user work is not silently excluded.
 - It only runs edit-capable local agents in the target checkout when `THEHOOD_ALLOW_DIRECT_EDIT=1` is explicitly set.
 

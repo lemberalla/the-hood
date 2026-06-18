@@ -515,22 +515,52 @@ const isolatedContinue = await runMcp([
     }
   }
 ]);
-const isolatedResult = isolatedContinue[1].result.structuredContent;
-const isolatedImplementation = isolatedResult.provider_responses.find(
+const isolatedPatchGate = isolatedContinue[1].result.structuredContent;
+const isolatedImplementation = isolatedPatchGate.provider_responses.find(
   (response) => response.data.implementationResult
 ).data.implementationResult;
-const isolatedDiffArtifact = isolatedResult.artifacts.find((artifact) => artifact.kind === "diff");
+const isolatedDiffArtifact = isolatedPatchGate.artifacts.find((artifact) => artifact.kind === "diff");
+const isolatedPatchApproval = isolatedPatchGate.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
 
 assert.equal(isolatedCreate[1].result.structuredContent.status, "awaiting_approval");
-assert.equal(isolatedResult.status, "completed");
+assert.equal(isolatedPatchGate.status, "awaiting_approval");
+assert.equal(isolatedPatchGate.approval_required, true);
+assert.ok(isolatedPatchGate.approval_reason.includes("apply isolated patch"));
 assert.equal(isolatedImplementation.status, "changed");
 assert.equal(isolatedImplementation.isolatedWorkspace.mode, "isolated_git_worktree");
 assert.equal(isolatedImplementation.patchArtifact.ref, isolatedDiffArtifact.ref);
+assert.equal(isolatedPatchApproval.arguments.run_id, isolatedRunId);
+assert.ok(isolatedPatchApproval.arguments.message.includes("apply isolated patch"));
 await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
 
 const isolatedPatch = await fs.readFile(isolatedDiffArtifact.ref, "utf8");
 assert.ok(isolatedPatch.includes("implemented.txt"));
 assert.ok(isolatedPatch.includes("isolated implementation"));
+
+const isolatedApply = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: isolatedRunId,
+        repo_path: isolatedRepoPath,
+        approval: "approve",
+        message: isolatedPatchApproval.arguments.message
+      }
+    }
+  }
+]);
+const isolatedResult = isolatedApply[1].result.structuredContent;
+
+assert.equal(isolatedResult.status, "completed");
+assert.equal(isolatedResult.provider_responses.at(-1).data.verificationResult.verdict, "approve");
+assert.equal(await fs.readFile(path.join(isolatedRepoPath, "implemented.txt"), "utf8"), "isolated implementation\n");
 
 const runsPath = await runMcp([
   ...baseMessages,

@@ -59,6 +59,7 @@ The runtime must:
 - enforce allowed and disallowed paths
 - block protected test changes unless approved
 - run edit-capable local agents in isolated git worktrees by default and capture patch artifacts for review
+- require explicit approval before applying isolated worker patches to the target checkout
 - require `THEHOOD_ALLOW_DIRECT_EDIT=1` before a local agent can edit the target checkout directly
 
 ## Command Safety

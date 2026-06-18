@@ -38,6 +38,7 @@ Current implementation:
 
 - `thehood exec <run-id> -- <command> [args...]` captures command logs as artifacts.
 - `thehood evidence <run-id>` captures git status, git diff, and protected path matches.
+- Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch before verifier review.
 
 ### Verifier
 
@@ -122,4 +123,4 @@ evidence:
 - Verifier receives only the implementer's summary.
 - Test files are silently modified.
 - Final report says "tests passed" without command names and exit codes.
-- Runtime applies a patch before verification.
+- Runtime applies an isolated patch before explicit approval.
