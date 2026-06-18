@@ -927,7 +927,8 @@ const executeReadOnlyRun = async (
       };
     }
 
-    const repoContext = await captureRepoContext(result.run, decisionFromResponse(result.response)?.delegate);
+    const decision = decisionFromResponse(result.response);
+    const repoContext = await captureRepoContext(result.run, decision?.delegate ?? decision);
 
     return {
       run: repoContext.run,

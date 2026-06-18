@@ -320,11 +320,29 @@ await fs.writeFile(
   "export const provider = 'context-smoke';\n",
   "utf8"
 );
+await fs.mkdir(path.join(repoPath, "docs"), { recursive: true });
+await fs.writeFile(
+  path.join(repoPath, "docs", "MEMORY_AND_RECONCILIATION.md"),
+  "# Memory And Reconciliation\n\nCanonical memory marker.\n",
+  "utf8"
+);
+for (let index = 0; index < 30; index += 1) {
+  await fs.writeFile(
+    path.join(repoPath, "docs", `aa-filler-${String(index).padStart(2, "0")}.md`),
+    `# Filler ${index}\n`,
+    "utf8"
+  );
+}
+await fs.writeFile(
+  path.join(repoPath, "docs", "zz-source-of-truth.md"),
+  "# Source Of Truth\n\nExplicitly requested context marker.\n",
+  "utf8"
+);
 const repoContextPlan = JSON.parse(
   (
     await runCli([
       "plan",
-      "repo-context-smoke plan provider milestone",
+      "repo-context-smoke plan docs/zz-source-of-truth.md provider milestone",
       "--repo",
       repoPath,
       "--orchestrator",
@@ -350,6 +368,22 @@ const repoContext = JSON.parse(await fs.readFile(contextArtifact.ref, "utf8"));
 assert.equal(repoContext.kind, "repo_context");
 assert.ok(repoContext.tree.includes("README.md"));
 assert.ok(repoContext.files.some((file) => file.path === "README.md"));
+assert.ok(
+  repoContext.files.some(
+    (file) =>
+      file.path === "docs/MEMORY_AND_RECONCILIATION.md" &&
+      file.excerpt.includes("Canonical memory marker")
+  ),
+  "static priority docs should include memory and reconciliation source-of-truth excerpts"
+);
+assert.ok(
+  repoContext.files.some(
+    (file) =>
+      file.path === "docs/zz-source-of-truth.md" &&
+      file.excerpt.includes("Explicitly requested context marker")
+  ),
+  "explicitly requested files should be prioritized ahead of generic context candidates"
+);
 const contextArtifactRead = await runCli([
   "artifact",
   repoContextPlan.runId,

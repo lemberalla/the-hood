@@ -47,6 +47,7 @@ const priorityPaths = [
   "docs/ARCHITECTURE.md",
   "docs/RUNTIME_LOOP.md",
   "docs/ROLE_CONTRACTS.md",
+  "docs/MEMORY_AND_RECONCILIATION.md",
   "docs/PROVIDER_ADAPTERS.md",
   "docs/MCP_SPEC.md",
   "docs/CLI_SPEC.md",
@@ -90,8 +91,17 @@ const maxTreePaths = 300;
 const maxFiles = 24;
 const maxBytesPerFile = 4_000;
 const maxTotalBytes = 60_000;
+const pathLikePattern =
+  /[A-Za-z0-9_.@+-]+(?:\/[A-Za-z0-9_.@+-]+)+|[A-Za-z0-9_.@+-]+\.(?:md|markdown|ts|tsx|js|mjs|cjs|json|toml|yaml|yml|lock|txt|sh|swift|py|go|rs)/g;
 
 const toPosixPath = (value: string): string => value.split(path.sep).join("/");
+
+const normalizePathCandidate = (value: string): string =>
+  toPosixPath(value)
+    .trim()
+    .replace(/^['"`([{]+/, "")
+    .replace(/[)"'`\].,;:]+$/, "")
+    .replace(/^\.\//, "");
 
 const isIgnoredPath = (relativePath: string): boolean => {
   const parts = relativePath.split("/");
@@ -154,15 +164,59 @@ const scorePath = (relativePath: string): number => {
   return 10;
 };
 
-const selectCandidateFiles = (tree: string[]): string[] => {
+const collectStringValues = (value: JsonValue | undefined, values: string[] = []): string[] => {
+  if (typeof value === "string") {
+    values.push(value);
+    return values;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectStringValues(item, values);
+    }
+
+    return values;
+  }
+
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) {
+      collectStringValues(item, values);
+    }
+  }
+
+  return values;
+};
+
+const pathCandidatesFromText = (text: string): string[] =>
+  [...text.matchAll(pathLikePattern)].map((match) => normalizePathCandidate(match[0]));
+
+const requestedPaths = (files: string[], values: JsonValue[]): string[] => {
+  const fileSet = new Set(files);
+  const matches: string[] = [];
+
+  for (const value of values) {
+    for (const text of collectStringValues(value)) {
+      for (const candidate of pathCandidatesFromText(text)) {
+        if (fileSet.has(candidate)) {
+          matches.push(candidate);
+        }
+      }
+    }
+  }
+
+  return Array.from(new Set(matches));
+};
+
+const selectCandidateFiles = (tree: string[], requestedValues: JsonValue[]): string[] => {
   const files = tree.filter((relativePath) => !relativePath.endsWith("/"));
+  const requested = requestedPaths(files, requestedValues);
   const priority = priorityPaths.filter((relativePath) => files.includes(relativePath));
   const scored = files
-    .filter((relativePath) => !priority.includes(relativePath))
+    .filter((relativePath) => !requested.includes(relativePath) && !priority.includes(relativePath))
     .filter((relativePath) => scorePath(relativePath) < 10)
     .sort((left, right) => scorePath(left) - scorePath(right) || left.localeCompare(right));
 
-  return Array.from(new Set([...priority, ...scored])).slice(0, maxFiles);
+  return Array.from(new Set([...requested, ...priority, ...scored])).slice(0, maxFiles);
 };
 
 const readContextFile = async (repoPath: string, relativePath: string): Promise<RepoContextFile | undefined> => {
@@ -214,6 +268,7 @@ export const captureRepoContext = async (
 ): Promise<CaptureRepoContextResult> => {
   const repoPath = resolveRepoPath(run.repoPath);
   const tree = await walkRepo(repoPath);
+  const normalizedDelegate = normalizeDelegate(delegate);
   const context: RepoContextPack = {
     schemaVersion: 1,
     kind: "repo_context",
@@ -221,7 +276,7 @@ export const captureRepoContext = async (
     repoPath,
     runId: run.runId,
     goal: run.userGoal,
-    delegate: normalizeDelegate(delegate),
+    delegate: normalizedDelegate,
     limits: {
       maxTreePaths,
       maxFiles,
@@ -230,7 +285,7 @@ export const captureRepoContext = async (
     },
     tree: tree.slice(0, maxTreePaths),
     omittedTreePathCount: Math.max(0, tree.length - maxTreePaths),
-    files: await boundedFileExcerpts(repoPath, selectCandidateFiles(tree)),
+    files: await boundedFileExcerpts(repoPath, selectCandidateFiles(tree, [run.userGoal, normalizedDelegate])),
     notes: [
       "This context pack was captured by deterministic runtime code.",
       "Ignored paths include .git, .thehood, node_modules, dist, build, coverage, and secret-looking filenames.",
