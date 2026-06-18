@@ -78,6 +78,16 @@ assert.equal(mcpConfigResult.installed.command, "thehood");
 assert.deepEqual(mcpConfigResult.installed.args, ["mcp"]);
 assert.equal(mcpConfigResult.local.command, process.execPath);
 assert.equal(mcpConfigResult.local.args.at(-1), "mcp");
+const chatGptMcpConfig = await runCli(["mcp", "config", "--chatgpt-web", "--json"]);
+const chatGptMcpConfigResult = JSON.parse(chatGptMcpConfig.stdout);
+assert.equal(
+  chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_COMMAND,
+  "thehood-chatgpt-web-bridge"
+);
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED, "1");
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_CDP_URL, "http://127.0.0.1:9222");
+assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_COMMAND, chatGptBridgePath);
+assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_COMMAND"));
 await runCli(["init", "--repo", repoPath]);
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);

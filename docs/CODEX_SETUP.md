@@ -30,6 +30,20 @@ The command prints two TOML snippets:
 
 Use one snippet in Codex's MCP server configuration.
 
+For ChatGPT Pro through the included browser bridge, use the opt-in config generator after launching the debug Chrome profile and selecting the intended model:
+
+```bash
+node dist/cli/main.js mcp config --chatgpt-web
+```
+
+This adds:
+
+- `THEHOOD_CHATGPT_WEB_COMMAND`
+- `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1`
+- `THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222`
+
+Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
+
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:

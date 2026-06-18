@@ -29,6 +29,7 @@ thehood continue <run-id>
 thehood abort <run-id>
 thehood mcp
 thehood mcp config
+thehood mcp config --chatgpt-web
 ```
 
 ## Run Modes

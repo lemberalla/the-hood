@@ -28,6 +28,8 @@ args = ["mcp"]
 
 Run `thehood mcp config` or `node dist/cli/main.js mcp config` to print installed-package and local-build snippets.
 
+Run `thehood mcp config --chatgpt-web` after launching a debug Chrome profile and selecting the intended ChatGPT model to print snippets with the ChatGPT Web bridge environment variables included.
+
 ## Tools
 
 Implemented tools:

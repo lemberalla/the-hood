@@ -60,7 +60,7 @@ Usage:
   thehood continue <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood mcp
-  thehood mcp config [--json]
+  thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
 
 Role override options for plan/run:
   --orchestrator provider:model
@@ -295,7 +295,11 @@ const handleMcp = async (
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
   if (args[0] === "config") {
-    const report = getMcpConfigReport(process.argv[1]);
+    const cdpUrl = getStringOption(options, "cdpUrl");
+    const report = getMcpConfigReport(process.argv[1], {
+      includeChatGptWeb: getBooleanOption(options, "chatgptWeb"),
+      ...(cdpUrl ? { cdpUrl } : {})
+    });
     shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatMcpConfigReport(report)}\n`);
     return;
   }
