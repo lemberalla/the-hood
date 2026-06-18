@@ -26,6 +26,7 @@ thehood exec <run-id> -- npm run build
 thehood diff <run-id>
 thehood approve <run-id>
 thehood reject <run-id>
+thehood revise <run-id>
 thehood continue <run-id>
 thehood abort <run-id>
 thehood mcp
@@ -36,6 +37,7 @@ thehood browser start
 thehood browser status
 thehood browser stop
 thehood ui
+thehood ui approvals
 ```
 
 ## Run Modes
@@ -231,6 +233,18 @@ It checks:
 ## TUI Command
 
 `thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.
+
+The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints only pending approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands.
+
+Approval actions can be triggered without retyping the required approval phrase:
+
+```bash
+thehood ui approvals --repo . --approve <run-id>
+thehood ui approvals --repo . --reject <run-id>
+thehood ui approvals --repo . --revise <run-id>
+```
+
+The TUI only calls existing runtime approval transitions; it does not decide whether an approval is safe.
 
 ## ChatGPT MCP Tunnel Helper
 

@@ -135,6 +135,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
+assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -443,15 +444,21 @@ assert.equal(externalInvocationGate.run.state, "awaiting_approval");
 assert.equal(externalInvocationGate.run.approvalRequired, true);
 assert.ok(externalInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
 assert.equal(externalInvocationGate.providerResponses[0].data.decision.action, "request_approval");
+const approvalDashboard = await runCli(["ui", "--repo", repoPath]);
+assert.ok(approvalDashboard.stdout.includes("Approval Gates"));
+assert.ok(approvalDashboard.stdout.includes(externalContextPlan.runId));
+assert.ok(approvalDashboard.stdout.includes("I approve invoke chatgpt-web"));
+const approvalInbox = await runCli(["ui", "approvals", "--repo", repoPath]);
+assert.ok(approvalInbox.stdout.includes("Approval Gates"));
+assert.ok(approvalInbox.stdout.includes("[approve]"));
+assert.ok(approvalInbox.stdout.includes(`--approve ${externalContextPlan.runId}`));
+const approvalInboxJson = JSON.parse((await runCli(["ui", "approvals", "--repo", repoPath, "--json"])).stdout);
+assert.ok(approvalInboxJson.some((approval) => approval.runId === externalContextPlan.runId));
+const uiApprovalResult = JSON.parse(
+  (await runCli(["ui", "approvals", "--repo", repoPath, "--approve", externalContextPlan.runId, "--json"])).stdout
+);
+assert.equal(uiApprovalResult.approvalEvents.at(-1).decision, "approve");
 await assert.rejects(fs.readFile(fakeExternalBridgeLogPath, "utf8"));
-await runCli([
-  "approve",
-  externalContextPlan.runId,
-  "--repo",
-  repoPath,
-  "--reason",
-  "I approve invoke chatgpt-web for external context smoke."
-]);
 const externalContextGate = JSON.parse(
   (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
 );

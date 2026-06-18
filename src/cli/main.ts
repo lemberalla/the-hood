@@ -17,6 +17,7 @@ import {
   listRuns,
   recordApproval
 } from "../runtime/runtime.js";
+import { approvalMessageHint, pendingApprovalsFromRuns } from "../runtime/approvalInbox.js";
 import { approvalDecisions, runModes, type ApprovalDecision, type RoleMap, type RunMode } from "../runtime/types.js";
 import {
   getBooleanOption,
@@ -44,7 +45,7 @@ import {
   formatRunSummary,
   printJson
 } from "./format.js";
-import { renderDashboard } from "../tui/dashboard.js";
+import { renderApprovalInbox, renderDashboard } from "../tui/dashboard.js";
 import type { RunArtifact } from "../runtime/types.js";
 
 const helpText = `TheHood local agent runtime
@@ -67,12 +68,13 @@ Usage:
   thehood exec <run-id> [--repo <path>] [--cwd <path>] [--allow-risky] -- <command> [args...]
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
+  thehood revise <run-id> [--repo <path>] [--reason <text>]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
   thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
-  thehood ui [--repo <path>] [--port <n>] [--cdp-url <url>] [--json]
+  thehood ui [approvals] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
   thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
@@ -384,7 +386,7 @@ const handleExec = async (
 };
 
 const handleApprovalCommand = async (
-  command: "approve" | "reject",
+  command: "approve" | "reject" | "revise",
   args: string[],
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
@@ -475,18 +477,64 @@ const handleBrowser = async (
   throw new InputError(`Unknown browser subcommand "${subcommand}".`);
 };
 
-const handleUi = async (options: Record<string, CliOptionValue>): Promise<void> => {
+const handleUi = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const subcommand = args[0];
+  if (subcommand && subcommand !== "approvals") {
+    throw new InputError(`Unknown ui subcommand "${subcommand}".`);
+  }
+
   const repoPath = repoFromOptions(options);
+  const approvalAction = (
+    [
+      ["approve", getStringOption(options, "approve")],
+      ["reject", getStringOption(options, "reject")],
+      ["revise", getStringOption(options, "revise")]
+    ] as const
+  ).find(([, runId]) => runId !== undefined);
+
+  if (approvalAction) {
+    const [decision, runId] = approvalAction;
+    if (!runId) {
+      throw new InputError(`Run id is required for --${decision}.`);
+    }
+
+    const run = await getRun(repoPath, runId);
+    const reason = getStringOption(options, "reason") ?? (
+      decision === "approve"
+        ? approvalMessageHint(run)
+        : decision === "reject"
+          ? `Rejected from TheHood UI for run ${run.runId}.`
+          : `Revision requested from TheHood UI for run ${run.runId}.`
+    );
+    const updated = await recordApproval(repoPath, run.runId, decision, reason);
+
+    shouldPrintJson(options) ? printJson(updated) : process.stdout.write(`${formatRunSummary(updated)}\n`);
+    return;
+  }
+
   const config = await loadConfig(repoPath);
   const health = await inspectRuntimeHealth(config);
   const browser = await inspectBrowser(browserOptionsFromCli(options));
+  const runs = await listRuns(repoPath);
+  const pendingApprovals = pendingApprovalsFromRuns(runs);
   const dashboard = {
     repoPath,
     health,
-    browser
+    browser,
+    pendingApprovals
   };
 
-  shouldPrintJson(options) ? printJson(dashboard) : process.stdout.write(`${renderDashboard(dashboard)}\n`);
+  if (shouldPrintJson(options)) {
+    printJson(subcommand === "approvals" ? pendingApprovals : dashboard);
+    return;
+  }
+
+  process.stdout.write(
+    `${subcommand === "approvals" ? renderApprovalInbox(pendingApprovals) : renderDashboard(dashboard)}\n`
+  );
 };
 
 const runCli = async (argv: string[]): Promise<void> => {
@@ -539,6 +587,7 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "approve":
     case "reject":
+    case "revise":
       await handleApprovalCommand(command, args, parsed.options);
       return;
     case "continue":
@@ -551,7 +600,7 @@ const runCli = async (argv: string[]): Promise<void> => {
       await handleBrowser(args, parsed.options);
       return;
     case "ui":
-      await handleUi(parsed.options);
+      await handleUi(args, parsed.options);
       return;
     case "mcp":
       await handleMcp(args, parsed.options);

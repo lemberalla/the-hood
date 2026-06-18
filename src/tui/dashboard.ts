@@ -1,4 +1,5 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
+import type { PendingApproval } from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 
@@ -6,6 +7,7 @@ export interface DashboardInput {
   repoPath: string;
   health: RuntimeHealthReport;
   browser: BrowserStatus;
+  pendingApprovals: PendingApproval[];
 }
 
 const wideLogo = [
@@ -30,6 +32,9 @@ export const renderHeader = (width = terminalWidth()): string =>
   (width >= 72 ? [...wideLogo, "", "THEHOOD - local agent runtime"] : compactLogo).join("\n");
 
 const statusWord = (ready: boolean): string => ready ? "ready" : "needs attention";
+
+const quoteArg = (value: string): string =>
+  /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 
 const providerState = (health: RuntimeHealthReport, providerId: string): string => {
   const provider = health.providers.find((candidate) => candidate.id === providerId);
@@ -63,6 +68,48 @@ const nextActions = (browser: BrowserStatus): string[] => {
   return actions;
 };
 
+const truncate = (value: string, maxLength: number): string =>
+  value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+
+const approvalCommand = (approval: PendingApproval, command: "approve" | "reject" | "revise"): string => {
+  const parts = [
+    "thehood",
+    "ui",
+    "approvals",
+    "--repo",
+    quoteArg(approval.repoPath),
+    `--${command}`,
+    approval.runId
+  ];
+
+  return parts.join(" ");
+};
+
+const approvalLines = (approval: PendingApproval, index: number): string[] => [
+  `  [${index + 1}] ${approval.runId}  ${approval.mode}  ${approval.state}`,
+  `      goal    ${truncate(approval.goal, 96)}`,
+  `      reason  ${truncate(approval.reason, 120)}`,
+  `      approve ${truncate(approval.suggestedApprovalMessage, 120)}`,
+  ...(approval.artifacts.length > 0
+    ? [
+        "      review",
+        ...approval.artifacts.map((artifact) => `        ${artifact.kind}: ${artifact.summary}`)
+      ]
+    : []),
+  "      buttons",
+  `        [approve] ${approvalCommand(approval, "approve")}`,
+  `        [reject]  ${approvalCommand(approval, "reject")}`,
+  `        [revise]  ${approvalCommand(approval, "revise")}`,
+  `        [resume]  thehood continue ${approval.runId} --repo ${quoteArg(approval.repoPath)}`
+];
+
+export const renderApprovalInbox = (approvals: PendingApproval[]): string => [
+  "Approval Gates",
+  ...(approvals.length > 0
+    ? approvals.flatMap(approvalLines)
+    : ["  no pending approval gates"])
+].join("\n");
+
 export const renderDashboard = (input: DashboardInput): string => {
   const actions = nextActions(input.browser);
 
@@ -82,6 +129,8 @@ export const renderDashboard = (input: DashboardInput): string => {
     "",
     "Roles",
     ...roleLines(input.health),
+    "",
+    renderApprovalInbox(input.pendingApprovals),
     "",
     "Next Actions",
     ...(actions.length > 0 ? actions.map((action) => `  > ${action}`) : ["  > no immediate action"])

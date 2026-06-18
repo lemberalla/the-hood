@@ -44,6 +44,7 @@ It supports:
 - provider access-mode metadata for agent bridges, API agents, and MCP connectors
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
 - branded terminal dashboard shell for runtime, role, and browser readiness
+- terminal approval inbox for pending runtime gates
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 - read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
@@ -72,6 +73,7 @@ node dist/cli/main.js status --repo .
 node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
+node dist/cli/main.js ui approvals --repo .
 node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
 node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>

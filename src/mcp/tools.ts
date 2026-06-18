@@ -12,6 +12,7 @@ import {
   readRepoFile,
   searchRepo
 } from "../runtime/repoGateway.js";
+import { approvalMessageHint } from "../runtime/approvalInbox.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -38,21 +39,6 @@ const roleSummary = (roles: RoleMap): JsonObject =>
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
   );
-
-const approvalMessageHint = (run: RunRecord): string => {
-  const reason = run.approvalReason ?? "";
-  const quoted = reason.match(/"([^"]+)"/)?.[1];
-
-  if (quoted) {
-    return `I approve ${quoted} for run ${run.runId}.`;
-  }
-
-  if (reason.includes("Implementation mode requires approval")) {
-    return `I approve starting implementation for run ${run.runId}.`;
-  }
-
-  return `I approve the next TheHood transition for run ${run.runId}.`;
-};
 
 const artifactReadAction = (
   run: RunRecord,
