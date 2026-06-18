@@ -10,6 +10,7 @@ import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } 
 import { getProviderAdapter } from "../providers/router.js";
 import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
+import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
   JsonObject,
@@ -1115,10 +1116,14 @@ const advanceOneStep = async (
 
   if (run.state === "verifying") {
     const evidence = await captureGitEvidence(run.repoPath, run.runId);
-    const result = await runAgent(evidence.run, "verifier", {
+    const validation = await captureValidationEvidence(evidence.run);
+    const result = await runAgent(validation.run, "verifier", {
       phase: "verify",
       changedPathCount: evidence.changedPaths.length,
-      protectedChangeCount: evidence.protectedChanges.length
+      protectedChangeCount: evidence.protectedChanges.length,
+      validationCommandCount: validation.executedCommands.length,
+      validationFailureCount: validation.failedCommands.length,
+      validationSummaryRef: validation.artifact.ref
     });
     const stopped = await stopForProviderStatus(result.run, "verifier", result.response);
 

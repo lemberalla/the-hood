@@ -150,6 +150,7 @@ delegating
   -> awaiting_approval when integrated protected paths need separate approval
   -> verifying
   -> git evidence capture
+  -> package validation command capture
   -> verifier response
   -> verifier response schema validation
   -> completed or awaiting_approval

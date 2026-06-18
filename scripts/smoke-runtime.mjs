@@ -110,6 +110,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcemen
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
+assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -470,6 +471,19 @@ await runCli(["exec", run.runId, "--repo", repoPath, "--", "rm", "src/app.ts"], 
 
 const loopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-loop-smoke-"));
 await runCli(["init", "--repo", loopRepoPath]);
+await fs.writeFile(
+  path.join(loopRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
 const loopRunOutput = await runCli([
   "run",
   "exercise deterministic loop",
@@ -502,6 +516,19 @@ assert.equal(finalReport.kind, "final_report");
 assert.equal(finalReport.finalState, "completed");
 assert.equal(finalReport.completedBy.role, "verifier");
 assert.equal(finalReport.stopReason, "Verifier approved runtime evidence.");
+const validationToolEvent = loopResult.run.toolEvents.find((event) => event.tool === "validation_typecheck");
+assert.ok(validationToolEvent, "verification should capture the selected validation command");
+assert.equal(validationToolEvent.command, "npm");
+assert.deepEqual(validationToolEvent.args, ["run", "typecheck"]);
+assert.equal(validationToolEvent.exitCode, 0);
+const validationSummaryArtifact = loopResult.run.artifacts.find(
+  (artifact) => artifact.kind === "metadata" && artifact.summary.includes("Validation summary")
+);
+assert.ok(validationSummaryArtifact, "verification should attach a validation summary artifact");
+const validationSummary = JSON.parse(await fs.readFile(validationSummaryArtifact.ref, "utf8"));
+assert.equal(validationSummary.executedCommands.length, 1);
+assert.equal(validationSummary.executedCommands[0].script, "typecheck");
+assert.equal(validationSummary.failedCommandCount, 0);
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
 assert.equal(directiveArtifacts.length, 3);
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));
@@ -565,6 +592,62 @@ assert.ok(
   maxIterationContinue.run.events.some(
     (event) => event.type === "run_failed" && event.data?.reason === "max_iterations"
   )
+);
+
+const failingValidationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-validation-fail-smoke-"));
+await runCli(["init", "--repo", failingValidationRepoPath]);
+await fs.writeFile(
+  path.join(failingValidationRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.exit(7)\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const failingValidationRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "stop on failing validation evidence",
+      "--repo",
+      failingValidationRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--json"
+    ])
+  ).stdout
+);
+await runCli(["approve", failingValidationRun.runId, "--repo", failingValidationRepoPath, "--reason", "smoke-approved"]);
+const failingValidationContinue = JSON.parse(
+  (await runCli(["continue", failingValidationRun.runId, "--repo", failingValidationRepoPath, "--json"])).stdout
+);
+assert.equal(failingValidationContinue.run.state, "awaiting_approval");
+assert.ok(failingValidationContinue.run.approvalReason.includes("Verifier returned ask_user"));
+const failingValidationToolEvent = failingValidationContinue.run.toolEvents.find(
+  (event) => event.tool === "validation_typecheck"
+);
+assert.ok(failingValidationToolEvent, "failing validation should still be captured");
+assert.equal(failingValidationToolEvent.exitCode, 7);
+assert.equal(
+  failingValidationContinue.providerResponses.at(-1).data.verificationResult.summary,
+  "Runtime validation commands failed; user review is required."
+);
+assert.ok(
+  !failingValidationContinue.run.artifacts.some(
+    (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+  ),
+  "failing validation should not produce a final report"
 );
 
 const { createFallbackAgentResponse, parseLocalAgentOutput } = await import(

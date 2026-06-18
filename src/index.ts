@@ -16,6 +16,7 @@ export * from "./runtime/responseContracts.js";
 export * from "./runtime/role-assignment.js";
 export * from "./runtime/runtime.js";
 export * from "./runtime/runtimeInfo.js";
+export * from "./runtime/validationCommands.js";
 export { loadRun, saveRun } from "./runtime/store.js";
 export * from "./runtime/types.js";
 export * from "./cli/mcpConfig.js";

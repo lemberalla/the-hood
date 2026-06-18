@@ -72,7 +72,8 @@ const implementerResponse = (): AgentResponse =>
 
 const verifierResponse = (request: AgentRequest): AgentResponse => {
   const protectedChangeCount = Number(request.context.protectedChangeCount ?? 0);
-  const verdict = protectedChangeCount > 0 ? "ask_user" : "approve";
+  const validationFailureCount = Number(request.context.validationFailureCount ?? 0);
+  const verdict = protectedChangeCount > 0 || validationFailureCount > 0 ? "ask_user" : "approve";
 
   return response(`Stub verifier returned ${verdict}.`, {
     verificationResult: {
@@ -80,9 +81,14 @@ const verifierResponse = (request: AgentRequest): AgentResponse => {
       summary:
         protectedChangeCount > 0
           ? "Protected files changed; user approval is required."
+          : validationFailureCount > 0
+            ? "Runtime validation commands failed; user review is required."
           : "No protected changes were detected in runtime evidence.",
       failedCriteria: [],
-      risks: protectedChangeCount > 0 ? ["Protected path changes need explicit review."] : [],
+      risks: [
+        ...(protectedChangeCount > 0 ? ["Protected path changes need explicit review."] : []),
+        ...(validationFailureCount > 0 ? ["Runtime validation command failures need review."] : [])
+      ],
       nextAction: verdict === "approve" ? "complete" : "ask_user"
     }
   });

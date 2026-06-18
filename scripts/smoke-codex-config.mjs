@@ -276,7 +276,8 @@ for (const expectedCapability of [
   "approval_phrase_enforcement",
   "final_report_artifacts",
   "mcp_final_report_next_action",
-  "max_iteration_enforcement"
+  "max_iteration_enforcement",
+  "validation_command_capture"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),
