@@ -25,7 +25,7 @@ import {
   parseArgs,
   type CliOptionValue
 } from "./args.js";
-import { getMcpConfigReport } from "./mcpConfig.js";
+import { getMcpConfigReport, getMcpTunnelConfigReport } from "./mcpConfig.js";
 import {
   formatBrowserStartResult,
   formatBrowserStatus,
@@ -36,6 +36,7 @@ import {
   formatDoctorReport,
   formatGitEvidence,
   formatMcpConfigReport,
+  formatMcpTunnelConfigReport,
   formatProviders,
   formatRoles,
   formatRunEvents,
@@ -74,6 +75,7 @@ Usage:
   thehood ui [--repo <path>] [--port <n>] [--cdp-url <url>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
+  thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
 
 Role override options for plan/run:
   --orchestrator provider:model
@@ -424,6 +426,17 @@ const handleMcp = async (
       ...(cdpUrl ? { cdpUrl } : {})
     });
     shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatMcpConfigReport(report)}\n`);
+    return;
+  }
+
+  if (args[0] === "tunnel" || args[0] === "tunnel-config") {
+    const profile = getStringOption(options, "profile");
+    const tunnelId = getStringOption(options, "tunnelId");
+    const report = getMcpTunnelConfigReport(process.argv[1], {
+      ...(profile ? { profile } : {}),
+      ...(tunnelId ? { tunnelId } : {})
+    });
+    shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatMcpTunnelConfigReport(report)}\n`);
     return;
   }
 

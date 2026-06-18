@@ -27,6 +27,15 @@ tunnel-client run --profile thehood-local
 
 Then create a ChatGPT connector using the tunnel connection and enable it in a new conversation. In that mode, ChatGPT can call TheHood's exact repo and run tools instead of receiving a prebuilt summary.
 
+The CLI can print the same tunnel setup shape:
+
+```bash
+thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+```
+
+Use the local-build command while developing TheHood so the tunnel points at the current checkout's `dist/cli/main.js`.
+
 References:
 
 - [MCP Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)

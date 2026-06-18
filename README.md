@@ -74,6 +74,7 @@ node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
 node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
+node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>
 ```
 
 ## Product Shape

@@ -2,7 +2,7 @@ import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../runtime/browserManager.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
-import type { McpConfigReport } from "./mcpConfig.js";
+import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
@@ -129,6 +129,26 @@ export const formatMcpConfigReport = (report: McpConfigReport): string => [
   "",
   "local build:",
   report.localToml
+].join("\n");
+
+export const formatMcpTunnelConfigReport = (report: McpTunnelConfigReport): string => [
+  "installed package tunnel:",
+  report.installed.initCommand,
+  "",
+  report.installed.doctorCommand,
+  report.installed.runCommand,
+  "",
+  "local build tunnel:",
+  report.local.initCommand,
+  "",
+  report.local.doctorCommand,
+  report.local.runCommand,
+  "",
+  "ChatGPT connector:",
+  ...report.chatGptSteps.map((step) => `  - ${step}`),
+  "",
+  "notes:",
+  ...report.notes.map((note) => `  - ${note}`)
 ].join("\n");
 
 export const formatBrowserStatus = (status: BrowserStatus): string => [

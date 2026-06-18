@@ -31,6 +31,7 @@ thehood abort <run-id>
 thehood mcp
 thehood mcp config
 thehood mcp config --chatgpt-web
+thehood mcp tunnel --tunnel-id <tunnel-id>
 thehood browser start
 thehood browser status
 thehood browser stop
@@ -230,3 +231,21 @@ It checks:
 ## TUI Command
 
 `thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.
+
+## ChatGPT MCP Tunnel Helper
+
+`thehood mcp tunnel` prints Secure MCP Tunnel setup commands for both installed-package and local-build use.
+
+```bash
+thehood mcp tunnel --tunnel-id tunnel_0123456789abcdef --profile thehood-local
+node dist/cli/main.js mcp tunnel --tunnel-id tunnel_0123456789abcdef --profile thehood-local
+```
+
+The helper does not start the tunnel or contact OpenAI. It prints:
+
+- `tunnel-client init` with `sample_mcp_stdio_local`
+- `tunnel-client doctor`
+- `tunnel-client run`
+- ChatGPT Developer Mode connector setup notes
+
+Use the local-build command while developing this checkout so ChatGPT sees the current `dist` output. Use the installed-package command after publishing or installing TheHood.

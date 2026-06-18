@@ -99,6 +99,28 @@ assert.equal(chatGptMcpConfigResult.local.startupTimeoutSec, 120);
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_COMMAND"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_TIMEOUT_MS"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120"));
+const tunnelConfig = await runCli([
+  "mcp",
+  "tunnel",
+  "--profile",
+  "thehood-smoke",
+  "--tunnel-id",
+  "tunnel_smoke",
+  "--json"
+]);
+const tunnelConfigResult = JSON.parse(tunnelConfig.stdout);
+assert.equal(tunnelConfigResult.installed.profile, "thehood-smoke");
+assert.equal(tunnelConfigResult.installed.tunnelId, "tunnel_smoke");
+assert.equal(tunnelConfigResult.installed.mcpCommand, "thehood mcp");
+assert.ok(tunnelConfigResult.installed.initCommand.includes("--sample sample_mcp_stdio_local"));
+assert.ok(tunnelConfigResult.installed.initCommand.includes("--mcp-command 'thehood mcp'"));
+assert.ok(tunnelConfigResult.local.mcpCommand.includes(cliPath));
+assert.equal(tunnelConfigResult.local.runCommand, "tunnel-client run --profile thehood-smoke");
+assert.ok(tunnelConfigResult.chatGptSteps.some((step) => step.includes("Developer Mode")));
+const tunnelConfigText = await runCli(["mcp", "tunnel"]);
+assert.ok(tunnelConfigText.stdout.includes("installed package tunnel:"));
+assert.ok(tunnelConfigText.stdout.includes("local build tunnel:"));
+assert.ok(tunnelConfigText.stdout.includes("ChatGPT connector:"));
 await runCli(["init", "--repo", repoPath]);
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
