@@ -927,6 +927,7 @@ const executeReadOnlyRun = async (
               reason: "repeated_repo_context_delegate",
               requestedPaths: analysis.requestedPaths,
               alreadyCapturedPaths: analysis.alreadyCapturedPaths,
+              incompleteCapturedPaths: analysis.incompleteCapturedPaths,
               existingContextArtifactRef: existingContextArtifact.ref
             })
           ]

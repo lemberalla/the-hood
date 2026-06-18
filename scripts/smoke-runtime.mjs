@@ -459,22 +459,36 @@ await fs.writeFile(
     "  const hasRepoContext = input.includes('\"repoContext\"');",
     "  const hasProgressPacket = input.includes('\"progressPacket\"');",
     "  const isTargetedContextSmoke = input.includes('targeted-follow-up-context-smoke');",
+    "  const isTruncatedContextSmoke = input.includes('truncated-follow-up-context-smoke');",
     "  const hasTargetedEvidence = input.includes('Targeted follow-up context marker');",
     "  const hasFinalTargetedEvidence = input.includes('Targeted follow-up context marker 7');",
+    "  const hasTruncatedContinuation = input.includes('Truncated continuation context marker');",
     "  const targetFiles = Array.from({ length: 8 }, (_, index) => `notes/targeted-evidence-${index}.md`);",
+    "  const truncatedTargetFile = 'notes/truncated-context.md';",
     "  if (logPath) {",
-    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
+    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTruncatedContinuation ? 'fake ChatGPT received truncated continuation repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
     "      decision: hasProgressPacket ? {",
     "        action: 'complete',",
     "        reason: 'Approved progress packet was reconciled.'",
+    "      } : hasTruncatedContinuation ? {",
+    "        action: 'complete',",
+    "        reason: 'Continuation repo context was enough for a plan.'",
     "      } : hasFinalTargetedEvidence ? {",
     "        action: 'complete',",
     "        reason: 'Targeted repo context was enough for a plan.'",
+    "      } : hasRepoContext && isTruncatedContextSmoke ? {",
+    "        action: 'delegate',",
+    "        reason: 'Need the next chunk of the truncated file before planning.',",
+    "        targetFiles: [truncatedTargetFile],",
+    "        delegate: {",
+    "          role: 'repo_reader',",
+    "          task: `Capture follow-up repo context for ${truncatedTargetFile}.`",
+    "        }",
     "      } : hasRepoContext && isTargetedContextSmoke ? {",
     "        action: 'delegate',",
     "        reason: 'Need one targeted follow-up file before planning.',",
@@ -837,6 +851,83 @@ assert.ok(
   targetedContextCompleted.run.events.filter(
     (event) => event.type === "approval_auto_approved" && event.data?.reason === "repo_context_external_transfer"
   ).length >= 4
+);
+await fs.writeFile(
+  path.join(repoPath, "notes", "truncated-context.md"),
+  `# Truncated Context\n\n${"large requested context line\n".repeat(900)}\nTruncated continuation context marker.\n`,
+  "utf8"
+);
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const truncatedContextPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "truncated-follow-up-context-smoke provider milestone",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const truncatedInvocationGate = JSON.parse(
+  (await runCli(["continue", truncatedContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(truncatedInvocationGate.run.state, "awaiting_approval");
+assert.ok(truncatedInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli([
+  "approve",
+  truncatedContextPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for truncated follow-up context smoke."
+]);
+const truncatedContextCompleted = JSON.parse(
+  (await runCli(["continue", truncatedContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(truncatedContextCompleted.run.state, "completed");
+assert.deepEqual(truncatedContextCompleted.providerResponses.map((response) => response.data.decision.action), [
+  "delegate",
+  "delegate",
+  "delegate",
+  "complete"
+]);
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context",
+  "context",
+  "truncated-continuation-context"
+]);
+const truncatedContextArtifacts = truncatedContextCompleted.run.artifacts.filter(
+  (artifact) => artifact.kind === "context"
+);
+const truncatedContextPacks = await Promise.all(
+  truncatedContextArtifacts.map(async (artifact) => JSON.parse(await fs.readFile(artifact.ref, "utf8")))
+);
+const truncatedFileExcerpts = truncatedContextPacks.flatMap((context) =>
+  context.files.filter((file) => file.path === "notes/truncated-context.md")
+);
+assert.equal(truncatedFileExcerpts.length, 2);
+assert.equal(truncatedFileExcerpts[0].startByte, 0);
+assert.equal(truncatedFileExcerpts[0].endByte, truncatedContextPacks.at(-1).limits.maxBytesPerRequestedFile);
+assert.equal(truncatedFileExcerpts[0].truncated, true);
+assert.ok(truncatedFileExcerpts[1].startByte > 0);
+assert.ok(truncatedFileExcerpts[1].excerpt.includes("Truncated continuation context marker"));
+assert.equal(truncatedFileExcerpts[1].truncated, false);
+assert.ok(
+  truncatedContextCompleted.run.events.some(
+    (event) =>
+      event.type === "repo_context_captured" &&
+      Array.isArray(event.data?.requestedPaths) &&
+      event.data.requestedPaths.includes("notes/truncated-context.md")
+  )
 );
 const restoredApprovalPolicy = JSON.parse(
   (

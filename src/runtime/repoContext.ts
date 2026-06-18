@@ -10,6 +10,8 @@ export interface RepoContextFile {
   path: string;
   bytes: number;
   maxBytes: number;
+  startByte: number;
+  endByte: number;
   truncated: boolean;
   excerpt: string;
 }
@@ -44,6 +46,7 @@ export interface CaptureRepoContextResult {
 export interface RepoContextRequestAnalysis {
   requestedPaths: string[];
   alreadyCapturedPaths: string[];
+  incompleteCapturedPaths: string[];
   newRequestedPaths: string[];
 }
 
@@ -216,6 +219,12 @@ const requestedPaths = (files: string[], values: JsonValue[]): string[] => {
   return Array.from(new Set(matches));
 };
 
+interface CapturedPathState {
+  captured: boolean;
+  complete: boolean;
+  nextByteOffset: number;
+}
+
 const selectCandidateFiles = (tree: string[], requestedValues: JsonValue[]): string[] => {
   const files = tree.filter((relativePath) => !relativePath.endsWith("/"));
   const requested = requestedPaths(files, requestedValues);
@@ -242,7 +251,8 @@ const selectCandidateFilesWithPreferred = (
 const readContextFile = async (
   repoPath: string,
   relativePath: string,
-  maxBytes: number
+  maxBytes: number,
+  startByte = 0
 ): Promise<RepoContextFile | undefined> => {
   const absolutePath = path.join(repoPath, relativePath);
   const buffer = await fs.readFile(absolutePath);
@@ -251,13 +261,21 @@ const readContextFile = async (
     return undefined;
   }
 
-  const sliced = buffer.subarray(0, maxBytes);
+  const boundedStartByte = Math.max(0, Math.min(startByte, buffer.byteLength));
+  if (boundedStartByte >= buffer.byteLength) {
+    return undefined;
+  }
+
+  const endByte = Math.min(buffer.byteLength, boundedStartByte + maxBytes);
+  const sliced = buffer.subarray(boundedStartByte, endByte);
 
   return {
     path: relativePath,
     bytes: buffer.byteLength,
     maxBytes,
-    truncated: buffer.byteLength > maxBytes,
+    startByte: boundedStartByte,
+    endByte,
+    truncated: endByte < buffer.byteLength,
     excerpt: sliced.toString("utf8")
   };
 };
@@ -265,19 +283,20 @@ const readContextFile = async (
 const boundedFileExcerpts = async (
   repoPath: string,
   candidates: string[],
-  requested: Set<string>
+  requested: Set<string>,
+  startByteByPath: Map<string, number> = new Map()
 ): Promise<RepoContextFile[]> => {
   const files: RepoContextFile[] = [];
   let totalBytes = 0;
 
   for (const relativePath of candidates) {
     const maxBytes = requested.has(relativePath) ? maxBytesPerRequestedFile : maxBytesPerFile;
-    const file = await readContextFile(repoPath, relativePath, maxBytes);
+    const file = await readContextFile(repoPath, relativePath, maxBytes, startByteByPath.get(relativePath) ?? 0);
     if (!file) {
       continue;
     }
 
-    const nextTotalBytes = totalBytes + file.excerpt.length;
+    const nextTotalBytes = totalBytes + Buffer.byteLength(file.excerpt, "utf8");
     if (nextTotalBytes > maxTotalBytes) {
       break;
     }
@@ -300,17 +319,39 @@ const readRepoContextArtifact = async (artifact: RunArtifact): Promise<RepoConte
   return JSON.parse(raw) as RepoContextPack;
 };
 
-const previouslyCapturedPaths = async (run: RunRecord): Promise<Set<string>> => {
-  const paths = new Set<string>();
+const contextFileStartByte = (file: RepoContextFile): number =>
+  typeof file.startByte === "number" ? file.startByte : 0;
+
+const contextFileEndByte = (file: RepoContextFile): number => {
+  if (typeof file.endByte === "number") {
+    return file.endByte;
+  }
+
+  const startByte = contextFileStartByte(file);
+  const fallbackLength = typeof file.maxBytes === "number"
+    ? Math.min(file.maxBytes, file.bytes)
+    : Buffer.byteLength(file.excerpt, "utf8");
+
+  return Math.min(file.bytes, startByte + fallbackLength);
+};
+
+const previouslyCapturedPathStates = async (run: RunRecord): Promise<Map<string, CapturedPathState>> => {
+  const states = new Map<string, CapturedPathState>();
 
   for (const artifact of contextArtifacts(run)) {
     const context = await readRepoContextArtifact(artifact);
     for (const file of context.files) {
-      paths.add(file.path);
+      const endByte = contextFileEndByte(file);
+      const previous = states.get(file.path);
+      states.set(file.path, {
+        captured: true,
+        complete: Boolean(previous?.complete) || !file.truncated || endByte >= file.bytes,
+        nextByteOffset: Math.max(previous?.nextByteOffset ?? 0, endByte)
+      });
     }
   }
 
-  return paths;
+  return states;
 };
 
 export const analyzeRepoContextRequest = async (
@@ -321,13 +362,19 @@ export const analyzeRepoContextRequest = async (
   const tree = await walkRepo(repoPath);
   const candidateFiles = tree.filter((relativePath) => !relativePath.endsWith("/"));
   const requested = requestedPaths(candidateFiles, [normalizeDelegate(delegate)]);
-  const captured = await previouslyCapturedPaths(run);
-  const alreadyCapturedPaths = requested.filter((relativePath) => captured.has(relativePath));
+  const captured = await previouslyCapturedPathStates(run);
+  const alreadyCapturedPaths = requested.filter((relativePath) => captured.get(relativePath)?.complete);
+  const incompleteCapturedPaths = requested.filter((relativePath) => {
+    const state = captured.get(relativePath);
+    return Boolean(state?.captured) && !state?.complete;
+  });
+  const uncapturedPaths = requested.filter((relativePath) => !captured.get(relativePath)?.captured);
 
   return {
     requestedPaths: requested,
     alreadyCapturedPaths,
-    newRequestedPaths: requested.filter((relativePath) => !captured.has(relativePath))
+    incompleteCapturedPaths,
+    newRequestedPaths: [...uncapturedPaths, ...incompleteCapturedPaths]
   };
 };
 
@@ -341,6 +388,15 @@ export const captureRepoContext = async (
   const normalizedDelegate = normalizeDelegate(delegate);
   const candidateFiles = tree.filter((relativePath) => !relativePath.endsWith("/"));
   const requested = new Set(requestedPaths(candidateFiles, [run.userGoal, normalizedDelegate]));
+  const captured = await previouslyCapturedPathStates(run);
+  const startByteByPath = new Map(
+    (options.preferredPaths ?? [])
+      .map((relativePath): [string, number] | undefined => {
+        const state = captured.get(relativePath);
+        return state?.captured && !state.complete ? [relativePath, state.nextByteOffset] : undefined;
+      })
+      .filter((entry): entry is [string, number] => Boolean(entry))
+  );
   const context: RepoContextPack = {
     schemaVersion: 1,
     kind: "repo_context",
@@ -361,13 +417,15 @@ export const captureRepoContext = async (
     files: await boundedFileExcerpts(
       repoPath,
       selectCandidateFilesWithPreferred(tree, [run.userGoal, normalizedDelegate], options.preferredPaths ?? []),
-      requested
+      requested,
+      startByteByPath
     ),
     notes: [
       "This context pack was captured by deterministic runtime code.",
       "Ignored paths include .git, .thehood, node_modules, dist, build, coverage, and secret-looking filenames.",
       "File excerpts are bounded and may be truncated.",
-      "Files explicitly requested by the run goal or provider decision receive a larger per-file budget."
+      "Files explicitly requested by the run goal or provider decision receive a larger per-file budget.",
+      "Repeated requests for truncated files continue from the next uncaptured byte offset."
     ]
   };
   const artifact = await writeRunArtifact({
