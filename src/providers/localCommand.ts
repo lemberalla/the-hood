@@ -2,11 +2,14 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { writeRunArtifact } from "../runtime/artifacts.js";
 import { ProviderUnavailableError } from "../runtime/errors.js";
+import { newId, nowIso } from "../runtime/ids.js";
 import { redactText } from "../runtime/redaction.js";
+import { loadRun, saveRun } from "../runtime/store.js";
 import { buildAgentResponseSchema } from "./responseSchema.js";
 import type { AgentRequest, AgentResponse, ProviderAdapter } from "./types.js";
-import type { JsonObject, JsonValue, RuntimeRole } from "../runtime/types.js";
+import type { JsonObject, JsonValue, RunArtifact, RuntimeRole } from "../runtime/types.js";
 
 export interface LocalAgentCommandSpec {
   providerId: string;
@@ -18,6 +21,7 @@ export interface LocalAgentCommandSpec {
 export interface LocalAgentCommandContext {
   schema: JsonObject;
   schemaPath: string;
+  workspacePath: string;
 }
 
 export type BuildLocalAgentArgs = (request: AgentRequest, context: LocalAgentCommandContext) => string[];
@@ -33,6 +37,119 @@ export interface FallbackResponseInput {
 const defaultTimeoutMs = 10 * 60 * 1000;
 
 const directEditAllowed = (): boolean => process.env.THEHOOD_ALLOW_DIRECT_EDIT === "1";
+
+interface ProcessResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+interface LocalWorkspace {
+  path: string;
+  mode: "target_checkout" | "isolated_git_worktree";
+  cleanup: () => Promise<void>;
+}
+
+const runProcess = async (
+  command: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<ProcessResult> => {
+  const child = spawn(command, args, {
+    cwd,
+    shell: false,
+    env,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+
+  child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+
+  return {
+    exitCode,
+    stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+    stderr: Buffer.concat(stderrChunks).toString("utf8")
+  };
+};
+
+const targetCheckoutWorkspace = (repoPath: string): LocalWorkspace => ({
+  path: repoPath,
+  mode: "target_checkout",
+  cleanup: async () => {
+    // Target checkout cleanup is owned by the runtime/user.
+  }
+});
+
+const prepareIsolatedWorktree = async (request: AgentRequest): Promise<LocalWorkspace | AgentResponse> => {
+  const status = await runProcess(
+    "git",
+    ["status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude).thehood"],
+    request.run.repoPath
+  ).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      throw new ProviderUnavailableError("git command was not found on PATH.");
+    }
+
+    throw error;
+  });
+
+  if (status.exitCode !== 0) {
+    return createFallbackAgentResponse(request, {
+      status: "blocked",
+      summary: "Isolated edit-capable local agent execution requires a git repository."
+    });
+  }
+
+  if (status.stdout.trim()) {
+    return createFallbackAgentResponse(request, {
+      status: "blocked",
+      summary: "Isolated edit-capable local agent execution requires a clean target checkout."
+    });
+  }
+
+  const worktreePath = await fs.mkdtemp(path.join(os.tmpdir(), `thehood-${request.run.runId}-${request.role}-`));
+  const added = await runProcess("git", ["worktree", "add", "--detach", worktreePath, "HEAD"], request.run.repoPath);
+
+  if (added.exitCode !== 0) {
+    await fs.rm(worktreePath, { recursive: true, force: true });
+    return createFallbackAgentResponse(request, {
+      status: "blocked",
+      summary: "Could not create isolated git worktree for edit-capable local agent execution.",
+      exitCode: added.exitCode,
+      stdoutLength: redactText(added.stdout).length,
+      stderrLength: redactText(added.stderr).length
+    });
+  }
+
+  return {
+    path: worktreePath,
+    mode: "isolated_git_worktree",
+    cleanup: async () => {
+      await runProcess("git", ["worktree", "remove", "--force", worktreePath], request.run.repoPath).catch(() => ({
+        exitCode: 1,
+        stdout: "",
+        stderr: ""
+      }));
+      await fs.rm(worktreePath, { recursive: true, force: true });
+    }
+  };
+};
+
+const prepareWorkspace = async (request: AgentRequest): Promise<LocalWorkspace | AgentResponse> => {
+  if (!request.directive.toolPermissions.edit || directEditAllowed()) {
+    return targetCheckoutWorkspace(request.run.repoPath);
+  }
+
+  return prepareIsolatedWorktree(request);
+};
 
 const writeSchemaFile = async (providerId: string, schema: JsonObject): Promise<{ dir: string; path: string }> => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), `thehood-${providerId}-schema-`));
@@ -135,6 +252,9 @@ export const parseLocalAgentOutput = (stdout: string): AgentResponse | undefined
   return isAgentResponse(unwrapped) ? unwrapped : undefined;
 };
 
+const isFallbackResponse = (value: LocalWorkspace | AgentResponse): value is AgentResponse =>
+  "status" in value && "summary" in value && "data" in value;
+
 const roleFallbackPayload = (
   role: RuntimeRole,
   requiredDataKey: string,
@@ -233,16 +353,122 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
   ].join("\n\n");
 };
 
+const attachArtifact = async (
+  request: AgentRequest,
+  artifact: RunArtifact,
+  workspace: LocalWorkspace,
+  changedPathCount: number
+): Promise<void> => {
+  const latest = await loadRun(request.run.repoPath, request.run.runId);
+  await saveRun({
+    ...latest,
+    updatedAt: nowIso(),
+    artifacts: [...latest.artifacts, artifact],
+    events: [
+      ...latest.events,
+      {
+        id: newId("event"),
+        createdAt: nowIso(),
+        type: "isolated_patch_captured",
+        message: `Captured isolated ${request.role} patch for ${changedPathCount} changed path(s).`,
+        data: {
+          role: request.role,
+          provider: request.assignment.provider,
+          workspaceMode: workspace.mode,
+          changedPathCount,
+          artifactRef: artifact.ref
+        }
+      }
+    ]
+  });
+};
+
+const captureIsolatedPatch = async (
+  request: AgentRequest,
+  workspace: LocalWorkspace
+): Promise<RunArtifact | undefined> => {
+  if (workspace.mode !== "isolated_git_worktree") {
+    return undefined;
+  }
+
+  const status = await runProcess("git", ["status", "--short", "--untracked-files=all"], workspace.path);
+  const statusText = redactText(status.stdout);
+
+  if (!statusText.trim()) {
+    return undefined;
+  }
+
+  await runProcess("git", ["add", "-N", "."], workspace.path);
+  const diff = await runProcess("git", ["diff", "--no-ext-diff", "--binary"], workspace.path);
+  const patch = redactText(diff.stdout);
+  const changedPaths = statusText
+    .split("\n")
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+  const artifact = await writeRunArtifact({
+    repoPath: request.run.repoPath,
+    runId: request.run.runId,
+    kind: "diff",
+    name: `${request.role}-${request.assignment.provider}-${newId("patch")}.patch`,
+    content: [
+      `# Isolated workspace mode: ${workspace.mode}`,
+      "# Changed paths:",
+      ...changedPaths.map((changedPath) => `# - ${changedPath}`),
+      "",
+      patch
+    ].join("\n"),
+    summary: `Isolated ${request.role} patch from ${request.assignment.provider} with ${changedPaths.length} changed path(s).`
+  });
+
+  await attachArtifact(request, artifact, workspace, changedPaths.length);
+  return artifact;
+};
+
+const withPatchArtifact = (
+  request: AgentRequest,
+  response: AgentResponse,
+  patchArtifact: RunArtifact | undefined,
+  workspace: LocalWorkspace
+): AgentResponse => {
+  if (!patchArtifact || request.role !== "implementer") {
+    return response;
+  }
+
+  const requiredDataKey = request.directive.outputContract.requiredDataKey;
+  const payload = response.data[requiredDataKey];
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return response;
+  }
+
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      [requiredDataKey]: {
+        ...payload,
+        isolatedWorkspace: {
+          mode: workspace.mode
+        },
+        patchArtifact: {
+          kind: patchArtifact.kind,
+          ref: patchArtifact.ref,
+          summary: patchArtifact.summary
+        }
+      } as JsonValue
+    }
+  };
+};
+
 export const runLocalAgentCommand = async (
   request: AgentRequest,
   spec: LocalAgentCommandSpec
 ): Promise<AgentResponse> => {
-  if (request.directive.toolPermissions.edit && !directEditAllowed()) {
-    return createFallbackAgentResponse(request, {
-      status: "blocked",
-      summary:
-        "Direct edit-capable local agent execution is blocked until isolated workspaces and patch integration are enabled."
-    });
+  const workspace = await prepareWorkspace(request);
+
+  if (isFallbackResponse(workspace)) {
+    return workspace;
   }
 
   const prompt = buildAgentPrompt(request);
@@ -251,10 +477,11 @@ export const runLocalAgentCommand = async (
   const schemaFile = await writeSchemaFile(spec.providerId, schema);
   const args = spec.buildArgs(request, {
     schema,
-    schemaPath: schemaFile.path
+    schemaPath: schemaFile.path,
+    workspacePath: workspace.path
   });
   const child = spawn(spec.command, args, {
-    cwd: request.run.repoPath,
+    cwd: workspace.path,
     shell: false,
     env: {
       ...process.env,
@@ -276,60 +503,67 @@ export const runLocalAgentCommand = async (
   child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
   child.stdin.end(prompt);
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  }).catch(async (error: NodeJS.ErrnoException) => {
+  try {
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code) => resolve(code ?? 1));
+    }).catch(async (error: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      await fs.rm(schemaFile.dir, { recursive: true, force: true });
+
+      if (error.code === "ENOENT") {
+        throw new ProviderUnavailableError(
+          `${spec.providerId} command "${spec.command}" was not found on PATH.`
+        );
+      }
+
+      throw error;
+    });
+
     clearTimeout(timer);
     await fs.rm(schemaFile.dir, { recursive: true, force: true });
 
-    if (error.code === "ENOENT") {
-      throw new ProviderUnavailableError(
-        `${spec.providerId} command "${spec.command}" was not found on PATH.`
-      );
+    const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+    const stderr = Buffer.concat(stderrChunks).toString("utf8");
+    const redactedStdout = redactText(stdout);
+    const redactedStderr = redactText(stderr);
+    const patchArtifact = await captureIsolatedPatch(request, workspace);
+
+    if (timedOut) {
+      return createFallbackAgentResponse(request, {
+        status: "failed",
+        summary: `${spec.providerId} timed out after ${timeoutMs}ms.`,
+        exitCode,
+        stdoutLength: redactedStdout.length,
+        stderrLength: redactedStderr.length
+      });
     }
 
-    throw error;
-  });
+    if (exitCode !== 0) {
+      return createFallbackAgentResponse(request, {
+        status: "failed",
+        summary: `${spec.providerId} exited with code ${exitCode}.`,
+        exitCode,
+        stdoutLength: redactedStdout.length,
+        stderrLength: redactedStderr.length
+      });
+    }
 
-  clearTimeout(timer);
-  await fs.rm(schemaFile.dir, { recursive: true, force: true });
+    const response = parseLocalAgentOutput(redactedStdout) ??
+      createFallbackAgentResponse(request, {
+        status: "blocked",
+        summary: `${spec.providerId} returned output that did not match the AgentResponse envelope.`,
+        exitCode,
+        stdoutLength: redactedStdout.length,
+        stderrLength: redactedStderr.length
+      });
 
-  const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-  const stderr = Buffer.concat(stderrChunks).toString("utf8");
-  const redactedStdout = redactText(stdout);
-  const redactedStderr = redactText(stderr);
-
-  if (timedOut) {
-    return createFallbackAgentResponse(request, {
-      status: "failed",
-      summary: `${spec.providerId} timed out after ${timeoutMs}ms.`,
-      exitCode,
-      stdoutLength: redactedStdout.length,
-      stderrLength: redactedStderr.length
-    });
+    return withPatchArtifact(request, response, patchArtifact, workspace);
+  } finally {
+    clearTimeout(timer);
+    await fs.rm(schemaFile.dir, { recursive: true, force: true });
+    await workspace.cleanup();
   }
-
-  if (exitCode !== 0) {
-    return createFallbackAgentResponse(request, {
-      status: "failed",
-      summary: `${spec.providerId} exited with code ${exitCode}.`,
-      exitCode,
-      stdoutLength: redactedStdout.length,
-      stderrLength: redactedStderr.length
-    });
-  }
-
-  return (
-    parseLocalAgentOutput(redactedStdout) ??
-    createFallbackAgentResponse(request, {
-      status: "blocked",
-      summary: `${spec.providerId} returned output that did not match the AgentResponse envelope.`,
-      exitCode,
-      stdoutLength: redactedStdout.length,
-      stderrLength: redactedStderr.length
-    })
-  );
 };
 
 export const createLocalCommandProvider = (

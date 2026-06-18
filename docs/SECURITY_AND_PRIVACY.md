@@ -54,7 +54,8 @@ The runtime must:
 - isolate worker changes in worktrees when possible
 - enforce allowed and disallowed paths
 - block protected test changes unless approved
-- block direct edit-capable local agent execution until isolated workspaces and patch integration are enabled, unless explicitly overridden by `THEHOOD_ALLOW_DIRECT_EDIT=1`
+- run edit-capable local agents in isolated git worktrees by default and capture patch artifacts for review
+- require `THEHOOD_ALLOW_DIRECT_EDIT=1` before a local agent can edit the target checkout directly
 
 ## Command Safety
 

@@ -383,7 +383,8 @@ const schemaContext = {
   schema: {
     type: "object"
   },
-  schemaPath: path.join(loopRepoPath, "agent-response.schema.json")
+  schemaPath: path.join(loopRepoPath, "agent-response.schema.json"),
+  workspacePath: loopRepoPath
 };
 const codexArgs = buildCodexCliArgs(fakeVerifierRequest, schemaContext);
 assert.deepEqual(codexArgs.slice(0, 5), ["exec", "--cd", loopRepoPath, "--sandbox", "read-only"]);
@@ -400,7 +401,7 @@ const blockedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-blocked
 await runCli(["init", "--repo", blockedRepoPath]);
 const blockedRunOutput = await runCli([
   "run",
-  "block direct local edits",
+  "block isolated local edits outside git",
   "--repo",
   blockedRepoPath,
   "--orchestrator",
@@ -419,7 +420,7 @@ const blockedContinue = await runCli(["continue", blockedRun.runId, "--repo", bl
 const blockedResult = JSON.parse(blockedContinue.stdout);
 assert.equal(blockedResult.run.state, "awaiting_approval");
 assert.equal(blockedResult.run.approvalRequired, true);
-assert.ok(blockedResult.run.approvalReason.includes("Direct edit-capable local agent execution is blocked"));
+assert.ok(blockedResult.run.approvalReason.includes("Isolated edit-capable local agent execution requires a git repository"));
 assert.equal(blockedResult.providerResponses.at(-1).status, "blocked");
 
 process.stdout.write(`Runtime smoke passed using ${repoPath}\n`);

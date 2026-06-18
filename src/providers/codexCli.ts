@@ -9,7 +9,7 @@ export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentComm
   const args = [
     "exec",
     "--cd",
-    request.run.repoPath,
+    context.workspacePath,
     "--sandbox",
     sandboxForRequest(request),
     "--ask-for-approval",

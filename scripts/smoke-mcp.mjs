@@ -30,6 +30,29 @@ const runCommand = async (args) => {
   return stdout;
 };
 
+const runRawCommand = async (command, args, cwd) => {
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const exitCode = await new Promise((resolve) => {
+    child.on("close", resolve);
+  });
+
+  assert.equal(exitCode, 0, stderr || stdout);
+  return stdout;
+};
+
 const runMcp = async (messages) => {
   const child = spawn(process.execPath, [cliPath, "mcp"], {
     cwd: root,
@@ -325,6 +348,118 @@ assert.equal(
   fakeChatGptConsultPath[1].result.structuredContent.provider_responses[0].data.decision.action,
   "complete"
 );
+
+const isolatedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-isolated-"));
+await runRawCommand("git", ["init"], isolatedRepoPath);
+await fs.writeFile(path.join(isolatedRepoPath, "README.md"), "# Isolated Smoke\n", "utf8");
+await runRawCommand("git", ["add", "README.md"], isolatedRepoPath);
+await runRawCommand(
+  "git",
+  [
+    "-c",
+    "user.name=TheHood Smoke",
+    "-c",
+    "user.email=smoke@example.invalid",
+    "commit",
+    "-m",
+    "initial"
+  ],
+  isolatedRepoPath
+);
+await runCommand(["init", "--repo", isolatedRepoPath]);
+
+const fakeCodexDir = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-fake-codex-"));
+const fakeCodexPath = path.join(fakeCodexDir, "fake-codex.mjs");
+await fs.writeFile(
+  fakeCodexPath,
+  [
+    "#!/usr/bin/env node",
+    "import fs from 'node:fs/promises';",
+    "import path from 'node:path';",
+    "const cdIndex = process.argv.indexOf('--cd');",
+    "const workspace = cdIndex >= 0 ? process.argv[cdIndex + 1] : process.cwd();",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', async () => {",
+    "  await fs.writeFile(path.join(workspace, 'implemented.txt'), 'isolated implementation\\n', 'utf8');",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: input.includes('Runtime directive') ? 'fake codex changed isolated workspace' : 'fake codex missing directive',",
+    "    data: {",
+    "      implementationResult: {",
+    "        status: 'changed',",
+    "        changedFiles: ['implemented.txt'],",
+    "        commandsRun: [],",
+    "        unresolvedRisks: []",
+    "      }",
+    "    }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeCodexPath, 0o755);
+process.env.THEHOOD_CODEX_COMMAND = fakeCodexPath;
+delete process.env.THEHOOD_ALLOW_DIRECT_EDIT;
+
+const isolatedCreate = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_orchestrate",
+      arguments: {
+        goal: "exercise isolated codex implementer",
+        repo_path: isolatedRepoPath,
+        mode: "implement",
+        role_mapping: {
+          orchestrator: "stub:orchestrator",
+          implementer: "codex-cli:default",
+          verifier: "stub:verifier",
+          critic: "stub:critic"
+        }
+      }
+    }
+  }
+]);
+const isolatedRunId = isolatedCreate[1].result.structuredContent.run_id;
+const isolatedContinue = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: isolatedRunId,
+        repo_path: isolatedRepoPath,
+        approval: "approve",
+        message: "mcp-smoke-isolated-approve"
+      }
+    }
+  }
+]);
+const isolatedResult = isolatedContinue[1].result.structuredContent;
+const isolatedImplementation = isolatedResult.provider_responses.find(
+  (response) => response.data.implementationResult
+).data.implementationResult;
+const isolatedDiffArtifact = isolatedResult.artifacts.find((artifact) => artifact.kind === "diff");
+
+assert.equal(isolatedCreate[1].result.structuredContent.status, "awaiting_approval");
+assert.equal(isolatedResult.status, "completed");
+assert.equal(isolatedImplementation.status, "changed");
+assert.equal(isolatedImplementation.isolatedWorkspace.mode, "isolated_git_worktree");
+assert.equal(isolatedImplementation.patchArtifact.ref, isolatedDiffArtifact.ref);
+await assert.rejects(fs.access(path.join(isolatedRepoPath, "implemented.txt")));
+
+const isolatedPatch = await fs.readFile(isolatedDiffArtifact.ref, "utf8");
+assert.ok(isolatedPatch.includes("implemented.txt"));
+assert.ok(isolatedPatch.includes("isolated implementation"));
 
 const runsPath = await runMcp([
   ...baseMessages,

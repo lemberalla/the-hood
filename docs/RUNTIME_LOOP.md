@@ -120,7 +120,7 @@ Verifier and runtime failures should be classified into stable categories:
 
 Only the runtime applies approved changes to the target checkout.
 
-Implementers can produce patches. They do not get to self-merge.
+Implementers can produce patches. Local CLI implementers run in isolated git worktrees by default; TheHood captures their diff as a run artifact for later verification or integration. They do not get to self-merge.
 
 ## Current Loop
 

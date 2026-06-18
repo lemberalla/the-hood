@@ -116,12 +116,13 @@ const runAgent = async (
     content: `${JSON.stringify(response, null, 2)}\n`,
     summary: `${role} response: ${response.summary}`
   });
+  const latestRun = await loadRun(runWithDirective.repoPath, runWithDirective.runId);
   const updated: RunRecord = {
-    ...runWithDirective,
+    ...latestRun,
     updatedAt: nowIso(),
-    artifacts: [...runWithDirective.artifacts, artifact],
+    artifacts: [...latestRun.artifacts, artifact],
     events: [
-      ...runWithDirective.events,
+      ...latestRun.events,
       createEvent("agent_response", `${role} responded: ${response.summary}`, {
         role,
         provider: assignment.provider,

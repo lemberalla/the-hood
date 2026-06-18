@@ -59,7 +59,9 @@ Rules:
 - It redacts obvious secrets from captured process output before parsing.
 - It fails closed with a schema-compatible blocked or failed response when output is unstructured.
 - It does not use dangerous bypass flags.
-- It blocks edit-capable local agent execution unless `THEHOOD_ALLOW_DIRECT_EDIT=1` is explicitly set.
+- It runs edit-capable local agents in an isolated git worktree by default and captures the resulting patch as a `diff` artifact.
+- It requires a clean target checkout before isolated edit execution so uncommitted user work is not silently excluded.
+- It only runs edit-capable local agents in the target checkout when `THEHOOD_ALLOW_DIRECT_EDIT=1` is explicitly set.
 
 ## Stub Adapter
 
