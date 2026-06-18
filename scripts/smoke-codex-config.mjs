@@ -252,15 +252,34 @@ const toolNames = toolsList.result.tools.map((tool) => tool.name);
 for (const expectedTool of [
   "thehood_doctor",
   "thehood_roles",
+  "thehood_assign_roles",
   "thehood_plan",
   "thehood_orchestrate",
   "thehood_consult",
-  "thehood_continue"
+  "thehood_continue",
+  "thehood_status",
+  "thehood_runs",
+  "thehood_read_artifact",
+  "thehood_capture_evidence",
+  "thehood_abort"
 ]) {
   assert.ok(toolNames.includes(expectedTool), `tools/list should expose ${expectedTool}`);
 }
 
 const health = doctor.result.structuredContent;
+assert.equal(health.runtime.name, "thehood");
+for (const expectedCapability of [
+  "structured_mcp_next_actions",
+  "approval_artifact_next_actions",
+  "protected_integrated_patch_gate",
+  "cli_artifact_reads"
+]) {
+  assert.ok(
+    health.runtime.capabilities.includes(expectedCapability),
+    `doctor runtime capabilities should include ${expectedCapability}`
+  );
+}
+
 const activeRoles = ["orchestrator", "implementer", "verifier", "critic"];
 for (const role of activeRoles) {
   const roleHealth = health.roles.find((candidate) => candidate.role === role);
@@ -274,6 +293,7 @@ process.stdout.write(
     `config: ${configPath}`,
     `repo: ${repoPath}`,
     `server: ${launch.command} ${launch.args.join(" ")}`,
+    `capabilities: ${health.runtime.capabilities.join(", ")}`,
     `tools: ${toolNames.join(", ")}`
   ].join("\n") + "\n"
 );
