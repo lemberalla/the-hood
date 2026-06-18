@@ -52,6 +52,33 @@ node dist/cli/main.js doctor --repo /path/to/repo --json
 
 For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, and a ChatGPT tab is visible. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, and `chatgpt_tab_not_found`.
 
+## Actual Codex App Verification
+
+Add one generated TOML snippet to Codex's `config.toml`, then restart Codex so the MCP server list is rebuilt. A running Codex session should not be treated as proof because MCP servers are loaded at app or session startup.
+
+After restart, the TheHood server should expose these tools:
+
+- `thehood_doctor`
+- `thehood_roles`
+- `thehood_assign_roles`
+- `thehood_plan`
+- `thehood_orchestrate`
+- `thehood_consult`
+- `thehood_continue`
+- `thehood_status`
+- `thehood_runs`
+- `thehood_read_artifact`
+- `thehood_capture_evidence`
+- `thehood_abort`
+
+First verification sequence from a Codex chat:
+
+1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
+2. Call `thehood_plan` for a harmless read-only goal.
+3. Call `thehood_continue` for that run and confirm ChatGPT Pro returns schema-valid JSON.
+4. Confirm any delegated repo inspection creates a bounded `context` artifact before Pro receives repo evidence.
+5. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
+
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:
