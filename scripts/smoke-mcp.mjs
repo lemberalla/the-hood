@@ -289,8 +289,15 @@ const fakeClaudeConsultGate = await runMcp([
 ]);
 
 const fakeClaudeRunId = fakeClaudeConsultGate[1].result.structuredContent.run_id;
+const fakeClaudeNextApproval = fakeClaudeConsultGate[1].result.structuredContent.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
 assert.equal(fakeClaudeConsultGate[1].result.structuredContent.status, "awaiting_approval");
 assert.equal(fakeClaudeConsultGate[1].result.structuredContent.consulted_agent, "claude-code:default");
+assert.equal(fakeClaudeNextApproval.tool, "thehood_continue");
+assert.equal(fakeClaudeNextApproval.arguments.run_id, fakeClaudeRunId);
+assert.equal(fakeClaudeNextApproval.arguments.approval, "approve");
+assert.ok(fakeClaudeNextApproval.arguments.message.includes("invoke claude-code"));
 assert.equal(
   fakeClaudeConsultGate[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
   "unclear"
@@ -367,8 +374,15 @@ const fakeChatGptConsultGate = await runMcp([
 ]);
 
 const fakeChatGptRunId = fakeChatGptConsultGate[1].result.structuredContent.run_id;
+const fakeChatGptNextApproval = fakeChatGptConsultGate[1].result.structuredContent.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
 assert.equal(fakeChatGptConsultGate[1].result.structuredContent.status, "awaiting_approval");
 assert.equal(fakeChatGptConsultGate[1].result.structuredContent.consulted_agent, "chatgpt-web:chatgpt-pro");
+assert.equal(fakeChatGptNextApproval.tool, "thehood_continue");
+assert.equal(fakeChatGptNextApproval.arguments.run_id, fakeChatGptRunId);
+assert.equal(fakeChatGptNextApproval.arguments.approval, "approve");
+assert.ok(fakeChatGptNextApproval.arguments.message.includes("invoke chatgpt-web"));
 assert.equal(
   fakeChatGptConsultGate[1].result.structuredContent.provider_responses[0].data.decision.action,
   "request_approval"
@@ -477,6 +491,13 @@ const isolatedCreate = await runMcp([
   }
 ]);
 const isolatedRunId = isolatedCreate[1].result.structuredContent.run_id;
+const isolatedNextApproval = isolatedCreate[1].result.structuredContent.next_actions.find(
+  (action) => action.action === "continue_with_approval"
+);
+assert.equal(isolatedNextApproval.tool, "thehood_continue");
+assert.equal(isolatedNextApproval.arguments.run_id, isolatedRunId);
+assert.equal(isolatedNextApproval.arguments.approval, "approve");
+assert.ok(isolatedNextApproval.arguments.message.includes("starting implementation"));
 const isolatedContinue = await runMcp([
   ...baseMessages,
   {

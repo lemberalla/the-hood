@@ -32,6 +32,78 @@ const roleSummary = (roles: RoleMap): JsonObject =>
       .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
   );
 
+const approvalMessageHint = (run: RunRecord): string => {
+  const reason = run.approvalReason ?? "";
+  const quoted = reason.match(/"([^"]+)"/)?.[1];
+
+  if (quoted) {
+    return `I approve ${quoted} for run ${run.runId}.`;
+  }
+
+  if (reason.includes("Implementation mode requires approval")) {
+    return `I approve starting implementation for run ${run.runId}.`;
+  }
+
+  return `I approve the next TheHood transition for run ${run.runId}.`;
+};
+
+const nextActionsForRun = (run: RunRecord): JsonObject[] => {
+  if (run.approvalRequired) {
+    return [
+      {
+        action: "review_approval_reason",
+        description: run.approvalReason ?? "Approval is required before this run can continue."
+      },
+      {
+        action: "continue_with_approval",
+        description: "After the user explicitly approves this boundary, call thehood_continue with approval=approve.",
+        tool: "thehood_continue",
+        arguments: {
+          repo_path: run.repoPath,
+          run_id: run.runId,
+          approval: "approve",
+          message: approvalMessageHint(run)
+        }
+      },
+      {
+        action: "reject_or_revise",
+        description: "If the user does not approve, call thehood_continue with approval=reject or approval=revise."
+      }
+    ];
+  }
+
+  if (run.state === "completed" || run.state === "failed" || run.state === "aborted") {
+    return [
+      {
+        action: "inspect_artifacts",
+        description: "Inspect any relevant artifacts with thehood_read_artifact."
+      }
+    ];
+  }
+
+  return [
+    {
+      action: "continue",
+      description: "Call thehood_continue to advance this run to the next runtime boundary.",
+      tool: "thehood_continue",
+      arguments: {
+        repo_path: run.repoPath,
+        run_id: run.runId,
+        approval: "none"
+      }
+    },
+    {
+      action: "inspect_status",
+      description: "Call thehood_status to inspect events and artifacts before continuing.",
+      tool: "thehood_status",
+      arguments: {
+        repo_path: run.repoPath,
+        run_id: run.runId
+      }
+    }
+  ];
+};
+
 const runSummary = (run: RunRecord): JsonObject => ({
   run_id: run.runId,
   status: run.state,
@@ -47,7 +119,8 @@ const runSummary = (run: RunRecord): JsonObject => ({
     kind: artifact.kind,
     ref: artifact.ref,
     summary: artifact.summary
-  }))
+  })),
+  next_actions: nextActionsForRun(run)
 });
 
 const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
@@ -147,8 +220,7 @@ const createPlanTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(run),
-        next_actions: ["Inspect the run with thehood_status.", "Continue provider wiring before model execution."]
+        ...runSummary(run)
       };
     })
 });

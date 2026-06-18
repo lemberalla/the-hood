@@ -113,7 +113,14 @@ Output:
   "run_id": "string",
   "status": "awaiting_approval | completed | failed",
   "plan": "string",
-  "next_actions": ["string"]
+  "next_actions": [
+    {
+      "action": "string",
+      "description": "string",
+      "tool": "optional MCP tool name",
+      "arguments": "optional tool arguments"
+    }
+  ]
 }
 ```
 
@@ -208,7 +215,7 @@ Current behavior:
 
 - optionally records an approval decision
 - advances the runtime loop until completion or the next gate
-- returns the final state, stop reason, provider response count, and normalized provider responses
+- returns the final state, stop reason, provider response count, normalized provider responses, and structured `next_actions`
 
 Input:
 
