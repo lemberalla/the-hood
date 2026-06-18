@@ -161,6 +161,20 @@ const readyOrchestrator = readyDoctorResult.roles.find((role) => role.role === "
 assert.deepEqual(readyChatGptProvider.issues, []);
 assert.deepEqual(readyOrchestrator.issues, []);
 const blockedChatGptPlan = JSON.parse((await runCli(["plan", "block missing ChatGPT bridge", "--repo", repoPath, "--json"])).stdout);
+const blockedChatGptInvocation = JSON.parse(
+  (await runCli(["continue", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(blockedChatGptInvocation.run.state, "awaiting_approval");
+assert.equal(blockedChatGptInvocation.providerResponses[0].status, "blocked");
+assert.ok(blockedChatGptInvocation.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli([
+  "approve",
+  blockedChatGptPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for missing bridge smoke."
+]);
 const blockedChatGptContinue = JSON.parse((await runCli(["continue", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout);
 assert.equal(blockedChatGptContinue.run.state, "awaiting_approval");
 assert.equal(blockedChatGptContinue.providerResponses[0].status, "blocked");
@@ -326,6 +340,22 @@ const externalContextPlan = JSON.parse(
     )
   ).stdout
 );
+const externalInvocationGate = JSON.parse(
+  (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(externalInvocationGate.run.state, "awaiting_approval");
+assert.equal(externalInvocationGate.run.approvalRequired, true);
+assert.ok(externalInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+assert.equal(externalInvocationGate.providerResponses[0].data.decision.action, "request_approval");
+await assert.rejects(fs.readFile(fakeExternalBridgeLogPath, "utf8"));
+await runCli([
+  "approve",
+  externalContextPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for external context smoke."
+]);
 const externalContextGate = JSON.parse(
   (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
 );

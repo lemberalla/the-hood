@@ -59,6 +59,7 @@ Rules:
 - It redacts obvious secrets from captured process output before parsing.
 - It fails closed with a schema-compatible blocked or failed response when output is unstructured.
 - It does not use dangerous bypass flags.
+- For read-only repo work, model-backed local command providers require an explicit provider-invocation approval before the first call.
 - It runs edit-capable local agents in an isolated git worktree by default and captures the resulting patch as a `diff` artifact.
 - It requires a clean target checkout before isolated edit execution so uncommitted user work is not silently excluded.
 - It only runs edit-capable local agents in the target checkout when `THEHOOD_ALLOW_DIRECT_EDIT=1` is explicitly set.
@@ -188,6 +189,7 @@ Rules:
 - Do not let Codex self-verify its own changes.
 - Run through `codex exec` with TheHood's role directive.
 - Use `read-only` sandbox for non-editing roles.
+- Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--output-schema`.
 - Do not pass dangerous sandbox bypass flags.
 
@@ -209,6 +211,7 @@ Rules:
 - If Claude Code edits, another agent verifies.
 - Run through `claude --print` with TheHood's role directive.
 - Use plan/read tools for non-editing roles.
+- Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--json-schema`.
 - Do not pass permission bypass flags.
 

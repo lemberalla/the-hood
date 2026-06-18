@@ -77,17 +77,18 @@ First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
 2. Call `thehood_plan` for a harmless read-only goal.
-3. Call `thehood_continue` for that run and confirm ChatGPT Pro returns schema-valid JSON.
-4. If Pro delegates repo inspection, confirm the runtime creates a bounded `context` artifact and then stops for explicit approval before sending that context back to ChatGPT Web.
-5. Approve the context transfer only when the user accepts sending bounded repo evidence to ChatGPT Web, then continue the run.
-6. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
+3. Call `thehood_continue` for that run and confirm it stops for explicit approval before invoking ChatGPT Pro.
+4. Approve the provider invocation only when the user accepts calling ChatGPT Web for the repo, then continue the run and confirm ChatGPT Pro returns schema-valid JSON.
+5. If Pro delegates repo inspection, confirm the runtime creates a bounded `context` artifact and then stops for explicit approval before sending that context back to ChatGPT Web.
+6. Approve the context transfer only when the user accepts sending bounded repo evidence to ChatGPT Web, then continue the run.
+7. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
 
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:
 
 1. Ask Codex to call `thehood_doctor` for the repo.
-2. Ask Codex to call `thehood_consult` with a read-only guest role.
+2. Ask Codex to call `thehood_consult` with a read-only guest role and approve the provider-invocation gate before Claude, Codex, or Pro is called.
 3. Use `thehood_orchestrate` for implementation work.
 4. Use `thehood_continue` only after approving the run boundary.
 

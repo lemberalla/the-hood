@@ -270,7 +270,7 @@ await fs.writeFile(
 await fs.chmod(fakeAgentPath, 0o755);
 process.env.THEHOOD_CLAUDE_COMMAND = fakeAgentPath;
 
-const fakeClaudeConsultPath = await runMcp([
+const fakeClaudeConsultGate = await runMcp([
   ...baseMessages,
   {
     jsonrpc: "2.0",
@@ -288,8 +288,33 @@ const fakeClaudeConsultPath = await runMcp([
   }
 ]);
 
+const fakeClaudeRunId = fakeClaudeConsultGate[1].result.structuredContent.run_id;
+assert.equal(fakeClaudeConsultGate[1].result.structuredContent.status, "awaiting_approval");
+assert.equal(fakeClaudeConsultGate[1].result.structuredContent.consulted_agent, "claude-code:default");
+assert.equal(
+  fakeClaudeConsultGate[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
+  "unclear"
+);
+
+const fakeClaudeConsultPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: fakeClaudeRunId,
+        repo_path: repoPath,
+        approval: "approve",
+        message: "I approve invoke claude-code for MCP smoke."
+      }
+    }
+  }
+]);
+
 assert.equal(fakeClaudeConsultPath[1].result.structuredContent.status, "completed");
-assert.equal(fakeClaudeConsultPath[1].result.structuredContent.consulted_agent, "claude-code:default");
 assert.equal(fakeClaudeConsultPath[1].result.structuredContent.provider_responses[0].summary, "fake guest saw directive");
 assert.equal(
   fakeClaudeConsultPath[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,
@@ -323,7 +348,7 @@ await fs.writeFile(
 await fs.chmod(fakeChatGptPath, 0o755);
 process.env.THEHOOD_CHATGPT_WEB_COMMAND = fakeChatGptPath;
 
-const fakeChatGptConsultPath = await runMcp([
+const fakeChatGptConsultGate = await runMcp([
   ...baseMessages,
   {
     jsonrpc: "2.0",
@@ -341,8 +366,33 @@ const fakeChatGptConsultPath = await runMcp([
   }
 ]);
 
+const fakeChatGptRunId = fakeChatGptConsultGate[1].result.structuredContent.run_id;
+assert.equal(fakeChatGptConsultGate[1].result.structuredContent.status, "awaiting_approval");
+assert.equal(fakeChatGptConsultGate[1].result.structuredContent.consulted_agent, "chatgpt-web:chatgpt-pro");
+assert.equal(
+  fakeChatGptConsultGate[1].result.structuredContent.provider_responses[0].data.decision.action,
+  "request_approval"
+);
+
+const fakeChatGptConsultPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_continue",
+      arguments: {
+        run_id: fakeChatGptRunId,
+        repo_path: repoPath,
+        approval: "approve",
+        message: "I approve invoke chatgpt-web for MCP smoke."
+      }
+    }
+  }
+]);
+
 assert.equal(fakeChatGptConsultPath[1].result.structuredContent.status, "completed");
-assert.equal(fakeChatGptConsultPath[1].result.structuredContent.consulted_agent, "chatgpt-web:chatgpt-pro");
 assert.equal(fakeChatGptConsultPath[1].result.structuredContent.provider_responses[0].summary, "fake chatgpt saw directive");
 assert.equal(
   fakeChatGptConsultPath[1].result.structuredContent.provider_responses[0].data.decision.action,

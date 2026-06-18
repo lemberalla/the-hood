@@ -182,7 +182,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads, then calls the same role again with that context attached.
 
-When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing.
+When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call.
 
 ## Doctor Command
 

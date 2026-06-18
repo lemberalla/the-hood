@@ -308,7 +308,7 @@ const createConsultTool = (): McpTool => ({
   definition: {
     name: "thehood_consult",
     title: "Consult TheHood Guest Agent",
-    description: "Run a single read-only role immediately, useful for asking Claude or another agent to plan, research, or critique from Codex chat.",
+    description: "Create or advance a single read-only guest role, useful for asking Claude or another agent to plan, research, or critique from Codex chat. Model-backed providers may stop for invocation approval before the provider is called.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

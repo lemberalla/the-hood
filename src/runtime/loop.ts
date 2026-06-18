@@ -164,6 +164,13 @@ const actionFromResponse = (response: AgentResponse): string | undefined => {
 };
 
 const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
+const readOnlyProvidersRequiringInvocationApproval = new Set([
+  "anthropic-api",
+  "chatgpt-web",
+  "claude-code",
+  "codex-cli",
+  "openai-api"
+]);
 
 const latestRepoContextCapturedAt = (run: RunRecord): string | undefined =>
   run.events.filter((event) => event.type === "repo_context_captured").at(-1)?.createdAt;
@@ -195,6 +202,39 @@ const hasExternalRepoContextApproval = (run: RunRecord, assignment: RoleAssignme
   );
 };
 
+const approvalMentionsProviderInvocation = (reason: string, assignment: RoleAssignment): boolean => {
+  const normalized = reason.toLowerCase();
+  const providerTokens = [
+    assignment.provider,
+    assignment.provider.replace(/-/g, " "),
+    assignment.model,
+    assignment.model.replace(/-/g, " ")
+  ];
+
+  return (
+    (normalized.includes("invoke") || normalized.includes("call") || normalized.includes("use")) &&
+    providerTokens.some((token) => token && normalized.includes(token.toLowerCase()))
+  );
+};
+
+const hasProviderInvocationApproval = (run: RunRecord, assignment: RoleAssignment): boolean =>
+  run.approvalEvents.some(
+    (approval) => approval.decision === "approve" && approvalMentionsProviderInvocation(approval.reason, assignment)
+  );
+
+const hasProviderResponded = (run: RunRecord, role: RuntimeRole, assignment: RoleAssignment): boolean =>
+  run.events.some((event) => {
+    if (event.type !== "agent_response" || !event.data) {
+      return false;
+    }
+
+    return event.data.role === role && event.data.provider === assignment.provider && event.data.model === assignment.model;
+  });
+
+const providerInvocationApprovalReason = (role: RuntimeRole, assignment: RoleAssignment): string =>
+  `Invoking ${assignment.provider}:${assignment.model} for ${role} requires explicit approval. ` +
+  `Approval message must mention "invoke ${assignment.provider}".`;
+
 const externalRepoContextApprovalReason = (
   role: RuntimeRole,
   assignment: RoleAssignment,
@@ -204,23 +244,101 @@ const externalRepoContextApprovalReason = (
   `Approval message must mention "send repo context to ${assignment.provider}". Context artifact: ${artifactSummary}`;
 
 const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentResponse => {
-  if (role === "orchestrator" || role === "planner") {
-    return {
-      status: "blocked",
-      summary,
-      data: {
-        decision: {
-          action: "request_approval",
-          reason: summary
-        }
-      }
-    };
-  }
+  const dataForRole = (): JsonObject => {
+    switch (role) {
+      case "orchestrator":
+      case "planner":
+        return {
+          decision: {
+            action: "request_approval",
+            reason: summary
+          }
+        };
+      case "researcher":
+        return {
+          researchResult: {
+            status: "blocked",
+            summary,
+            findings: [],
+            sources: []
+          }
+        };
+      case "critic":
+        return {
+          critiqueResult: {
+            verdict: "unclear",
+            blockingConcerns: [summary],
+            nonBlockingConcerns: []
+          }
+        };
+      case "verifier":
+        return {
+          verificationResult: {
+            verdict: "ask_user",
+            summary
+          }
+        };
+      case "implementer":
+        return {
+          implementationResult: {
+            status: "blocked",
+            changedFiles: [],
+            commandsRun: [],
+            unresolvedRisks: [summary]
+          }
+        };
+      default:
+        return {
+          result: {
+            status: "blocked",
+            summary
+          }
+        };
+    }
+  };
 
   return {
     status: "blocked",
     summary,
-    data: {}
+    data: dataForRole()
+  };
+};
+
+const stopForProviderInvocationApproval = async (
+  run: RunRecord,
+  role: RuntimeRole,
+  assignment: RoleAssignment
+): Promise<{ run: RunRecord; response: AgentResponse; stopReason: string } | undefined> => {
+  if (
+    !readOnlyProvidersRequiringInvocationApproval.has(assignment.provider) ||
+    hasProviderResponded(run, role, assignment) ||
+    hasProviderInvocationApproval(run, assignment)
+  ) {
+    return undefined;
+  }
+
+  const approvalReason = providerInvocationApprovalReason(role, assignment);
+  const gated = await updateRun(
+    run,
+    {
+      state: "awaiting_approval",
+      approvalRequired: true,
+      approvalReason
+    },
+    [
+      createEvent("approval_required", approvalReason, {
+        role,
+        provider: assignment.provider,
+        model: assignment.model,
+        reason: "provider_invocation"
+      })
+    ]
+  );
+
+  return {
+    run: gated,
+    response: createApprovalGateResponse(role, approvalReason),
+    stopReason: approvalReason
   };
 };
 
@@ -313,6 +431,16 @@ const executeReadOnlyRun = async (
 ): Promise<{ run: RunRecord; response: AgentResponse; advanced: boolean; stopReason?: string }> => {
   const assignment = requiredAssignment(run, role);
   const contextArtifact = latestRepoContextArtifact(run);
+  const invocationGate = await stopForProviderInvocationApproval(run, role, assignment);
+
+  if (invocationGate) {
+    return {
+      run: invocationGate.run,
+      response: invocationGate.response,
+      advanced: true,
+      stopReason: invocationGate.stopReason
+    };
+  }
 
   if (
     contextArtifact &&

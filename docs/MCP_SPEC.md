@@ -180,7 +180,7 @@ ChatGPT Pro example:
 
 `chatgpt-web` requires `THEHOOD_CHATGPT_WEB_COMMAND`; without it the run returns `blocked`.
 
-Output includes the created run id, final state, consulted role, consulted agent, stop reason, provider response count, normalized provider responses, and artifacts.
+Output includes the created run id, current or final state, consulted role, consulted agent, stop reason, provider response count, normalized provider responses, and artifacts. Read-only model-backed guest agents may return `awaiting_approval` before the first provider call; continue only after the user approves invoking that provider.
 
 Output:
 
@@ -287,6 +287,6 @@ Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
 2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Claude as critic or verifier.
-3. Call `thehood_consult` to bring in a guest read-only agent immediately.
+3. Call `thehood_consult` to bring in a guest read-only agent; approve the provider-invocation gate before Claude, Codex, or Pro is actually called.
 4. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
 5. Call `thehood_continue` with approval only after the user authorizes the next runtime transition.
