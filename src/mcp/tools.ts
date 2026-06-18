@@ -13,6 +13,7 @@ import {
   searchRepo
 } from "../runtime/repoGateway.js";
 import { approvalMessageHint } from "../runtime/approvalInbox.js";
+import { reconcileRun } from "../runtime/reconciliation.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
@@ -71,12 +72,26 @@ const artifactReadAction = (
   };
 };
 
+const artifactSummary = (artifact: RunRecord["artifacts"][number]): JsonObject => ({
+  kind: artifact.kind,
+  ref: artifact.ref,
+  summary: artifact.summary
+});
+
 const finalReportActionForRun = (run: RunRecord): JsonObject | undefined => {
   const event = run.events.filter((candidate) => candidate.type === "final_report_written").at(-1);
   const artifactRef = event?.data?.artifactRef;
 
   return typeof artifactRef === "string"
     ? artifactReadAction(run, artifactRef, "Inspect the final report for this completed run.", "inspect_final_report")
+    : undefined;
+};
+
+const progressPacketActionForRun = (run: RunRecord): JsonObject | undefined => {
+  const artifact = run.artifacts.filter((candidate) => candidate.kind === "progress").at(-1);
+
+  return artifact
+    ? artifactReadAction(run, artifact.ref, "Inspect the progress packet for planner reconciliation.", "inspect_progress_packet")
     : undefined;
 };
 
@@ -113,6 +128,11 @@ const approvalArtifactActionsForRun = (run: RunRecord): JsonObject[] => {
 
 const nextActionsForRun = (run: RunRecord): JsonObject[] => {
   if (run.approvalRequired) {
+    const isReconciliationApproval = Boolean(run.approvalReason?.includes("send progress packet"));
+    const continueTool = isReconciliationApproval ? "thehood_reconcile" : "thehood_continue";
+    const continueDescription = isReconciliationApproval
+      ? "After the user explicitly approves this boundary, call thehood_reconcile with approval=approve."
+      : "After the user explicitly approves this boundary, call thehood_continue with approval=approve.";
     return [
       {
         action: "review_approval_reason",
@@ -121,8 +141,8 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
       ...approvalArtifactActionsForRun(run),
       {
         action: "continue_with_approval",
-        description: "After the user explicitly approves this boundary, call thehood_continue with approval=approve.",
-        tool: "thehood_continue",
+        description: continueDescription,
+        tool: continueTool,
         arguments: {
           repo_path: run.repoPath,
           run_id: run.runId,
@@ -139,9 +159,25 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
 
   if (run.state === "completed" || run.state === "failed" || run.state === "aborted") {
     const finalReportAction = run.state === "completed" ? finalReportActionForRun(run) : undefined;
+    const progressAction = run.state === "completed" ? progressPacketActionForRun(run) : undefined;
 
     return [
       ...(finalReportAction ? [finalReportAction] : []),
+      ...(progressAction ? [progressAction] : []),
+      ...(run.state === "completed"
+        ? [
+            {
+              action: "reconcile",
+              description: "Reconcile this completed run against its progress packet.",
+              tool: "thehood_reconcile",
+              arguments: {
+                repo_path: run.repoPath,
+                run_id: run.runId,
+                approval: "none"
+              }
+            }
+          ]
+        : []),
       {
         action: "inspect_artifacts",
         description: "Inspect any relevant artifacts with thehood_read_artifact."
@@ -600,6 +636,72 @@ const createContinueTool = (): McpTool => ({
     })
 });
 
+const createReconcileTool = (): McpTool => ({
+  definition: {
+    name: "thehood_reconcile",
+    title: "Reconcile TheHood Run",
+    description: "Reconcile a completed TheHood run by sending its progress packet to the configured planner or orchestrator after any required approval.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        role: {
+          type: "string",
+          enum: ["planner", "orchestrator"]
+        },
+        approval: {
+          type: "string",
+          enum: ["approve", "reject", "revise", "none"]
+        },
+        message: {
+          type: "string"
+        }
+      },
+      required: ["run_id", "repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const repoPath = requiredString(args, "repo_path");
+      const runId = requiredString(args, "run_id");
+      const approval = optionalString(args, "approval") ?? "none";
+
+      if (!["approve", "reject", "revise", "none"].includes(approval)) {
+        throw new Error("approval must be approve, reject, revise, or none.");
+      }
+
+      if (approval !== "none") {
+        const run = await getRun(repoPath, runId);
+        const message = optionalString(args, "message") ?? approvalMessageHint(run);
+        await recordApproval(repoPath, runId, approval as ApprovalDecision, message);
+      }
+
+      const roleValue = optionalString(args, "role");
+      const result = await reconcileRun({
+        repoPath,
+        runId,
+        ...(roleValue ? { role: parseRole(roleValue) } : {})
+      });
+
+      return {
+        ...runSummary(result.run),
+        reconciled_role: result.role,
+        advanced: result.advanced,
+        stop_reason: result.stopReason,
+        progress_artifact: result.progressArtifact ? artifactSummary(result.progressArtifact) : null,
+        reconciliation_artifact: result.reconciliationArtifact ? artifactSummary(result.reconciliationArtifact) : null,
+        provider_response_count: result.providerResponses.length,
+        provider_responses: agentResponsesSummary(result.providerResponses)
+      };
+    })
+});
+
 const createReadArtifactTool = (): McpTool => ({
   definition: {
     name: "thehood_read_artifact",
@@ -995,6 +1097,7 @@ export const mcpTools: McpTool[] = [
   createOrchestrateTool(),
   createConsultTool(),
   createContinueTool(),
+  createReconcileTool(),
   createStatusTool(),
   createRunsTool(),
   createReadArtifactTool(),

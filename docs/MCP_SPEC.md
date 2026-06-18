@@ -65,6 +65,7 @@ Implemented tools:
 - `thehood_orchestrate`
 - `thehood_consult`
 - `thehood_continue`
+- `thehood_reconcile`
 - `thehood_status`
 - `thehood_runs`
 - `thehood_read_artifact`
@@ -230,7 +231,7 @@ Output:
   "approval_reason": "string",
   "artifacts": [
     {
-      "kind": "plan | diff | log | report | metadata | status | agent | directive | context",
+      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation",
       "ref": "string"
     }
   ]
@@ -248,6 +249,7 @@ Current behavior:
 - returns the final state, stop reason, provider response count, normalized provider responses, and structured `next_actions`
 - approval gates include `thehood_read_artifact` next actions when a specific patch or integration report should be inspected first
 - completed runs include an `inspect_final_report` next action when a final report artifact is available
+- completed runs include a `thehood_reconcile` next action when they can be reconciled from a progress packet
 
 Input:
 
@@ -256,6 +258,29 @@ Input:
   "run_id": "string",
   "approval": "approve | reject | revise | none",
   "message": "string"
+}
+```
+
+### `thehood_reconcile`
+
+Reconcile a completed run from its latest progress packet.
+
+Current behavior:
+
+- finds or creates a `progress` artifact for a completed run
+- pauses for approval before sending progress packets to browser or API providers
+- invokes the configured `planner`, or `orchestrator` when no planner is assigned
+- stores the schema-bound provider response as a `reconciliation` artifact
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string",
+  "role": "optional planner | orchestrator",
+  "approval": "approve | reject | revise | none",
+  "message": "optional approval message"
 }
 ```
 

@@ -48,6 +48,7 @@ It supports:
 - terminal approval inbox for pending runtime gates
 - run status insights for latest provider output and final reports
 - runtime-captured repo context packs when read-only orchestrators request evidence
+- schema-bound planner reconciliation from completed run progress packets
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 - read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
 

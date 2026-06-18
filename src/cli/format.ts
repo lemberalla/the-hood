@@ -1,5 +1,6 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
+import type { ReconcileRunResult } from "../runtime/reconciliation.js";
 import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../runtime/browserManager.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
 import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
@@ -210,6 +211,28 @@ export const formatAdvanceRunResult = (result: AdvanceRunResult): string => [
   "",
   `advanced: ${result.advanced}`,
   `stopReason: ${result.stopReason}`,
+  `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatReconcileRunResult = (result: ReconcileRunResult): string => [
+  formatRunSummary(result.run),
+  "",
+  `reconcileRole: ${result.role}`,
+  `advanced: ${result.advanced}`,
+  `stopReason: ${result.stopReason}`,
+  ...(result.progressArtifact
+    ? [
+        `progress: ${result.progressArtifact.summary}`,
+        `progressArtifact: ${result.progressArtifact.ref}`
+      ]
+    : []),
+  ...(result.reconciliationArtifact
+    ? [
+        `reconciliation: ${result.reconciliationArtifact.summary}`,
+        `reconciliationArtifact: ${result.reconciliationArtifact.ref}`,
+        `inspect: thehood artifact ${result.run.runId} ${quoteArg(result.reconciliationArtifact.ref)} --repo ${quoteArg(result.run.repoPath)}`
+      ]
+    : []),
   `providerResponses: ${result.providerResponses.length}`
 ].join("\n");
 

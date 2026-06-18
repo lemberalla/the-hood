@@ -175,6 +175,8 @@ The planner should answer:
 
 Reconciliation is advisory. The runtime remains responsible for approvals, tool execution, artifact storage, verification gates, and final state.
 
+The current runtime stores `progress` artifacts for completed runs and can reconcile them through the configured planner or orchestrator with `thehood reconcile` or `thehood_reconcile`. Browser and API providers require explicit approval before the progress packet is sent, and successful provider responses are stored as `reconciliation` artifacts.
+
 ## Risks
 
 ### Lossy Memory

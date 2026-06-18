@@ -263,10 +263,12 @@ const roleField = (value: JsonValue | undefined): RuntimeRole | undefined =>
     : undefined;
 
 const providerResponseArtifacts = (run: RunRecord): RunArtifact[] =>
-  run.artifacts.filter((artifact) => artifact.kind === "plan" || artifact.kind === "agent");
+  run.artifacts.filter(
+    (artifact) => artifact.kind === "plan" || artifact.kind === "agent" || artifact.kind === "reconciliation"
+  );
 
 const providerResponseEvents = (run: RunRecord): RunEvent[] =>
-  run.events.filter((event) => event.type === "agent_response");
+  run.events.filter((event) => event.type === "agent_response" || event.type === "reconciliation_response");
 
 const cloneRoleMapping = (roleMapping: RoleMap): RoleMap =>
   Object.fromEntries(

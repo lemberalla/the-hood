@@ -75,6 +75,9 @@ const approvedStateForRun = (run: RunRecord): RunState => {
   return run.mode === "implement" ? "delegating" : "planning";
 };
 
+const isPostCompletionApproval = (run: RunRecord): boolean =>
+  run.state === "completed" && Boolean(run.approvalReason?.includes("progress packet"));
+
 const initialStateForMode = (mode: RunMode): { state: RunState; approvalRequired: boolean; reason?: string } => {
   if (mode === "implement") {
     return {
@@ -165,11 +168,12 @@ export const recordApproval = async (
   const updatedAt = nowIso();
   const { approvalReason: _approvalReason, ...runWithoutApprovalReason } = run;
 
+  const preservesCompletedRun = isPostCompletionApproval(run);
   const state: RunState =
     decision === "reject"
-      ? "aborted"
+      ? preservesCompletedRun ? "completed" : "aborted"
       : decision === "revise"
-        ? "awaiting_approval"
+        ? preservesCompletedRun ? "completed" : "awaiting_approval"
         : approvedStateForRun(run);
 
   const base: RunRecord = {
@@ -187,7 +191,9 @@ export const recordApproval = async (
     decision === "revise"
       ? {
           ...base,
-          approvalReason: "Revision requested before continuing."
+          approvalReason: preservesCompletedRun
+            ? "Revision requested before reconciliation."
+            : "Revision requested before continuing."
         }
       : base;
 

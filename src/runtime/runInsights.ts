@@ -30,7 +30,7 @@ export interface RunInsights {
   issues: string[];
 }
 
-const agentResponseKinds = new Set<RunArtifact["kind"]>(["plan", "agent"]);
+const agentResponseKinds = new Set<RunArtifact["kind"]>(["plan", "agent", "reconciliation"]);
 const primaryOutputKeys = [
   "decision",
   "verificationResult",

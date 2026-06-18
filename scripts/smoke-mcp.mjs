@@ -148,6 +148,10 @@ assert.ok(
   "tools/list should expose thehood_consult"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_reconcile"),
+  "tools/list should expose thehood_reconcile"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_doctor"),
   "tools/list should expose thehood_doctor"
 );
@@ -184,6 +188,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patc
 assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("progress_packet_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("planner_reconciliation"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
@@ -200,6 +206,73 @@ assert.deepEqual(stubProvider.accessModes, ["agent-bridge"]);
 const chatGptProvider = doctorContent.providers.find((provider) => provider.id === "chatgpt-web");
 assert.ok(chatGptProvider.accessModes.includes("agent-bridge"));
 assert.ok(chatGptProvider.accessModes.includes("mcp-connector"));
+
+const reconciliationSeedPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_consult",
+      arguments: {
+        goal: "create a completed run for reconciliation smoke",
+        repo_path: repoPath,
+        role: "orchestrator",
+        agent: "stub:orchestrator"
+      }
+    }
+  }
+]);
+const reconciliationSeed = reconciliationSeedPath[1].result.structuredContent;
+assert.equal(reconciliationSeed.status, "completed");
+assert.ok(
+  reconciliationSeed.artifacts.some((artifact) => artifact.kind === "progress"),
+  "completed MCP consult should expose a progress packet artifact"
+);
+assert.ok(
+  reconciliationSeed.next_actions.some((action) => action.tool === "thehood_reconcile"),
+  "completed MCP consult should suggest reconciliation"
+);
+const reconciliationPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_reconcile",
+      arguments: {
+        run_id: reconciliationSeed.run_id,
+        repo_path: repoPath
+      }
+    }
+  }
+]);
+const reconciliationResult = reconciliationPath[1].result.structuredContent;
+assert.equal(reconciliationResult.status, "completed");
+assert.equal(reconciliationResult.reconciled_role, "orchestrator");
+assert.equal(reconciliationResult.provider_response_count, 1);
+assert.equal(reconciliationResult.reconciliation_artifact.kind, "reconciliation");
+const reconciliationStatusPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_status",
+      arguments: {
+        run_id: reconciliationSeed.run_id,
+        repo_path: repoPath
+      }
+    }
+  }
+]);
+assert.equal(
+  reconciliationStatusPath[1].result.structuredContent.insights.latestAgentResponse.artifact.kind,
+  "reconciliation"
+);
 
 const repoTreePath = await runMcp([
   ...baseMessages,

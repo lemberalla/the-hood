@@ -419,12 +419,29 @@ assert.equal(repoContextStatus.insights.latestAgentResponse.status, "ok");
 assert.equal(repoContextStatus.insights.latestAgentResponse.decision.action, "complete");
 assert.equal(repoContextStatus.insights.latestAgentResponse.primaryOutputKey, "decision");
 assert.equal(repoContextStatus.insights.finalReport.artifact.ref, repoContextFinalReportArtifact.ref);
-const repoContextStatusText = await runCli(["status", repoContextPlan.runId, "--repo", repoPath]);
-assert.ok(repoContextStatusText.stdout.includes("latest agent response:"));
-assert.ok(repoContextStatusText.stdout.includes("action: complete"));
-assert.ok(repoContextStatusText.stdout.includes("final report:"));
+  const repoContextStatusText = await runCli(["status", repoContextPlan.runId, "--repo", repoPath]);
+  assert.ok(repoContextStatusText.stdout.includes("latest agent response:"));
+  assert.ok(repoContextStatusText.stdout.includes("action: complete"));
+  assert.ok(repoContextStatusText.stdout.includes("final report:"));
+  const repoContextProgressArtifact = repoContextContinue.run.artifacts.find(
+    (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
+  );
+  assert.ok(repoContextProgressArtifact, "completed read-only run should attach a progress packet");
+  const repoContextReconcile = JSON.parse(
+    (await runCli(["reconcile", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+  );
+  assert.equal(repoContextReconcile.run.state, "completed");
+  assert.equal(repoContextReconcile.role, "orchestrator");
+  assert.equal(repoContextReconcile.providerResponses.length, 1);
+  assert.equal(repoContextReconcile.providerResponses[0].status, "ok");
+  assert.equal(repoContextReconcile.progressArtifact.ref, repoContextProgressArtifact.ref);
+  assert.equal(repoContextReconcile.reconciliationArtifact.kind, "reconciliation");
+  const repoContextReconciledStatus = JSON.parse(
+    (await runCli(["status", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+  );
+  assert.equal(repoContextReconciledStatus.insights.latestAgentResponse.artifact.kind, "reconciliation");
 
-const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
+  const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
 const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");
 await fs.writeFile(
   fakeExternalBridgePath,

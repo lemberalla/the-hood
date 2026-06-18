@@ -28,6 +28,7 @@ thehood approve <run-id>
 thehood reject <run-id>
 thehood revise <run-id>
 thehood continue <run-id>
+thehood reconcile <run-id>
 thehood abort <run-id>
 thehood mcp
 thehood mcp config
@@ -205,6 +206,8 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 `thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.
 
 `thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, and verifier phases without external model calls.
+
+`thehood reconcile <run-id>` reconciles a completed run by sending its latest `progress` artifact to the configured `planner`, or to the `orchestrator` when no planner is assigned. Browser and API providers such as `chatgpt-web`, `openai-api`, and `anthropic-api` pause at an approval gate before the progress packet is sent. After approval, the provider response is stored as a `reconciliation` artifact.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads, then calls the same role again with that context attached.
 

@@ -9,6 +9,7 @@ import { advanceRun } from "../runtime/loop.js";
 import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { listProviders } from "../runtime/providers.js";
+import { reconcileRun } from "../runtime/reconciliation.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import {
@@ -40,6 +41,7 @@ import {
   formatMcpConfigReport,
   formatMcpTunnelConfigReport,
   formatProviders,
+  formatReconcileRunResult,
   formatRoles,
   formatRunEvents,
   formatRunList,
@@ -71,6 +73,7 @@ Usage:
   thehood reject <run-id> [--repo <path>] [--reason <text>]
   thehood revise <run-id> [--repo <path>] [--reason <text>]
   thehood continue <run-id> [--repo <path>] [--json]
+  thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
@@ -412,6 +415,21 @@ const handleContinue = async (
   shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatAdvanceRunResult(result)}\n`);
 };
 
+const handleReconcile = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const roleValue = getStringOption(options, "role");
+  const role = roleValue ? parseRole(roleValue) : undefined;
+  const result = await reconcileRun({
+    repoPath: repoFromOptions(options),
+    runId: ensureRunId(args[0]),
+    ...(role ? { role } : {})
+  });
+
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatReconcileRunResult(result)}\n`);
+};
+
 const handleAbort = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -596,6 +614,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "continue":
       await handleContinue(args, parsed.options);
+      return;
+    case "reconcile":
+      await handleReconcile(args, parsed.options);
       return;
     case "abort":
       await handleAbort(args, parsed.options);

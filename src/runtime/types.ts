@@ -79,7 +79,8 @@ export type RunArtifactKind =
   | "agent"
   | "directive"
   | "context"
-  | "progress";
+  | "progress"
+  | "reconciliation";
 
 export interface RunArtifact {
   kind: RunArtifactKind;

@@ -1,15 +1,13 @@
 import fs from "node:fs/promises";
+import { requiredAssignment, runAgent } from "./agentRunner.js";
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
 import { loadConfig } from "./config.js";
-import { buildAgentDirective } from "./directives.js";
 import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
 import { captureRepoContext, latestRepoContextArtifact, readLatestRepoContext } from "./repoContext.js";
-import { getProviderAdapter } from "../providers/router.js";
-import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
@@ -69,91 +67,6 @@ const updateRun = async (
 
   await saveRun(next);
   return next;
-};
-
-const requiredAssignment = (run: RunRecord, role: RuntimeRole): RoleAssignment => {
-  const assignment = run.roleMapping[role];
-
-  if (!assignment) {
-    throw new Error(`Run ${run.runId} does not have a ${role} role assignment.`);
-  }
-
-  return assignment;
-};
-
-const runAgent = async (
-  run: RunRecord,
-  role: RuntimeRole,
-  context: JsonObject
-): Promise<{ run: RunRecord; response: AgentResponse }> => {
-  const assignment = requiredAssignment(run, role);
-  const adapter = getProviderAdapter(assignment);
-  const callId = newId("response");
-  const directive = await buildAgentDirective(run, role, assignment, context);
-  const directiveArtifact = await writeRunArtifact({
-    repoPath: run.repoPath,
-    runId: run.runId,
-    kind: "directive",
-    name: `${role}-${callId}-directive.json`,
-    content: `${JSON.stringify(directive, null, 2)}\n`,
-    summary: `${role} directive for ${assignment.provider}:${assignment.model}`
-  });
-  const runWithDirective: RunRecord = {
-    ...run,
-    updatedAt: nowIso(),
-    artifacts: [...run.artifacts, directiveArtifact],
-    events: [
-      ...run.events,
-      createEvent("agent_directive_created", `${role} directive created.`, {
-        role,
-        provider: assignment.provider,
-        model: assignment.model,
-        outputContract: directive.outputContract.name
-      })
-    ]
-  };
-
-  await saveRun(runWithDirective);
-
-  const response = await adapter.runAgent({
-    run: runWithDirective,
-    role,
-    assignment,
-    context,
-    directive
-  });
-  validateAgentResponse(role, directive, response);
-
-  const artifact = await writeRunArtifact({
-    repoPath: runWithDirective.repoPath,
-    runId: runWithDirective.runId,
-    kind: role === "orchestrator" || role === "planner" ? "plan" : "agent",
-    name: `${role}-${callId}-response.json`,
-    content: `${JSON.stringify(response, null, 2)}\n`,
-    summary: `${role} response: ${response.summary}`
-  });
-  const latestRun = await loadRun(runWithDirective.repoPath, runWithDirective.runId);
-  const updated: RunRecord = {
-    ...latestRun,
-    updatedAt: nowIso(),
-    artifacts: [...latestRun.artifacts, artifact],
-    events: [
-      ...latestRun.events,
-      createEvent("agent_response", `${role} responded: ${response.summary}`, {
-        role,
-        provider: assignment.provider,
-        model: assignment.model,
-        status: response.status
-      })
-    ]
-  };
-
-  await saveRun(updated);
-
-  return {
-    run: updated,
-    response
-  };
 };
 
 const terminalStates = new Set<RunState>(["completed", "failed", "aborted"]);
