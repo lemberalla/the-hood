@@ -73,6 +73,8 @@ After restart, the TheHood server should expose these tools:
 - `thehood_capture_evidence`
 - `thehood_abort`
 
+When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
+
 First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
