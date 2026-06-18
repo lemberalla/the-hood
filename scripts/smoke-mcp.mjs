@@ -168,6 +168,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patc
 assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);
@@ -224,6 +225,11 @@ const consultFinalReportArtifact = consultPath[1].result.structuredContent.artif
   (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
 );
 assert.ok(consultFinalReportArtifact, "consult should expose final report artifact");
+const consultFinalReportAction = consultPath[1].result.structuredContent.next_actions.find(
+  (action) => action.action === "inspect_final_report"
+);
+assert.equal(consultFinalReportAction.tool, "thehood_read_artifact");
+assert.equal(consultFinalReportAction.arguments.ref, consultFinalReportArtifact.ref);
 
 const consultAgentArtifact = consultPath[1].result.structuredContent.artifacts.find(
   (artifact) => artifact.kind === "agent"
@@ -644,6 +650,11 @@ const isolatedFinalReportArtifact = isolatedResult.artifacts.find(
   (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
 );
 assert.ok(isolatedFinalReportArtifact, "isolated patch completion should attach a final report");
+const isolatedFinalReportAction = isolatedResult.next_actions.find(
+  (action) => action.action === "inspect_final_report"
+);
+assert.equal(isolatedFinalReportAction.tool, "thehood_read_artifact");
+assert.equal(isolatedFinalReportAction.arguments.ref, isolatedFinalReportArtifact.ref);
 
 const isolatedIntegrationReportRead = await runMcp([
   ...baseMessages,

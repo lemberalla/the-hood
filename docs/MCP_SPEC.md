@@ -218,6 +218,7 @@ Current behavior:
 - advances the runtime loop until completion or the next gate
 - returns the final state, stop reason, provider response count, normalized provider responses, and structured `next_actions`
 - approval gates include `thehood_read_artifact` next actions when a specific patch or integration report should be inspected first
+- completed runs include an `inspect_final_report` next action when a final report artifact is available
 
 Input:
 

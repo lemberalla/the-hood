@@ -7,7 +7,8 @@ export const runtimeCapabilities = [
   "chatgpt_web_bridge",
   "cli_artifact_reads",
   "approval_phrase_enforcement",
-  "final_report_artifacts"
+  "final_report_artifacts",
+  "mcp_final_report_next_action"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];

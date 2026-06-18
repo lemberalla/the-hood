@@ -108,6 +108,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
+assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);

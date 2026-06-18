@@ -47,7 +47,12 @@ const approvalMessageHint = (run: RunRecord): string => {
   return `I approve the next TheHood transition for run ${run.runId}.`;
 };
 
-const artifactReadAction = (run: RunRecord, artifactRef: string, description: string): JsonObject | undefined => {
+const artifactReadAction = (
+  run: RunRecord,
+  artifactRef: string,
+  description: string,
+  action = "inspect_artifact"
+): JsonObject | undefined => {
   const artifact = run.artifacts.find((candidate) => candidate.ref === artifactRef);
 
   if (!artifact) {
@@ -55,7 +60,7 @@ const artifactReadAction = (run: RunRecord, artifactRef: string, description: st
   }
 
   return {
-    action: "inspect_artifact",
+    action,
     description,
     tool: "thehood_read_artifact",
     arguments: {
@@ -70,6 +75,15 @@ const artifactReadAction = (run: RunRecord, artifactRef: string, description: st
       summary: artifact.summary
     }
   };
+};
+
+const finalReportActionForRun = (run: RunRecord): JsonObject | undefined => {
+  const event = run.events.filter((candidate) => candidate.type === "final_report_written").at(-1);
+  const artifactRef = event?.data?.artifactRef;
+
+  return typeof artifactRef === "string"
+    ? artifactReadAction(run, artifactRef, "Inspect the final report for this completed run.", "inspect_final_report")
+    : undefined;
 };
 
 const approvalArtifactActionsForRun = (run: RunRecord): JsonObject[] => {
@@ -130,7 +144,10 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
   }
 
   if (run.state === "completed" || run.state === "failed" || run.state === "aborted") {
+    const finalReportAction = run.state === "completed" ? finalReportActionForRun(run) : undefined;
+
     return [
+      ...(finalReportAction ? [finalReportAction] : []),
       {
         action: "inspect_artifacts",
         description: "Inspect any relevant artifacts with thehood_read_artifact."
