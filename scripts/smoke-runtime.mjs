@@ -462,22 +462,23 @@ await fs.writeFile(
     "  const isTruncatedContextSmoke = input.includes('truncated-follow-up-context-smoke');",
     "  const hasTargetedEvidence = input.includes('Targeted follow-up context marker');",
     "  const hasFinalTargetedEvidence = input.includes('Targeted follow-up context marker 7');",
+    "  const hasTruncatedInitial = input.includes('Truncated initial context marker');",
     "  const hasTruncatedContinuation = input.includes('Truncated continuation context marker');",
     "  const targetFiles = Array.from({ length: 8 }, (_, index) => `notes/targeted-evidence-${index}.md`);",
     "  const truncatedTargetFile = 'notes/truncated-context.md';",
     "  if (logPath) {",
-    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
+    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTruncatedInitial && hasTruncatedContinuation ? 'truncated-combined-context\\n' : hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTruncatedContinuation ? 'fake ChatGPT received truncated continuation repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTruncatedInitial && hasTruncatedContinuation ? 'fake ChatGPT received combined truncated repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
     "      decision: hasProgressPacket ? {",
     "        action: 'complete',",
     "        reason: 'Approved progress packet was reconciled.'",
-    "      } : hasTruncatedContinuation ? {",
+    "      } : hasTruncatedInitial && hasTruncatedContinuation ? {",
     "        action: 'complete',",
-    "        reason: 'Continuation repo context was enough for a plan.'",
+    "        reason: 'Combined continuation repo context was enough for a plan.'",
     "      } : hasFinalTargetedEvidence ? {",
     "        action: 'complete',",
     "        reason: 'Targeted repo context was enough for a plan.'",
@@ -854,7 +855,7 @@ assert.ok(
 );
 await fs.writeFile(
   path.join(repoPath, "notes", "truncated-context.md"),
-  `# Truncated Context\n\n${"large requested context line\n".repeat(900)}\nTruncated continuation context marker.\n`,
+  `# Truncated Context\n\nTruncated initial context marker.\n${"large requested context line\n".repeat(900)}\nTruncated continuation context marker.\n`,
   "utf8"
 );
 await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
@@ -903,7 +904,7 @@ assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().s
   "no-context",
   "context",
   "context",
-  "truncated-continuation-context"
+  "truncated-combined-context"
 ]);
 const truncatedContextArtifacts = truncatedContextCompleted.run.artifacts.filter(
   (artifact) => artifact.kind === "context"
@@ -920,6 +921,7 @@ assert.equal(truncatedFileExcerpts[0].endByte, truncatedContextPacks.at(-1).limi
 assert.equal(truncatedFileExcerpts[0].truncated, true);
 assert.ok(truncatedFileExcerpts[1].startByte > 0);
 assert.ok(truncatedFileExcerpts[1].excerpt.includes("Truncated continuation context marker"));
+assert.ok(!truncatedFileExcerpts[1].excerpt.includes("Truncated initial context marker"));
 assert.equal(truncatedFileExcerpts[1].truncated, false);
 assert.ok(
   truncatedContextCompleted.run.events.some(

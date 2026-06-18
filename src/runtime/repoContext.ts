@@ -35,6 +35,7 @@ export interface RepoContextPack {
   omittedTreePathCount: number;
   files: RepoContextFile[];
   notes: string[];
+  sourceArtifacts?: RunArtifact[];
 }
 
 export interface CaptureRepoContextResult {
@@ -311,7 +312,7 @@ const boundedFileExcerpts = async (
 const normalizeDelegate = (delegate: JsonValue | undefined): JsonObject =>
   delegate && typeof delegate === "object" && !Array.isArray(delegate) ? delegate : {};
 
-const contextArtifacts = (run: RunRecord): RunArtifact[] =>
+export const repoContextArtifacts = (run: RunRecord): RunArtifact[] =>
   run.artifacts.filter((artifact) => artifact.kind === "context");
 
 const readRepoContextArtifact = async (artifact: RunArtifact): Promise<RepoContextPack> => {
@@ -338,7 +339,7 @@ const contextFileEndByte = (file: RepoContextFile): number => {
 const previouslyCapturedPathStates = async (run: RunRecord): Promise<Map<string, CapturedPathState>> => {
   const states = new Map<string, CapturedPathState>();
 
-  for (const artifact of contextArtifacts(run)) {
+  for (const artifact of repoContextArtifacts(run)) {
     const context = await readRepoContextArtifact(artifact);
     for (const file of context.files) {
       const endByte = contextFileEndByte(file);
@@ -468,7 +469,7 @@ export const captureRepoContext = async (
 };
 
 export const latestRepoContextArtifact = (run: RunRecord): RunArtifact | undefined =>
-  contextArtifacts(run).at(-1);
+  repoContextArtifacts(run).at(-1);
 
 export const readLatestRepoContext = async (run: RunRecord): Promise<RepoContextPack | undefined> => {
   const artifact = latestRepoContextArtifact(run);
@@ -478,4 +479,84 @@ export const readLatestRepoContext = async (run: RunRecord): Promise<RepoContext
   }
 
   return readRepoContextArtifact(artifact);
+};
+
+const combineContextFiles = (files: RepoContextFile[]): RepoContextFile => {
+  const sorted = [...files].sort((left, right) =>
+    contextFileStartByte(left) - contextFileStartByte(right) ||
+    contextFileEndByte(left) - contextFileEndByte(right)
+  );
+  const first = sorted[0];
+  if (!first) {
+    throw new Error("Cannot combine empty repo context file group.");
+  }
+  let cursor = 0;
+  let endByte = 0;
+  let hasGap = false;
+  const excerpts: string[] = [];
+
+  for (const file of sorted) {
+    const startByte = contextFileStartByte(file);
+    const fileEndByte = contextFileEndByte(file);
+
+    if (fileEndByte <= cursor) {
+      continue;
+    }
+
+    if (startByte > cursor) {
+      hasGap = true;
+      excerpts.push(`\n...[missing bytes ${cursor}-${startByte}]...\n`);
+    }
+
+    excerpts.push(file.excerpt);
+    cursor = Math.max(cursor, fileEndByte);
+    endByte = Math.max(endByte, fileEndByte);
+  }
+
+  return {
+    path: first.path,
+    bytes: first.bytes,
+    maxBytes: sorted.reduce((total, file) => total + file.maxBytes, 0),
+    startByte: 0,
+    endByte,
+    truncated: hasGap || endByte < first.bytes,
+    excerpt: excerpts.join("")
+  };
+};
+
+export const readCombinedRepoContext = async (run: RunRecord): Promise<RepoContextPack | undefined> => {
+  const artifacts = repoContextArtifacts(run);
+
+  if (artifacts.length === 0) {
+    return undefined;
+  }
+
+  const contexts = await Promise.all(artifacts.map(readRepoContextArtifact));
+  const latest = contexts.at(-1);
+
+  if (!latest) {
+    return undefined;
+  }
+
+  const filesByPath = new Map<string, RepoContextFile[]>();
+  for (const context of contexts) {
+    for (const file of context.files) {
+      filesByPath.set(file.path, [...(filesByPath.get(file.path) ?? []), file]);
+    }
+  }
+
+  return {
+    ...latest,
+    generatedAt: nowIso(),
+    delegate: latest.delegate,
+    tree: latest.tree,
+    omittedTreePathCount: latest.omittedTreePathCount,
+    files: Array.from(filesByPath.values()).map(combineContextFiles),
+    notes: [
+      ...latest.notes,
+      "This provider context was assembled from every repo_context artifact in the run.",
+      "Files split across multiple truncated context packs are rehydrated into one ordered excerpt per path."
+    ],
+    sourceArtifacts: artifacts
+  };
 };

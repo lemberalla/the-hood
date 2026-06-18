@@ -16,7 +16,8 @@ import {
   analyzeRepoContextRequest,
   captureRepoContext,
   latestRepoContextArtifact,
-  readLatestRepoContext
+  readCombinedRepoContext,
+  repoContextArtifacts
 } from "./repoContext.js";
 import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
@@ -762,8 +763,9 @@ const readOnlyRoleForMode = (run: RunRecord): RuntimeRole => {
 };
 
 const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
-  const repoContext = await readLatestRepoContext(run);
+  const repoContext = await readCombinedRepoContext(run);
   const contextArtifact = latestRepoContextArtifact(run);
+  const contextArtifacts = repoContextArtifacts(run);
 
   return {
     phase: run.mode,
@@ -775,6 +777,15 @@ const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
             ref: contextArtifact.ref,
             summary: contextArtifact.summary
           }
+        }
+      : {}),
+    ...(contextArtifacts.length > 0
+      ? {
+          repoContextArtifacts: contextArtifacts.map((artifact) => ({
+            kind: artifact.kind,
+            ref: artifact.ref,
+            summary: artifact.summary
+          }))
         }
       : {})
   };
