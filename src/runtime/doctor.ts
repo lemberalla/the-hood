@@ -5,13 +5,15 @@ import { inspectBrowser } from "./browserManager.js";
 import { listProviders } from "./providers.js";
 import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
 import type { ProviderDescriptor } from "./providers.js";
-import type { RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
+import type { ProviderAccessMode, RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
 
 export interface ProviderHealth {
   id: string;
   enabled: boolean;
   implemented: boolean;
   models: string[];
+  accessModes: ProviderAccessMode[];
+  defaultAccessMode: ProviderAccessMode;
   command?: string;
   commandFound?: boolean;
   issues: string[];
@@ -182,6 +184,8 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       enabled: provider.enabled,
       implemented,
       models: provider.models,
+      accessModes: provider.accessModes,
+      defaultAccessMode: provider.defaultAccessMode,
       ...(command ? { command } : {}),
       ...(commandFound === undefined ? {} : { commandFound }),
       issues: providerIssues(provider, implemented, providerSpecificIssues, command, commandFound)

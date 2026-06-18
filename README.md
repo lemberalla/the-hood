@@ -41,12 +41,21 @@ It supports:
 - schema-bound agent directives and response validation before runtime state advances
 - guarded local CLI adapters for Codex CLI and Claude Code
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
+- provider access-mode metadata for agent bridges, API agents, and MCP connectors
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
 - branded terminal dashboard shell for runtime, role, and browser readiness
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
+- read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
 
 ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.
+
+Users can choose between two ChatGPT Pro paths:
+
+- `agent-bridge`: TheHood invokes the ChatGPT Web bridge as an orchestrator or planner.
+- `mcp-connector`: ChatGPT connects to TheHood as an MCP connector and uses TheHood's repo/run tools directly.
+
+Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
 
 ## Quick Start
 
@@ -81,6 +90,9 @@ Local runtime
 
 Provider adapters
   connect to ChatGPT Pro, OpenAI API, Anthropic API, Codex, Claude Code, and local models
+
+MCP connector mode
+  lets ChatGPT, Codex, or another MCP host call TheHood's runtime and repo tools
 
 Agents
   orchestrator, planner, researcher, implementer, verifier, critic, integrator

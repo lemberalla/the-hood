@@ -12,7 +12,10 @@ export const runtimeCapabilities = [
   "mcp_final_report_next_action",
   "max_iteration_enforcement",
   "validation_command_capture",
-  "branded_tui_shell"
+  "branded_tui_shell",
+  "provider_access_modes",
+  "mcp_repo_gateway_tools",
+  "chatgpt_mcp_connector_mode"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];

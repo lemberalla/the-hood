@@ -22,7 +22,7 @@ export const formatProviders = (providers: ProviderDescriptor[]): string =>
   providers
     .map((provider) => {
       const state = provider.enabled ? "enabled" : "disabled";
-      return `${provider.id} (${state}): ${provider.models.join(", ")}`;
+      return `${provider.id} (${state}, ${provider.defaultAccessMode}): ${provider.models.join(", ")} [${provider.accessModes.join(", ")}]`;
     })
     .join("\n");
 
@@ -34,7 +34,7 @@ export const formatDoctorReport = (report: RuntimeHealthReport): string => [
   ...report.providers.map((provider) => {
     const state = provider.issues.length > 0 ? provider.issues.join(", ") : "ready";
     const command = provider.command ? ` command=${provider.command}` : "";
-    return `  ${provider.id}: ${state}${command}`;
+    return `  ${provider.id}: ${state} modes=${provider.accessModes.join(", ")} default=${provider.defaultAccessMode}${command}`;
   }),
   "",
   "roles:",

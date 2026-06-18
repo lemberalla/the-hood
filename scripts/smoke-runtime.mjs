@@ -113,9 +113,16 @@ assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
+assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
+assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
+assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
+assert.deepEqual(stubHealth.accessModes, ["agent-bridge"]);
+const chatGptHealth = doctorResult.providers.find((provider) => provider.id === "chatgpt-web");
+assert.ok(chatGptHealth.accessModes.includes("agent-bridge"));
+assert.ok(chatGptHealth.accessModes.includes("mcp-connector"));
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
 assert.equal(defaultOrchestratorHealth.providerImplemented, true);
 assert.ok(defaultOrchestratorHealth.issues.includes("bridge_command_not_configured"));

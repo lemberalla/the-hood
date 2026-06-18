@@ -46,6 +46,7 @@ export interface ToolDefinition {
   title: string;
   description: string;
   inputSchema: JsonObject;
+  annotations?: JsonObject;
 }
 
 export const createSuccess = (id: JsonRpcId, result: JsonValue): JsonRpcSuccessResponse => ({
@@ -90,4 +91,3 @@ export const errorToolResult = (error: unknown): ToolResult => {
     true
   );
 };
-

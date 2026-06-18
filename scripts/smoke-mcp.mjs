@@ -86,6 +86,14 @@ const runMcp = async (messages) => {
 };
 
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-smoke-"));
+await runRawCommand("git", ["init"], repoPath);
+await fs.writeFile(path.join(repoPath, "README.md"), "# MCP Smoke Repo\n\nProvider access modes are connector-ready.\n", "utf8");
+await fs.mkdir(path.join(repoPath, "src"), { recursive: true });
+await fs.writeFile(
+  path.join(repoPath, "src", "gateway.ts"),
+  "export const connectorMode = 'mcp-connector';\n",
+  "utf8"
+);
 await runCommand(["init", "--repo", repoPath]);
 
 const baseMessages = [
@@ -143,6 +151,14 @@ assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_doctor"),
   "tools/list should expose thehood_doctor"
 );
+assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_repo_read_file"),
+  "tools/list should expose thehood_repo_read_file"
+);
+assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_repo_search"),
+  "tools/list should expose thehood_repo_search"
+);
 assert.equal(happyPath[2].result.structuredContent.status, "created");
 assert.equal(happyPath[2].result.structuredContent.mode, "plan");
 
@@ -173,9 +189,112 @@ assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
+assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
+assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
+assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);
+assert.deepEqual(stubProvider.accessModes, ["agent-bridge"]);
+const chatGptProvider = doctorContent.providers.find((provider) => provider.id === "chatgpt-web");
+assert.ok(chatGptProvider.accessModes.includes("agent-bridge"));
+assert.ok(chatGptProvider.accessModes.includes("mcp-connector"));
+
+const repoTreePath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_repo_tree",
+      arguments: {
+        repo_path: repoPath,
+        max_depth: 3
+      }
+    }
+  }
+]);
+assert.ok(
+  repoTreePath[1].result.structuredContent.entries.some((entry) => entry.path === "README.md"),
+  "repo tree should include README.md"
+);
+assert.ok(
+  repoTreePath[1].result.structuredContent.entries.every((entry) => !entry.path.startsWith(".thehood")),
+  "repo tree should hide .thehood runtime state"
+);
+
+const repoReadPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_repo_read_file",
+      arguments: {
+        repo_path: repoPath,
+        path: "README.md",
+        max_bytes: 1000
+      }
+    }
+  }
+]);
+assert.equal(repoReadPath[1].result.structuredContent.path, "README.md");
+assert.ok(repoReadPath[1].result.structuredContent.content.includes("Provider access modes"));
+
+const repoSearchPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_repo_search",
+      arguments: {
+        repo_path: repoPath,
+        query: "mcp-connector",
+        globs: ["src/**/*.ts"]
+      }
+    }
+  }
+]);
+assert.equal(repoSearchPath[1].result.structuredContent.matches[0].path, "src/gateway.ts");
+assert.equal(repoSearchPath[1].result.structuredContent.matches[0].line, 1);
+
+const repoStatusPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_git_status",
+      arguments: {
+        repo_path: repoPath
+      }
+    }
+  }
+]);
+assert.equal(repoStatusPath[1].result.structuredContent.exitCode, 0);
+assert.ok(repoStatusPath[1].result.structuredContent.stdout.includes("README.md"));
+
+const repoDiffPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_git_diff",
+      arguments: {
+        repo_path: repoPath,
+        max_bytes: 4000
+      }
+    }
+  }
+]);
+assert.equal(repoDiffPath[1].result.structuredContent.exitCode, 0);
 
 const assignRolesPath = await runMcp([
   ...baseMessages,

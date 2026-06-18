@@ -4,6 +4,20 @@ Provider adapters connect role contracts to concrete model or agent systems.
 
 Adapters translate TheHood's structured role requests into provider-specific calls, then normalize the result back into TheHood schemas.
 
+## Provider Access Modes
+
+TheHood tracks provider access modes so users can choose the transport that fits their workflow:
+
+| Mode | Owner of model call | Best for |
+| --- | --- | --- |
+| `agent-bridge` | TheHood | Codex-first loops, local CLI agents, ChatGPT Web/CDP bridge orchestration |
+| `api-agent` | TheHood | API models with structured tool calls and traceable runtime mediation |
+| `mcp-connector` | External MCP host | ChatGPT Developer Mode or another MCP client inspecting a local repo through TheHood |
+
+Access mode is not an authority boundary. The runtime still owns repo access, permissions, approvals, artifacts, patch integration, and verification gates.
+
+`chatgpt-web` supports both `agent-bridge` and `mcp-connector` paths. The agent bridge sends a runtime directive to the ChatGPT Web bridge. MCP connector mode lets ChatGPT call TheHood tools such as repo search, file read, run status, and artifact read through a connector or Secure MCP Tunnel.
+
 ## Adapter Interface
 
 Each adapter should support:
@@ -133,6 +147,33 @@ Risk:
 - Browser UI changes can break automation.
 - Output extraction can be brittle.
 - Terms and product behavior may change.
+
+## ChatGPT MCP Connector Mode
+
+Purpose:
+
+- Let ChatGPT Pro inspect a local repo through TheHood without pre-sending a repo context pack.
+- Use ChatGPT Developer Mode or Secure MCP Tunnel to connect ChatGPT to TheHood's MCP server.
+
+Current implementation:
+
+- Provider access mode: `mcp-connector`
+- Transport target: `thehood mcp`
+- Repo gateway tools:
+  - `thehood_repo_tree`
+  - `thehood_repo_search`
+  - `thehood_repo_read_file`
+  - `thehood_git_status`
+  - `thehood_git_diff`
+- Run gateway tools include existing status, artifact, approval, continue, and orchestration tools.
+
+Rules:
+
+- Treat ChatGPT as an MCP host, not as runtime authority.
+- Expose read-only repo tools first.
+- Keep edit and approval actions mediated by TheHood runtime gates.
+- Do not expose `.git`, `.thehood`, dependency/build output, or secret-looking paths through repo gateway tools.
+- Prefer Secure MCP Tunnel for private local repos so the MCP server does not need a public inbound endpoint.
 
 ## OpenAI API Adapter
 

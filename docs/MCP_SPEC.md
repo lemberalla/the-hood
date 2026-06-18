@@ -1,6 +1,6 @@
 # MCP Spec
 
-The MCP server exposes TheHood to Codex and other MCP clients.
+The MCP server exposes TheHood to Codex, ChatGPT Developer Mode, and other MCP clients.
 
 Codex should use MCP as the doorway into the runtime. MCP tools should not implement orchestration logic themselves.
 
@@ -11,6 +11,21 @@ thehood mcp
 ```
 
 The current implementation uses the MCP stdio transport: newline-delimited JSON-RPC messages over stdin/stdout. It implements initialization, `tools/list`, `tools/call`, and `ping`.
+
+For ChatGPT Web, use ChatGPT Developer Mode with an MCP connector. For private local repos, prefer OpenAI Secure MCP Tunnel pointing at the stdio command:
+
+```bash
+tunnel-client init \
+  --sample sample_mcp_stdio_local \
+  --profile thehood-local \
+  --tunnel-id <tunnel-id> \
+  --mcp-command "thehood mcp"
+
+tunnel-client doctor --profile thehood-local --explain
+tunnel-client run --profile thehood-local
+```
+
+Then create a ChatGPT connector using the tunnel connection and enable it in a new conversation. In that mode, ChatGPT can call TheHood's exact repo and run tools instead of receiving a prebuilt summary.
 
 References:
 
@@ -45,6 +60,11 @@ Implemented tools:
 - `thehood_runs`
 - `thehood_read_artifact`
 - `thehood_capture_evidence`
+- `thehood_repo_tree`
+- `thehood_repo_search`
+- `thehood_repo_read_file`
+- `thehood_git_status`
+- `thehood_git_diff`
 - `thehood_abort`
 
 ### `thehood_doctor`
@@ -266,6 +286,62 @@ Input:
   "run_id": "string",
   "repo_path": "string",
   "ref": "string",
+  "max_bytes": 20000
+}
+```
+
+### Repo Gateway Tools
+
+The repo gateway tools are read-only and bounded. They skip `.git`, `.thehood`, dependency/build output, and secret-looking paths.
+
+`thehood_repo_tree`:
+
+```json
+{
+  "repo_path": "string",
+  "path": "optional relative directory",
+  "max_depth": 4,
+  "max_entries": 200
+}
+```
+
+`thehood_repo_search`:
+
+```json
+{
+  "repo_path": "string",
+  "query": "string",
+  "globs": ["src/**/*.ts"],
+  "max_results": 50,
+  "case_sensitive": true
+}
+```
+
+`thehood_repo_read_file`:
+
+```json
+{
+  "repo_path": "string",
+  "path": "relative file path",
+  "offset": 0,
+  "max_bytes": 20000
+}
+```
+
+`thehood_git_status`:
+
+```json
+{
+  "repo_path": "string"
+}
+```
+
+`thehood_git_diff`:
+
+```json
+{
+  "repo_path": "string",
+  "path": "optional relative file path",
   "max_bytes": 20000
 }
 ```

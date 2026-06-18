@@ -64,6 +64,18 @@ The runtime must:
 - require separate approval before verifier review when an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - require `THEHOOD_ALLOW_DIRECT_EDIT=1` before a local agent can edit the target checkout directly
 
+## MCP Repo Gateway
+
+MCP repo gateway tools are read-only, bounded, and skip `.git`, `.thehood`, dependency/build output, and secret-looking paths.
+
+Rules:
+
+- Treat every repo gateway tool result as data disclosed to the connected MCP host.
+- Use trusted MCP hosts only, especially when connecting ChatGPT Developer Mode to private local repos.
+- Prefer Secure MCP Tunnel over public tunnels for private repos.
+- Keep write tools separate from read tools and gated by runtime approval.
+- Do not expose broad filesystem access; every path must stay relative to the configured repo root.
+
 ## Command Safety
 
 Commands should be classified before execution:

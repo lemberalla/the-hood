@@ -103,29 +103,41 @@ Initial config shape:
     "chatgpt-web": {
       "enabled": true,
       "models": ["chatgpt-pro"],
+      "accessModes": ["agent-bridge", "mcp-connector"],
+      "defaultAccessMode": "agent-bridge",
       "browserProfile": "default"
     },
     "openai-api": {
       "enabled": false,
       "models": ["configured"],
+      "accessModes": ["api-agent"],
+      "defaultAccessMode": "api-agent",
       "apiKeyEnv": "OPENAI_API_KEY"
     },
     "anthropic-api": {
       "enabled": false,
       "models": ["claude-opus", "claude-sonnet"],
+      "accessModes": ["api-agent"],
+      "defaultAccessMode": "api-agent",
       "apiKeyEnv": "ANTHROPIC_API_KEY"
     },
     "codex-cli": {
       "enabled": true,
-      "models": ["default"]
+      "models": ["default"],
+      "accessModes": ["agent-bridge"],
+      "defaultAccessMode": "agent-bridge"
     },
     "claude-code": {
       "enabled": true,
-      "models": ["default"]
+      "models": ["default"],
+      "accessModes": ["agent-bridge"],
+      "defaultAccessMode": "agent-bridge"
     },
     "stub": {
       "enabled": true,
-      "models": ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"]
+      "models": ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"],
+      "accessModes": ["agent-bridge"],
+      "defaultAccessMode": "agent-bridge"
     }
   },
   "roles": {
@@ -202,6 +214,7 @@ It checks:
 - runtime name, package version, and capability flags for stale-process detection
 - whether providers are configured and enabled
 - whether the provider adapter is implemented
+- provider access modes such as `agent-bridge`, `api-agent`, and `mcp-connector`
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
 - whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, and ChatGPT tab are ready when `chatgpt-web` is configured
 - whether configured role models are listed for their providers

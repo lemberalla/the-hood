@@ -5,6 +5,13 @@ import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
+import {
+  getRepoGitDiff,
+  getRepoGitStatus,
+  listRepoTree,
+  readRepoFile,
+  searchRepo
+} from "../runtime/repoGateway.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -251,6 +258,41 @@ const executeTool = async (
     return errorToolResult(error);
   }
 };
+
+const optionalNumber = (source: JsonObject, key: string): number | undefined => {
+  const value = source[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  throw new Error(`${key} must be a finite number when provided.`);
+};
+
+const optionalBoolean = (source: JsonObject, key: string): boolean | undefined => {
+  const value = source[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  throw new Error(`${key} must be a boolean when provided.`);
+};
+
+const readOnlyAnnotations = (): JsonObject => ({
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+});
 
 const createPlanTool = (): McpTool => ({
   definition: {
@@ -730,6 +772,198 @@ const createCaptureEvidenceTool = (): McpTool => ({
     })
 });
 
+const createRepoTreeTool = (): McpTool => ({
+  definition: {
+    name: "thehood_repo_tree",
+    title: "List Repository Tree",
+    description: "Read-only repository tree listing for connector-backed planning. Paths are relative to repo_path and secret-looking or runtime-private paths are skipped.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        path: {
+          type: "string",
+          description: "Optional relative directory path. Defaults to repository root."
+        },
+        max_depth: {
+          type: "number"
+        },
+        max_entries: {
+          type: "number"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const treePath = optionalString(args, "path");
+      const maxDepth = optionalNumber(args, "max_depth");
+      const maxEntries = optionalNumber(args, "max_entries");
+      const result = await listRepoTree({
+        repoPath: requiredString(args, "repo_path"),
+        ...(treePath ? { path: treePath } : {}),
+        ...(maxDepth === undefined ? {} : { maxDepth }),
+        ...(maxEntries === undefined ? {} : { maxEntries })
+      });
+
+      return toJsonObject(result);
+    })
+});
+
+const createRepoSearchTool = (): McpTool => ({
+  definition: {
+    name: "thehood_repo_search",
+    title: "Search Repository",
+    description: "Read-only exact text search across safe, text-like repository files. Returns file paths, line numbers, and matching lines.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        query: {
+          type: "string"
+        },
+        globs: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        },
+        max_results: {
+          type: "number"
+        },
+        case_sensitive: {
+          type: "boolean"
+        }
+      },
+      required: ["repo_path", "query"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const maxResults = optionalNumber(args, "max_results");
+      const caseSensitive = optionalBoolean(args, "case_sensitive");
+      const result = await searchRepo({
+        repoPath: requiredString(args, "repo_path"),
+        query: requiredString(args, "query"),
+        globs: optionalStringList(args, "globs"),
+        ...(maxResults === undefined ? {} : { maxResults }),
+        ...(caseSensitive === undefined ? {} : { caseSensitive })
+      });
+
+      return toJsonObject(result);
+    })
+});
+
+const createRepoReadFileTool = (): McpTool => ({
+  definition: {
+    name: "thehood_repo_read_file",
+    title: "Read Repository File",
+    description: "Read-only bounded text file read from an allowed repository-relative path.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        path: {
+          type: "string"
+        },
+        offset: {
+          type: "number"
+        },
+        max_bytes: {
+          type: "number"
+        }
+      },
+      required: ["repo_path", "path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const offset = optionalNumber(args, "offset");
+      const maxBytes = optionalNumber(args, "max_bytes");
+      const result = await readRepoFile({
+        repoPath: requiredString(args, "repo_path"),
+        path: requiredString(args, "path"),
+        ...(offset === undefined ? {} : { offset }),
+        ...(maxBytes === undefined ? {} : { maxBytes })
+      });
+
+      return toJsonObject(result);
+    })
+});
+
+const createGitStatusTool = (): McpTool => ({
+  definition: {
+    name: "thehood_git_status",
+    title: "Read Git Status",
+    description: "Read-only git status for the repository, excluding TheHood runtime state.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) =>
+      toJsonObject(await getRepoGitStatus(requiredString(args, "repo_path")))
+    )
+});
+
+const createGitDiffTool = (): McpTool => ({
+  definition: {
+    name: "thehood_git_diff",
+    title: "Read Git Diff",
+    description: "Read-only bounded git diff for the repository or a single repository-relative path.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        path: {
+          type: "string"
+        },
+        max_bytes: {
+          type: "number"
+        }
+      },
+      required: ["repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const diffPath = optionalString(args, "path");
+      const maxBytes = optionalNumber(args, "max_bytes");
+      const result = await getRepoGitDiff({
+        repoPath: requiredString(args, "repo_path"),
+        ...(diffPath ? { path: diffPath } : {}),
+        ...(maxBytes === undefined ? {} : { maxBytes })
+      });
+
+      return toJsonObject(result);
+    })
+});
+
 const createAbortTool = (): McpTool => ({
   definition: {
     name: "thehood_abort",
@@ -776,6 +1010,11 @@ export const mcpTools: McpTool[] = [
   createRunsTool(),
   createReadArtifactTool(),
   createCaptureEvidenceTool(),
+  createRepoTreeTool(),
+  createRepoSearchTool(),
+  createRepoReadFileTool(),
+  createGitStatusTool(),
+  createGitDiffTool(),
   createAbortTool()
 ];
 

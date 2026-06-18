@@ -42,6 +42,9 @@ export interface RoleAssignment {
 
 export type RoleMap = Partial<Record<RuntimeRole, RoleAssignment>>;
 
+export const providerAccessModes = ["agent-bridge", "api-agent", "mcp-connector"] as const;
+export type ProviderAccessMode = (typeof providerAccessModes)[number];
+
 export interface RuntimeDefaults {
   maxIterations: number;
   editRequiresApproval: boolean;
@@ -53,6 +56,8 @@ export interface RuntimeDefaults {
 export interface ProviderConfig {
   enabled: boolean;
   models: string[];
+  accessModes?: ProviderAccessMode[];
+  defaultAccessMode?: ProviderAccessMode;
   apiKeyEnv?: string;
   browserProfile?: string;
 }

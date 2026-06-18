@@ -10,6 +10,7 @@ The runtime is the product core. The CLI, MCP server, and macOS menubar app are 
 - Run agent loops with explicit state, permissions, logs, and approval gates.
 - Support Codex through MCP without making Codex responsible for orchestration safety.
 - Support ChatGPT Pro as an orchestrator through a user-authenticated adapter.
+- Support ChatGPT Pro as an MCP connector client that can inspect local repo state through TheHood tools.
 - Support Claude, GPT, Codex, Claude Code, and local models as interchangeable role participants.
 - Keep verification independent from implementation.
 - Make runs inspectable and reproducible enough for public, trusted use.
@@ -153,6 +154,16 @@ roles:
     model: default
 ```
 
+Providers can expose multiple access modes:
+
+| Mode | Meaning |
+| --- | --- |
+| `agent-bridge` | TheHood invokes a provider adapter or local agent command. |
+| `api-agent` | TheHood invokes an API model and can mediate tool calls. |
+| `mcp-connector` | An external MCP host such as ChatGPT connects to TheHood and calls runtime tools. |
+
+The runtime contract is the same regardless of access mode. The mode changes the transport and who initiates the model call, not who owns permissions, repo access, approvals, logs, or verification.
+
 ### Agent Contracts
 
 Each role has a schema-bound contract:
@@ -188,6 +199,8 @@ It should support:
 The MCP server exposes runtime actions to Codex.
 
 Codex should call the MCP tools, then the runtime does the actual orchestration.
+
+The same MCP surface can also be used by ChatGPT Developer Mode through a connector or Secure MCP Tunnel. In that mode, ChatGPT is the MCP host, TheHood is the repo/runtime gateway, and TheHood returns exact bounded tool results such as file reads, search matches, git status, diffs, run status, and artifacts.
 
 ### macOS Menubar App
 
