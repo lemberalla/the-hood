@@ -4,6 +4,7 @@ import { inspectBrowser, startBrowser, stopBrowser, type BrowserManagerOptions }
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
+import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { startMcpServer } from "../mcp/server.js";
@@ -40,6 +41,7 @@ import {
   formatGitEvidence,
   formatMcpConfigReport,
   formatMcpTunnelConfigReport,
+  formatExternalTransferPreview,
   formatProviders,
   formatReconcileRunResult,
   formatRoles,
@@ -74,6 +76,7 @@ Usage:
   thehood revise <run-id> [--repo <path>] [--reason <text>]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
+  thehood transfer preview <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
@@ -430,6 +433,23 @@ const handleReconcile = async (
   shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatReconcileRunResult(result)}\n`);
 };
 
+const handleTransfer = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const subcommand = args[0] ?? "preview";
+
+  if (subcommand !== "preview") {
+    throw new InputError(`Unknown transfer subcommand "${subcommand}".`);
+  }
+
+  const repoPath = repoFromOptions(options);
+  const run = await getRun(repoPath, ensureRunId(args[1]));
+  const preview = await readLatestExternalTransferManifest(run);
+
+  shouldPrintJson(options) ? printJson(preview) : process.stdout.write(`${formatExternalTransferPreview(preview)}\n`);
+};
+
 const handleAbort = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -617,6 +637,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "reconcile":
       await handleReconcile(args, parsed.options);
+      return;
+    case "transfer":
+      await handleTransfer(args, parsed.options);
       return;
     case "abort":
       await handleAbort(args, parsed.options);

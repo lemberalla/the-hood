@@ -1,6 +1,10 @@
 import { readRunArtifact } from "./artifacts.js";
 import { runAgent } from "./agentRunner.js";
 import { InputError } from "./errors.js";
+import {
+  transferManifestSummary,
+  writeExternalTransferManifestArtifact
+} from "./externalTransfer.js";
 import { newId, nowIso } from "./ids.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
 import { loadRun, saveRun } from "./store.js";
@@ -108,10 +112,12 @@ const hasExternalProgressPacketApproval = (run: RunRecord, assignment: RoleAssig
 const externalProgressPacketApprovalReason = (
   role: RuntimeRole,
   assignment: RoleAssignment,
-  artifact: RunArtifact
+  artifact: RunArtifact,
+  approvalPhrase: string
 ): string =>
   `Sending progress packet to ${assignment.provider}:${assignment.model} for ${role} reconciliation requires explicit approval. ` +
-  `Approval message must mention "send progress packet to ${assignment.provider}". Progress artifact: ${artifact.summary}`;
+  `Approval message must mention "${approvalPhrase}". Review the transfer manifest before approving. ` +
+  `Progress artifact: ${artifact.summary}`;
 
 const ensureProgressArtifact = async (run: RunRecord): Promise<{ run: RunRecord; artifact: RunArtifact }> => {
   const existing = latestProgressArtifact(run);
@@ -157,12 +163,22 @@ const gateProgressPacketTransfer = async (
     };
   }
 
-  const approvalReason = externalProgressPacketApprovalReason(role, assignment, progressArtifact);
+  const approvalPhrase = `send progress packet to ${assignment.provider}`;
+  const transfer = await writeExternalTransferManifestArtifact({
+    run,
+    role,
+    destination: assignment,
+    purpose: "progress_packet",
+    approvalPhrase,
+    artifacts: [progressArtifact]
+  });
+  const approvalReason = externalProgressPacketApprovalReason(role, assignment, progressArtifact, approvalPhrase);
   const gated: RunRecord = {
     ...run,
     updatedAt: nowIso(),
     approvalRequired: true,
     approvalReason,
+    artifacts: [...run.artifacts, transfer.artifact],
     events: [
       ...run.events,
       createEvent("approval_required", approvalReason, {
@@ -170,8 +186,11 @@ const gateProgressPacketTransfer = async (
         provider: assignment.provider,
         model: assignment.model,
         reason: "progress_packet_external_transfer",
-        artifactRef: progressArtifact.ref,
-        artifactSummary: progressArtifact.summary
+        artifactRef: transfer.artifact.ref,
+        artifactSummary: transfer.artifact.summary,
+        sourceArtifactRef: progressArtifact.ref,
+        sourceArtifactSummary: progressArtifact.summary,
+        transfer: transferManifestSummary(transfer.manifest)
       })
     ]
   };

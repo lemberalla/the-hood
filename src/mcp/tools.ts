@@ -5,6 +5,7 @@ import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
+import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import {
   getRepoGitDiff,
   getRepoGitStatus,
@@ -112,6 +113,7 @@ const approvalArtifactActionsForRun = (run: RunRecord): JsonObject[] => {
 
   const approvalEvent = run.events.filter((event) => event.type === "approval_required").at(-1);
   addArtifactAction(approvalEvent?.data?.artifactRef, "Inspect the artifact that triggered this approval gate.");
+  addArtifactAction(approvalEvent?.data?.sourceArtifactRef, "Inspect the source artifact for this approval gate.");
 
   if (run.approvalReason?.includes("protected test changes")) {
     const integrationReportEvent = run.events
@@ -139,6 +141,19 @@ const nextActionsForRun = (run: RunRecord): JsonObject[] => {
         description: run.approvalReason ?? "Approval is required before this run can continue."
       },
       ...approvalArtifactActionsForRun(run),
+      ...(run.artifacts.some((artifact) => artifact.kind === "transfer_manifest")
+        ? [
+            {
+              action: "preview_external_transfer",
+              description: "Preview the exact external transfer manifest before approving.",
+              tool: "thehood_transfer_preview",
+              arguments: {
+                repo_path: run.repoPath,
+                run_id: run.runId
+              }
+            }
+          ]
+        : []),
       {
         action: "continue_with_approval",
         description: continueDescription,
@@ -702,6 +717,34 @@ const createReconcileTool = (): McpTool => ({
     })
 });
 
+const createTransferPreviewTool = (): McpTool => ({
+  definition: {
+    name: "thehood_transfer_preview",
+    title: "Preview External Transfer",
+    description: "Read the latest runtime-owned external transfer manifest for a run without sending anything to a provider.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        }
+      },
+      required: ["run_id", "repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const run = await getRun(requiredString(args, "repo_path"), requiredString(args, "run_id"));
+      const preview = await readLatestExternalTransferManifest(run);
+
+      return toJsonObject(preview);
+    })
+});
+
 const createReadArtifactTool = (): McpTool => ({
   definition: {
     name: "thehood_read_artifact",
@@ -1098,6 +1141,7 @@ export const mcpTools: McpTool[] = [
   createConsultTool(),
   createContinueTool(),
   createReconcileTool(),
+  createTransferPreviewTool(),
   createStatusTool(),
   createRunsTool(),
   createReadArtifactTool(),

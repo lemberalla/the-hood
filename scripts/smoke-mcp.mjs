@@ -152,6 +152,10 @@ assert.ok(
   "tools/list should expose thehood_reconcile"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_transfer_preview"),
+  "tools/list should expose thehood_transfer_preview"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_doctor"),
   "tools/list should expose thehood_doctor"
 );
@@ -189,6 +193,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorContent.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("progress_packet_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("external_transfer_manifests"));
 assert.ok(doctorContent.runtime.capabilities.includes("planner_reconciliation"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));

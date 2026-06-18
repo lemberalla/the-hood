@@ -130,6 +130,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_phrase_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
+assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_manifests"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
@@ -454,14 +455,18 @@ await fs.writeFile(
     "process.stdin.on('data', (chunk) => { input += chunk; });",
     "process.stdin.on('end', async () => {",
     "  const hasRepoContext = input.includes('\"repoContext\"');",
+    "  const hasProgressPacket = input.includes('\"progressPacket\"');",
     "  if (logPath) {",
-    "    await fs.appendFile(logPath, hasRepoContext ? 'context\\n' : 'no-context\\n', 'utf8');",
+    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
-    "      decision: hasRepoContext ? {",
+    "      decision: hasProgressPacket ? {",
+    "        action: 'complete',",
+    "        reason: 'Approved progress packet was reconciled.'",
+    "      } : hasRepoContext ? {",
     "        action: 'complete',",
     "        reason: 'Approved repo context was enough for a plan.'",
     "      } : {",
@@ -549,6 +554,49 @@ assert.equal(externalContextApproved.providerResponses[0].data.decision.action, 
 assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
   "no-context",
   "context"
+]);
+const externalProgressGate = JSON.parse(
+  (await runCli(["reconcile", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(externalProgressGate.run.state, "completed");
+assert.equal(externalProgressGate.run.approvalRequired, true);
+assert.ok(externalProgressGate.stopReason.includes("Review the transfer manifest before approving"));
+const transferManifestArtifact = externalProgressGate.run.artifacts.find((artifact) => artifact.kind === "transfer_manifest");
+assert.ok(transferManifestArtifact, "progress packet gate should attach a transfer manifest");
+const progressTransferEvent = externalProgressGate.run.events.at(-1);
+assert.equal(progressTransferEvent.type, "approval_required");
+assert.equal(progressTransferEvent.data.artifactRef, transferManifestArtifact.ref);
+assert.ok(progressTransferEvent.data.sourceArtifactRef.includes("/progress/"));
+const transferPreview = await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath]);
+assert.ok(transferPreview.stdout.includes("purpose: progress_packet"));
+assert.ok(transferPreview.stdout.includes("risk: private_runtime_memory"));
+assert.ok(transferPreview.stdout.includes("I approve send progress packet to chatgpt-web"));
+const transferPreviewJson = JSON.parse(
+  (await runCli(["transfer", "preview", externalContextPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(transferPreviewJson.manifest.purpose, "progress_packet");
+assert.equal(transferPreviewJson.manifest.risk.class, "private_runtime_memory");
+assert.equal(transferPreviewJson.manifest.artifacts.length, 1);
+const transferApprovalInbox = await runCli(["ui", "approvals", "--repo", repoPath]);
+assert.ok(transferApprovalInbox.stdout.includes("transfer_manifest"));
+assert.ok(transferApprovalInbox.stdout.includes("thehood transfer preview"));
+await runCli([
+  "approve",
+  externalContextPlan.runId,
+  "--repo",
+  repoPath,
+  "--reason",
+  "I approve send progress packet to chatgpt-web for this read-only smoke."
+]);
+const externalProgressReconciled = JSON.parse(
+  (await runCli(["reconcile", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(externalProgressReconciled.reconciliationArtifact.kind, "reconciliation");
+assert.equal(externalProgressReconciled.providerResponses[0].data.decision.action, "complete");
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context",
+  "progress"
 ]);
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);

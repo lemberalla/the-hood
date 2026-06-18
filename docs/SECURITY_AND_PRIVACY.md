@@ -122,6 +122,22 @@ Rules:
 - Tell browser-backed providers to ignore stale provider session context and use only TheHood-supplied state.
 - Keep advanced memory engines pluggable and rebuildable from canonical artifacts.
 
+## External Transfer Review
+
+Before runtime memory crosses a browser or API provider boundary, TheHood should create a transfer manifest and point the approval gate at it.
+
+The manifest records:
+
+- destination provider and role
+- transfer purpose
+- source artifact refs
+- byte counts and hashes
+- risk class
+- exact approval phrase
+- bounded preview of the artifact content
+
+Approval should be based on that manifest. The provider response, transfer manifest, and source artifacts remain separate so a later reviewer can distinguish what was sent from what the provider concluded.
+
 ## Public Repo Boundary
 
 The public repo should not contain:

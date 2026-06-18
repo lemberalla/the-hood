@@ -80,7 +80,8 @@ export type RunArtifactKind =
   | "directive"
   | "context"
   | "progress"
-  | "reconciliation";
+  | "reconciliation"
+  | "transfer_manifest";
 
 export interface RunArtifact {
   kind: RunArtifactKind;
@@ -313,4 +314,59 @@ export interface ProgressPacket {
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;
   bounds: ProgressPacketBounds;
+}
+
+export type ExternalTransferPurpose =
+  | "repo_context"
+  | "progress_packet"
+  | "memory_packet"
+  | "reconciliation";
+
+export type ExternalTransferRiskClass =
+  | "public"
+  | "repo_context"
+  | "private_runtime_memory"
+  | "secret_risk";
+
+export interface ExternalTransferArtifactRef {
+  kind: RunArtifactKind;
+  ref: string;
+  summary: string;
+  byteLength: number;
+  truncated: boolean;
+  sha256: string;
+}
+
+export interface ExternalTransferRisk {
+  class: ExternalTransferRiskClass;
+  reasons: string[];
+  secretPatternHits: number;
+}
+
+export interface ExternalTransferManifest {
+  schemaVersion: 1;
+  kind: "external_transfer_manifest";
+  runId: string;
+  createdAt: string;
+  destination: RoleAssignment;
+  role: RuntimeRole;
+  purpose: ExternalTransferPurpose;
+  approvalPhrase: string;
+  approvalHint: string;
+  artifacts: ExternalTransferArtifactRef[];
+  totalBytes: number;
+  risk: ExternalTransferRisk;
+  redaction: {
+    status: "not_applied" | "applied";
+    notes: string[];
+  };
+  preview: {
+    maxBytes: number;
+    content: string;
+    truncated: boolean;
+  };
+  provenance: {
+    sourceArtifactRefs: string[];
+    notes: string[];
+  };
 }

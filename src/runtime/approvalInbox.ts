@@ -75,6 +75,7 @@ export const approvalArtifactsForRun = (run: RunRecord): PendingApprovalArtifact
 
   return compactArtifacts([
     artifactForRef(run, approvalEvent?.data?.artifactRef),
+    artifactForRef(run, approvalEvent?.data?.sourceArtifactRef),
     run.approvalReason?.includes("protected test changes")
       ? artifactForRef(run, integrationReportEvent?.data?.artifactRef)
       : undefined

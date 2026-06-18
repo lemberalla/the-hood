@@ -10,6 +10,7 @@ export const runtimeCapabilities = [
   "approval_phrase_enforcement",
   "final_report_artifacts",
   "progress_packet_artifacts",
+  "external_transfer_manifests",
   "planner_reconciliation",
   "mcp_final_report_next_action",
   "max_iteration_enforcement",

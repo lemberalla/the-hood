@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { ReconcileRunResult } from "../runtime/reconciliation.js";
+import type { ExternalTransferPreview } from "../runtime/externalTransfer.js";
 import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../runtime/browserManager.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
 import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
@@ -234,6 +235,27 @@ export const formatReconcileRunResult = (result: ReconcileRunResult): string => 
       ]
     : []),
   `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatExternalTransferPreview = (preview: ExternalTransferPreview): string => [
+  `manifest: ${preview.manifestArtifact.ref}`,
+  `destination: ${formatRoleAssignment(preview.manifest.destination)}`,
+  `purpose: ${preview.manifest.purpose}`,
+  `risk: ${preview.manifest.risk.class}`,
+  `totalBytes: ${preview.manifest.totalBytes}`,
+  `approval: ${preview.manifest.approvalHint}`,
+  "",
+  "artifacts:",
+  ...preview.manifest.artifacts.map((artifact) =>
+    `  ${artifact.kind}: ${artifact.summary} (${artifact.byteLength} bytes, sha256 ${artifact.sha256.slice(0, 12)})`
+  ),
+  "",
+  "risk reasons:",
+  ...preview.manifest.risk.reasons.map((reason) => `  - ${reason}`),
+  "",
+  "preview:",
+  preview.manifest.preview.content,
+  ...(preview.manifest.preview.truncated ? ["", "preview truncated"] : [])
 ].join("\n");
 
 export const formatMcpConfigReport = (report: McpConfigReport): string => [

@@ -87,6 +87,8 @@ User approval is required before:
 
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
+Before sending a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine.
+
 `maxIterations` is enforced from persisted provider responses. If the next transition would call another provider after the run has already recorded `maxIterations` agent responses, the runtime fails closed with reason `max_iterations`.
 
 ## Runtime-Owned Evidence
@@ -105,6 +107,7 @@ The runtime captures evidence directly:
 - protected path classification
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
+- external transfer manifest artifacts before approved provider transfers
 
 Models may summarize evidence, but summaries are not authoritative.
 

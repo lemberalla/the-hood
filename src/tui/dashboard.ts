@@ -85,6 +85,16 @@ const approvalCommand = (approval: PendingApproval, command: "approve" | "reject
   return parts.join(" ");
 };
 
+const transferPreviewCommand = (approval: PendingApproval): string =>
+  [
+    "thehood",
+    "transfer",
+    "preview",
+    approval.runId,
+    "--repo",
+    quoteArg(approval.repoPath)
+  ].join(" ");
+
 const approvalLines = (approval: PendingApproval, index: number): string[] => [
   `  [${index + 1}] ${approval.runId}  ${approval.mode}  ${approval.state}`,
   `      goal    ${truncate(approval.goal, 96)}`,
@@ -95,6 +105,9 @@ const approvalLines = (approval: PendingApproval, index: number): string[] => [
         "      review",
         ...approval.artifacts.map((artifact) => `        ${artifact.kind}: ${artifact.summary}`)
       ]
+    : []),
+  ...(approval.artifacts.some((artifact) => artifact.kind === "transfer_manifest")
+    ? [`      preview ${transferPreviewCommand(approval)}`]
     : []),
   "      buttons",
   `        [approve] ${approvalCommand(approval, "approve")}`,

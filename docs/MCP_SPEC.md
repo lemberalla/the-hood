@@ -268,7 +268,7 @@ Reconcile a completed run from its latest progress packet.
 Current behavior:
 
 - finds or creates a `progress` artifact for a completed run
-- pauses for approval before sending progress packets to browser or API providers
+- writes a `transfer_manifest` artifact and pauses for approval before sending progress packets to browser or API providers
 - invokes the configured `planner`, or `orchestrator` when no planner is assigned
 - stores the schema-bound provider response as a `reconciliation` artifact
 
@@ -281,6 +281,21 @@ Input:
   "role": "optional planner | orchestrator",
   "approval": "approve | reject | revise | none",
   "message": "optional approval message"
+}
+```
+
+### `thehood_transfer_preview`
+
+Read the latest external transfer manifest for a run without sending anything to a provider.
+
+Use this before approving browser or API-provider transfer gates.
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string"
 }
 ```
 
