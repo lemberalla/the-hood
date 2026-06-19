@@ -141,6 +141,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"))
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
+assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
@@ -207,6 +208,7 @@ assert.ok(dashboard.stdout.includes("THEHOOD"));
 assert.ok(dashboard.stdout.includes("Automation"));
 assert.ok(dashboard.stdout.includes("ChatGPT Web"));
 assert.ok(dashboard.stdout.includes("CDP         reachable"));
+assert.ok(dashboard.stdout.includes("Run Monitor"));
 await new Promise((resolve, reject) => {
   cdpServer.close((error) => {
     if (error) {
@@ -478,6 +480,7 @@ assert.equal(repoContextStatus.insights.latestRepoContext.ref, contextArtifact.r
 assert.equal(repoContextStatus.insights.canonicalMemory.kind, "canonical_memory");
 assert.equal(repoContextStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
 assert.equal(repoContextStatus.insights.canonicalMemory.ignoreProviderSessionContext, true);
+assert.ok(Array.isArray(repoContextStatus.insights.reviewLanes));
 assert.ok(repoContextStatus.insights.handoffTimeline.length > 0);
 assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
 const repoContextDirectiveArtifact = repoContextContinue.run.artifacts.find((artifact) => artifact.kind === "directive");
@@ -491,6 +494,7 @@ assert.equal(repoContextDirective.variables.canonicalMemory.ignoreProviderSessio
   assert.ok(repoContextStatusText.stdout.includes("action: complete"));
   assert.ok(repoContextStatusText.stdout.includes("final report:"));
   assert.ok(repoContextStatusText.stdout.includes("canonical memory refs:"));
+  assert.ok(!repoContextStatusText.stdout.includes("review lanes:"));
   assert.ok(repoContextStatusText.stdout.includes("handoff timeline:"));
   const repoContextLogsText = await runCli(["logs", repoContextPlan.runId, "--repo", repoPath]);
   assert.ok(repoContextLogsText.stdout.includes("handoffs:"));
@@ -660,6 +664,8 @@ assert.equal(externalInvocationGate.run.approvalRequired, true);
 assert.ok(externalInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
 assert.equal(externalInvocationGate.providerResponses[0].data.decision.action, "request_approval");
 const approvalDashboard = await runCli(["ui", "--repo", repoPath]);
+assert.ok(approvalDashboard.stdout.includes("Run Monitor"));
+assert.ok(approvalDashboard.stdout.includes("approval gate"));
 assert.ok(approvalDashboard.stdout.includes("Approval Gates"));
 assert.ok(approvalDashboard.stdout.includes(externalContextPlan.runId));
 assert.ok(approvalDashboard.stdout.includes("I approve invoke chatgpt-web"));
@@ -1312,6 +1318,10 @@ assert.ok(
   ),
   "progress packet should expose satisfied QA lane"
 );
+const verifiedLoopStatusText = await runCli(["status", loopRun.runId, "--repo", loopRepoPath]);
+assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));
+assert.ok(verifiedLoopStatusText.stdout.includes("reviewer"));
+assert.ok(verifiedLoopStatusText.stdout.includes("qa"));
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
 assert.equal(directiveArtifacts.length, 3);
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));

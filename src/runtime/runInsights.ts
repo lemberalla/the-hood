@@ -1,6 +1,7 @@
 import { readRunArtifact } from "./artifacts.js";
 import { recentAutopilotApprovalsFromRuns } from "./approvalInbox.js";
 import { buildCanonicalMemory, latestCanonicalArtifactRefs } from "./canonicalMemory.js";
+import { deriveReviewLanes } from "./reviewLanes.js";
 import {
   latestRunHandoff,
   recentRunHandoffSummaries,
@@ -9,7 +10,7 @@ import {
 } from "./handoffs.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { AutopilotApproval } from "./approvalInbox.js";
-import type { JsonObject, RunArtifact, RunRecord } from "./types.js";
+import type { JsonObject, ReviewLane, RunArtifact, RunRecord } from "./types.js";
 
 export interface RunArtifactSummary {
   kind: RunArtifact["kind"];
@@ -41,6 +42,7 @@ export interface RunInsights {
   latestRepoContext?: RunArtifactSummary;
   latestTransferManifest?: RunArtifactSummary;
   canonicalMemory?: JsonObject;
+  reviewLanes: ReviewLane[];
   latestHandoff?: RunHandoffSummary;
   handoffTimeline: RunHandoffSummary[];
   recentAutopilotApprovals: AutopilotApproval[];
@@ -181,6 +183,7 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const latestHandoff = latestRunHandoff(run);
   const insights: RunInsights = {
     ...(latestHandoff ? { latestHandoff: summarizeRunHandoff(latestHandoff) } : {}),
+    reviewLanes: deriveReviewLanes(run),
     handoffTimeline: recentRunHandoffSummaries(run, 5),
     recentAutopilotApprovals: recentAutopilotApprovalsFromRuns([run]),
     issues

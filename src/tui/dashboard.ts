@@ -7,13 +7,15 @@ import type {
 } from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
-import type { ApprovalPolicy } from "../runtime/types.js";
+import type { RunMonitorItem } from "../runtime/runMonitor.js";
+import type { ApprovalPolicy, ReviewLaneState } from "../runtime/types.js";
 
 export interface DashboardInput {
   repoPath: string;
   health: RuntimeHealthReport;
   browser: BrowserStatus;
   approvalPolicy: ApprovalPolicy;
+  runMonitor: RunMonitorItem[];
   approvalInbox: ApprovalInboxView;
 }
 
@@ -79,6 +81,39 @@ const nextActions = (browser: BrowserStatus): string[] => {
 
 const truncate = (value: string, maxLength: number): string =>
   value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+
+const phaseLabel = (phase: RunMonitorItem["phase"]): string =>
+  phase.replace(/_/g, " ");
+
+const laneStateLabel = (state: ReviewLaneState): string =>
+  state.replace(/_/g, " ");
+
+const reviewLaneLines = (run: RunMonitorItem): string[] => {
+  if (run.reviewLanes.length === 0) {
+    return [];
+  }
+
+  return [
+    "      reviews",
+    ...run.reviewLanes.slice(0, 3).map((lane) =>
+      `        ${lane.kind.padEnd(8)} ${laneStateLabel(lane.state).padEnd(14)} ${lane.required ? "required" : "optional"}  ${truncate(lane.label, 72)}`
+    )
+  ];
+};
+
+const runMonitorLines = (run: RunMonitorItem, index: number): string[] => {
+  const firstArtifactRef = run.artifactRefs[0];
+
+  return [
+    `  [${index + 1}] ${run.runId}  ${phaseLabel(run.phase)}  ${run.mode}/${run.state}`,
+    `      goal    ${truncate(run.goal, 96)}`,
+    `      detail  ${truncate(run.detail, 120)}`,
+    ...(run.provider ? [`      agent   ${run.lane ?? "provider"} (${run.provider})`] : []),
+    ...(run.gate ? [`      gate    ${run.gate}`] : []),
+    ...(firstArtifactRef ? [`      artifact ${truncate(firstArtifactRef, 112)}`] : []),
+    ...reviewLaneLines(run)
+  ];
+};
 
 const approvalCommand = (approval: PendingApproval, command: "approve" | "reject" | "revise"): string => {
   const parts = [
@@ -187,6 +222,7 @@ const handoffLines = (handoff: ApprovalInboxHandoff, index: number): string[] =>
 
 export const renderApprovalInbox = (inbox: ApprovalInboxView): string => [
   "Approval Gates",
+  `  pending ${inbox.pendingApprovals.length}  autopilot ${inbox.recentAutopilotApprovals.length}  handoffs ${inbox.recentHandoffs.length}`,
   "  autopilot still stops for protected test changes, secret-risk transfers, and destructive/dependency/network commands",
   ...(inbox.pendingApprovals.length > 0
     ? inbox.pendingApprovals.flatMap(approvalLines)
@@ -224,6 +260,7 @@ const automationLines = (input: DashboardInput): string[] => {
 
 export const renderDashboard = (input: DashboardInput): string => {
   const actions = nextActions(input.browser);
+  const activeRuns = input.runMonitor.filter((run) => !["completed", "failed", "aborted"].includes(run.phase));
 
   return [
     renderHeader(),
@@ -233,6 +270,7 @@ export const renderDashboard = (input: DashboardInput): string => {
     `  Runtime     ${input.health.runtime.name} ${input.health.runtime.version}`,
     `  Browser     ${statusWord(input.browser.readyForBridge)}`,
     `  Automation  ${modeLabel(input.approvalPolicy.mode)}`,
+    `  Runs        ${activeRuns.length} active / ${input.runMonitor.length} shown`,
     "",
     ...automationLines(input),
     "",
@@ -244,6 +282,11 @@ export const renderDashboard = (input: DashboardInput): string => {
     "",
     "Roles",
     ...roleLines(input.health),
+    "",
+    "Run Monitor",
+    ...(input.runMonitor.length > 0
+      ? input.runMonitor.flatMap(runMonitorLines)
+      : ["  no runs found"]),
     "",
     renderApprovalInbox(input.approvalInbox),
     "",

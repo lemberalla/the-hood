@@ -11,7 +11,7 @@ import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RunInsights } from "../runtime/runInsights.js";
 import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
-import type { RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
+import type { ReviewLaneState, RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
 
 export const printJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -129,6 +129,14 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
   );
 };
 
+const formatLaneState = (state: ReviewLaneState): string =>
+  state.replace(/_/g, " ");
+
+const formatReviewLaneLines = (insights: RunInsights): string[] =>
+  insights.reviewLanes.map((lane) =>
+    `  ${lane.kind.padEnd(8)} ${formatLaneState(lane.state).padEnd(14)} ${lane.required ? "required" : "optional"}  ${lane.label}  ${lane.summary}`
+  );
+
 const handoffEndpoint = (
   label: string | undefined,
   assignment: string | undefined,
@@ -173,6 +181,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
+  const reviewLanes = formatReviewLaneLines(insights);
 
   return [
     ...(response
@@ -200,6 +209,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           "",
           "canonical memory refs:",
           ...memoryRefs
+        ]
+      : []),
+    ...(reviewLanes.length > 0
+      ? [
+          "",
+          "review lanes:",
+          ...reviewLanes
         ]
       : []),
     ...(insights.latestHandoff

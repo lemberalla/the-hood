@@ -203,7 +203,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood artifact <run-id> <artifact-ref>` reads a bounded artifact that is already attached to the run. It uses the same safety boundary as `thehood_read_artifact`: refs must stay inside that run's artifact directory and must already be recorded on the run.
 
-`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, the final report artifact when present, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `latestHandoff`, `handoffTimeline`, and bounded refs-only `canonicalMemory`.
+`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, the final report artifact when present, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, derived review lanes, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `reviewLanes`, `latestHandoff`, `handoffTimeline`, and bounded refs-only `canonicalMemory`.
 
 `thehood logs <run-id>` prints stored runtime events and a bounded `handoffs` section. Handoff labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer` are derived from runtime roles and provider assignments; they are display lanes, not policy grants.
 
@@ -251,7 +251,7 @@ It checks:
 
 ## TUI Command
 
-`thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.
+`thehood ui --repo .` prints the branded terminal dashboard shell. It reads runtime health, role mapping, browser readiness, approval inbox, and a derived run monitor from existing runtime APIs; it does not own orchestration logic. The run monitor shows active provider waits, approval gates, transfer gates, completed runs, and reviewer/tester/QA/critic lanes from runtime evidence.
 
 The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints pending manual approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands. It also shows recent autopilot approvals separately so operators can see what was auto-approved, why it qualified, and which artifact or transfer manifest was involved. The same inbox includes recent agent handoffs so operators can see which runtime lane handed work to the next lane or to an approval gate.
 

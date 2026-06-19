@@ -48,6 +48,7 @@ It supports:
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
 - branded terminal dashboard shell for runtime, role, and browser readiness
 - terminal approval inbox for pending runtime gates
+- terminal run monitor for provider wait, approval/transfer gates, and review lanes
 - run status insights for latest provider output and final reports
 - run status insights for latest progress, reconciliation, repo context, final report, and transfer manifest refs
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history

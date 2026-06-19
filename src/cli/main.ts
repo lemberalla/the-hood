@@ -13,6 +13,7 @@ import { listProviders } from "../runtime/providers.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
+import { runMonitorFromRuns } from "../runtime/runMonitor.js";
 import { summonAgent } from "../runtime/summons.js";
 import {
   abortRun,
@@ -689,11 +690,13 @@ const handleUi = async (
   const browser = await inspectBrowser(browserOptionsFromCli(options));
   const runs = await listRuns(repoPath);
   const approvalInbox = approvalInboxViewFromRuns(runs);
+  const runMonitor = runMonitorFromRuns(runs);
   const dashboard = {
     repoPath,
     health,
     browser,
     approvalPolicy: config.approvalPolicy,
+    runMonitor,
     approvalInbox
   };
 
