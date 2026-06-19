@@ -55,6 +55,7 @@ It supports:
 - schema-bound agent directives and response validation before runtime state advances
 - provider response contracts that keep JSON mechanical while long plans, reports, and reviews live in markdown payload fields
 - guarded local CLI adapters for Codex CLI and Claude Code
+- runtime-owned local agent execution artifacts for Codex CLI and Claude Code command invocations
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
 - provider access-mode metadata for agent bridges, API agents, and MCP connectors
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
@@ -62,7 +63,7 @@ It supports:
 - terminal approval inbox for pending runtime gates
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
 - run status insights for latest provider output and final reports
-- run status insights for latest progress, reconciliation, repo context, remote repo context, final report, and transfer manifest refs
+- run status insights for latest progress, reconciliation, repo context, remote repo context, provider execution, final report, and transfer manifest refs
 - runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence

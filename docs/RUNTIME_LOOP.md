@@ -24,6 +24,8 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
 
+Local command providers such as `codex-cli` and `claude-code` also write a compact `provider_invocation` artifact after the command exits. The artifact records role, provider/model, command args, workspace mode, sandbox or permission mode when available, exit code, timeout state, output lengths, parse status, and any isolated patch ref. It proves the runtime actually spawned the local agent adapter, but it does not replace the provider response, validation logs, or verifier verdict.
+
 Provider directives include a `directiveAck` marker. Browser-backed adapters must require the current marker in the provider response before accepting schema-valid JSON, which prevents stale ChatGPT Web project or conversation context from being mistaken for the current run.
 
 The `AgentResponse` JSON envelope is deliberately mechanical. It carries status, a short summary, required role-control fields such as `action`, `status`, or `verdict`, refs, and the directive acknowledgement. Human-facing plans, reports, reviews, critique, rationale, acceptance criteria, and long next-step writeups should live in `data.<required_data_key>.markdown` as GitHub-flavored Markdown. Status surfaces expose only a bounded markdown preview plus the response artifact ref; the full response artifact remains the source of truth.
@@ -134,6 +136,7 @@ The runtime captures evidence directly:
 - protected path classification
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
+- provider invocation artifacts for local Codex CLI and Claude Code adapter executions
 - derived review ownership metadata for verifier, runtime QA/validation, model-assisted QA tester, critic, and read-only summon evidence
 - review routing artifacts explaining risk tier, required lanes, skipped roles, and routing reasons
 - critic trigger artifacts explaining why an advisory critic was called
@@ -149,13 +152,13 @@ TheHood's memory is canonical runtime state, not provider session context. Exact
 
 Provider directives should assume that browser and API conversation context may be stale or empty. The runtime rehydrates providers from bounded packets that point back to exact artifacts.
 
-Each provider directive includes a bounded `canonicalMemory` object. It is a refs-only project memory index containing the current run snapshot, recent run summaries, and latest progress packet, reconciliation, repo context, final report, review routing, and transfer manifest refs when available. It does not include large artifact bodies. Providers must treat this runtime-owned memory as authoritative and ignore stale provider session context unless that context is repeated in the directive.
+Each provider directive includes a bounded `canonicalMemory` object. It is a refs-only project memory index containing the current run snapshot, recent run summaries, and latest progress packet, reconciliation, repo context, provider execution, final report, review routing, and transfer manifest refs when available. It does not include large artifact bodies. Providers must treat this runtime-owned memory as authoritative and ignore stale provider session context unless that context is repeated in the directive.
 
 ## Final Reports
 
 Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, and bounded review ownership lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
-Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. They also expose bounded loop responsibility schedules and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Loop schedules and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
+Run status insights expose the latest progress packet, reconciliation, repo context, provider execution, final report, and transfer manifest refs. They also expose bounded loop responsibility schedules and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Loop schedules and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

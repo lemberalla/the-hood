@@ -11,6 +11,7 @@ export interface CanonicalMemoryArtifactRefs {
   latestRepoContext?: CanonicalMemoryArtifactRef;
   latestRemoteRepoContext?: CanonicalMemoryArtifactRef;
   latestFinalReport?: CanonicalMemoryArtifactRef;
+  latestProviderExecution?: CanonicalMemoryArtifactRef;
   latestCriticTrigger?: CanonicalMemoryArtifactRef;
   latestRevisionPacket?: CanonicalMemoryArtifactRef;
   latestReviewRouting?: CanonicalMemoryArtifactRef;
@@ -59,6 +60,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
   const latestReconciliation = latestArtifact(run, (artifact) => artifact.kind === "reconciliation");
   const latestRepoContext = latestArtifact(run, (artifact) => artifact.kind === "context");
   const latestRemoteRepoContext = latestArtifact(run, (artifact) => artifact.kind === "remote_context");
+  const latestProviderExecution = latestArtifact(run, (artifact) => artifact.kind === "provider_invocation");
   const latestCriticTrigger = latestArtifact(run, (artifact) => artifact.kind === "critic_trigger");
   const latestRevisionPacket = latestArtifact(run, (artifact) => artifact.kind === "revision_packet");
   const latestReviewRouting = latestArtifact(run, (artifact) => artifact.kind === "review_routing");
@@ -74,6 +76,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
     ...(latestRepoContext ? { latestRepoContext } : {}),
     ...(latestRemoteRepoContext ? { latestRemoteRepoContext } : {}),
     ...(finalReport ? { latestFinalReport: finalReport } : {}),
+    ...(latestProviderExecution ? { latestProviderExecution } : {}),
     ...(latestCriticTrigger ? { latestCriticTrigger } : {}),
     ...(latestRevisionPacket ? { latestRevisionPacket } : {}),
     ...(latestReviewRouting ? { latestReviewRouting } : {}),
@@ -145,6 +148,7 @@ export const buildCanonicalMemory = async (run: RunRecord): Promise<JsonObject> 
     "latestRepoContext",
     "latestRemoteRepoContext",
     "latestFinalReport",
+    "latestProviderExecution",
     "latestRevisionPacket",
     "latestReviewRouting",
     "latestFanout",

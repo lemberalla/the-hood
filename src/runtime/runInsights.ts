@@ -82,6 +82,24 @@ export interface ReviewRoutingInsight {
   signals?: JsonObject;
 }
 
+export interface ProviderExecutionInsight {
+  artifact: RunArtifactSummary;
+  role?: string;
+  provider?: string;
+  model?: string;
+  command?: string;
+  args: string[];
+  commandMode?: string;
+  workspaceMode?: string;
+  sandbox?: string;
+  permissionMode?: string;
+  exitCode?: number;
+  timedOut?: boolean;
+  durationMs?: number;
+  responseParsed?: boolean;
+  responseStatus?: string;
+}
+
 export interface FanoutInsight {
   artifact: RunArtifactSummary;
   status?: string;
@@ -108,6 +126,8 @@ export interface RunInsights {
   latestCriticTrigger?: CriticTriggerInsight;
   latestRevisionPacket?: RevisionPacketInsight;
   latestReviewRouting?: ReviewRoutingInsight;
+  latestProviderExecution?: ProviderExecutionInsight;
+  recentProviderExecutions: ProviderExecutionInsight[];
   latestFanout?: FanoutInsight;
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
@@ -254,6 +274,9 @@ const revisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
 const reviewRoutingArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "review_routing").at(-1);
 
+const providerExecutionArtifacts = (run: RunRecord): RunArtifact[] =>
+  run.artifacts.filter((artifact) => artifact.kind === "provider_invocation");
+
 const fanoutArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "fanout").at(-1);
 
@@ -307,6 +330,32 @@ const parseReviewRouting = (
   reasons: stringArray(payload.reasons),
   ...(isJsonObject(payload.signals) ? { signals: payload.signals } : {})
 });
+
+const parseProviderExecution = (
+  artifact: RunArtifact,
+  payload: JsonObject
+): ProviderExecutionInsight => {
+  const exitCode = numberField(payload.exitCode);
+  const durationMs = numberField(payload.durationMs);
+
+  return {
+    artifact: summarizeArtifact(artifact),
+    ...(typeof payload.role === "string" ? { role: payload.role } : {}),
+    ...(typeof payload.provider === "string" ? { provider: payload.provider } : {}),
+    ...(typeof payload.model === "string" ? { model: payload.model } : {}),
+    ...(typeof payload.command === "string" ? { command: payload.command } : {}),
+    args: stringArray(payload.args),
+    ...(typeof payload.commandMode === "string" ? { commandMode: payload.commandMode } : {}),
+    ...(typeof payload.workspaceMode === "string" ? { workspaceMode: payload.workspaceMode } : {}),
+    ...(typeof payload.sandbox === "string" ? { sandbox: payload.sandbox } : {}),
+    ...(typeof payload.permissionMode === "string" ? { permissionMode: payload.permissionMode } : {}),
+    ...(exitCode !== undefined ? { exitCode } : {}),
+    ...(typeof payload.timedOut === "boolean" ? { timedOut: payload.timedOut } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(typeof payload.responseParsed === "boolean" ? { responseParsed: payload.responseParsed } : {}),
+    ...(typeof payload.responseStatus === "string" ? { responseStatus: payload.responseStatus } : {})
+  };
+};
 
 const numberField = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -384,6 +433,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const reviewRoutingPayload = reviewRouting
     ? await readArtifactJson(run, reviewRouting, issues)
     : undefined;
+  const providerExecutionArtifactsForRun = providerExecutionArtifacts(run).slice(-5);
+  const providerExecutionPayloads = await Promise.all(
+    providerExecutionArtifactsForRun.map((artifact) => readArtifactJson(run, artifact, issues))
+  );
   const latestFanout = fanoutArtifact(run);
   const latestFanoutPayload = latestFanout
     ? await readArtifactJson(run, latestFanout, issues)
@@ -405,8 +458,21 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
     operatorNextActions: deriveOperatorNextActions(run),
     handoffTimeline: recentRunHandoffSummaries(run, 5),
     recentAutopilotApprovals: recentAutopilotApprovalsFromRuns([run]),
+    recentProviderExecutions: providerExecutionArtifactsForRun
+      .map((artifact, index) => {
+        const payload = providerExecutionPayloads[index];
+        return payload ? parseProviderExecution(artifact, payload) : undefined;
+      })
+      .filter((execution): execution is ProviderExecutionInsight => Boolean(execution)),
     issues
   };
+
+  if (insights.recentProviderExecutions.length > 0) {
+    const latestProviderExecution = insights.recentProviderExecutions.at(-1);
+    if (latestProviderExecution) {
+      insights.latestProviderExecution = latestProviderExecution;
+    }
+  }
 
   if (latestRefs.latestProgressPacket) {
     insights.latestProgressPacket = latestRefs.latestProgressPacket;

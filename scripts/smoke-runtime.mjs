@@ -169,11 +169,26 @@ await fs.writeFile(
   fakeCodexPath,
   [
     "#!/usr/bin/env node",
-    "process.stdout.write(JSON.stringify({",
-    "  status: 'ok',",
-    "  summary: 'fake codex smoke response',",
-    "  data: {}",
-    "}));",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', () => {",
+    "  const key = input.match(/requiredDataKey\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'decision';",
+    "  const runId = input.match(/runId\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-run';",
+    "  const nonce = input.match(/nonce\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-nonce';",
+    "  const ack = { runId, nonce, responseField: 'thehoodDirectiveAck' };",
+    "  const payloads = {",
+    "    decision: { action: 'complete', reason: 'fake codex smoke response', thehoodDirectiveAck: ack },",
+    "    critiqueResult: { verdict: 'acceptable', blockingConcerns: [], nonBlockingConcerns: ['fake codex review path exercised'], thehoodDirectiveAck: ack },",
+    "    verificationResult: { verdict: 'approve', summary: 'fake codex verified', failedCriteria: [], risks: [], nextAction: 'complete', thehoodDirectiveAck: ack },",
+    "    qaResult: { verdict: 'pass', summary: 'fake codex QA passed', suggestedCommands: [], risks: [], thehoodDirectiveAck: ack }",
+    "  };",
+    "  process.stdout.write(JSON.stringify({",
+    "    status: 'ok',",
+    "    summary: 'fake codex smoke response',",
+    "    data: { [key]: payloads[key] ?? payloads.decision }",
+    "  }));",
+    "});",
     ""
   ].join("\n"),
   "utf8"
@@ -274,6 +289,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("provider_directive_ack"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("review_routing_policy"));
+assert.ok(doctorResult.runtime.capabilities.includes("local_agent_execution_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_session_isolation"));
@@ -366,6 +382,63 @@ assert.equal(verifierRoster.permissions.edit, false);
 assert.equal(verifierRoster.readOnly, true);
 const plannerRoster = roster.find((item) => item.role === "planner");
 assert.equal(plannerRoster.state, "unassigned");
+const localAgentRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-local-agent-execution-smoke-"));
+await runCli(["init", "--repo", localAgentRepoPath]);
+await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", localAgentRepoPath]);
+const localAgentRun = JSON.parse(
+  (await runCli([
+    "run",
+    "exercise local codex execution telemetry",
+    "--mode",
+    "review",
+    "--repo",
+    localAgentRepoPath,
+    "--critic",
+    "codex-cli:default",
+    "--json"
+  ])).stdout
+);
+const localAgentContinue = JSON.parse(
+  (await runCli(["continue", localAgentRun.runId, "--repo", localAgentRepoPath, "--json"])).stdout
+);
+assert.equal(localAgentContinue.run.state, "completed");
+const localExecutionArtifact = localAgentContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "provider_invocation"
+);
+assert.ok(localExecutionArtifact, "local codex execution should write a provider invocation artifact");
+const localExecution = JSON.parse(await fs.readFile(localExecutionArtifact.ref, "utf8"));
+assert.equal(localExecution.kind, "local_agent_execution");
+assert.equal(localExecution.role, "critic");
+assert.equal(localExecution.provider, "codex-cli");
+assert.equal(localExecution.model, "default");
+assert.equal(localExecution.command, fakeCodexPath);
+assert.equal(localExecution.commandMode, "read-only");
+assert.equal(localExecution.workspaceMode, "target_checkout");
+assert.equal(localExecution.sandbox, "read-only");
+assert.equal(localExecution.exitCode, 0);
+assert.equal(localExecution.timedOut, false);
+assert.equal(localExecution.responseParsed, true);
+assert.equal(localExecution.responseStatus, "ok");
+assert.ok(localExecution.args.includes("--output-schema"));
+const localAgentProgressArtifact = localAgentContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "progress"
+);
+assert.ok(localAgentProgressArtifact, "completed local agent run should write a progress packet");
+const localAgentProgress = JSON.parse(await fs.readFile(localAgentProgressArtifact.ref, "utf8"));
+assert.equal(localAgentProgress.latest.providerExecution.ref, localExecutionArtifact.ref);
+const localAgentStatusText = await runCli(["status", localAgentRun.runId, "--repo", localAgentRepoPath]);
+const localAgentStatusJson = JSON.parse(
+  (await runCli(["status", localAgentRun.runId, "--repo", localAgentRepoPath, "--json"])).stdout
+);
+assert.equal(localAgentStatusJson.insights.latestProviderExecution.artifact.ref, localExecutionArtifact.ref);
+assert.equal(localAgentStatusJson.insights.latestProviderExecution.provider, "codex-cli");
+assert.equal(localAgentStatusJson.insights.latestProviderExecution.role, "critic");
+assert.equal(
+  localAgentStatusJson.insights.canonicalMemory.currentRun.artifacts.latestProviderExecution.ref,
+  localExecutionArtifact.ref
+);
+assert.ok(localAgentStatusText.stdout.includes("local agent executions:"));
+assert.ok(localAgentStatusText.stdout.includes("critic codex-cli:default"));
 await runCli(["roles", "set", "verifier", "codex-cli:default", "--repo", repoPath], { expectExitCode: 6 });
 const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
 const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));

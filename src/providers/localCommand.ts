@@ -51,6 +51,23 @@ interface LocalWorkspace {
   cleanup: () => Promise<void>;
 }
 
+interface LocalAgentExecutionArtifactInput {
+  request: AgentRequest;
+  spec: LocalAgentCommandSpec;
+  workspace: LocalWorkspace;
+  args: string[];
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  exitCode: number;
+  timedOut: boolean;
+  stdoutLength: number;
+  stderrLength: number;
+  responseParsed: boolean;
+  responseStatus: AgentResponse["status"];
+  patchArtifact?: RunArtifact;
+}
+
 const runProcess = async (
   command: string,
   args: string[],
@@ -485,6 +502,99 @@ const withPatchArtifact = (
   };
 };
 
+const commandMode = (request: AgentRequest): string =>
+  request.directive.toolPermissions.edit ? "edit-capable" : "read-only";
+
+const commandOption = (args: string[], option: string): string | undefined => {
+  const optionIndex = args.indexOf(option);
+
+  return optionIndex >= 0 ? args[optionIndex + 1] : undefined;
+};
+
+const writeLocalAgentExecutionArtifact = async (
+  input: LocalAgentExecutionArtifactInput
+): Promise<RunArtifact> => {
+  const sandbox = commandOption(input.args, "--sandbox");
+  const permissionMode = commandOption(input.args, "--permission-mode");
+  const summary = `${input.request.role} local agent ${input.spec.providerId}:${input.request.assignment.model} exited ${input.exitCode}.`;
+  const payload: JsonObject = {
+    schemaVersion: 1,
+    kind: "local_agent_execution",
+    runId: input.request.run.runId,
+    role: input.request.role,
+    provider: input.spec.providerId,
+    model: input.request.assignment.model,
+    command: input.spec.command,
+    args: input.args.map(redactText),
+    commandMode: commandMode(input.request),
+    workspaceMode: input.workspace.mode,
+    ...(sandbox ? { sandbox } : {}),
+    ...(permissionMode ? { permissionMode } : {}),
+    toolPermissions: input.request.directive.toolPermissions as unknown as JsonObject,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt,
+    durationMs: input.durationMs,
+    timeoutMs: input.spec.timeoutMs ?? defaultTimeoutMs,
+    exitCode: input.exitCode,
+    timedOut: input.timedOut,
+    stdoutLength: input.stdoutLength,
+    stderrLength: input.stderrLength,
+    responseParsed: input.responseParsed,
+    responseStatus: input.responseStatus,
+    ...(input.patchArtifact
+      ? {
+          patchArtifact: {
+            kind: input.patchArtifact.kind,
+            ref: input.patchArtifact.ref,
+            summary: input.patchArtifact.summary
+          }
+        }
+      : {})
+  };
+  const artifact = await writeRunArtifact({
+    repoPath: input.request.run.repoPath,
+    runId: input.request.run.runId,
+    kind: "provider_invocation",
+    name: `${input.request.role}-${input.spec.providerId}-${newId("provider-invocation")}.json`,
+    content: `${JSON.stringify(payload, null, 2)}\n`,
+    summary
+  });
+  const latest = await loadRun(input.request.run.repoPath, input.request.run.runId);
+
+  await saveRun({
+    ...latest,
+    updatedAt: nowIso(),
+    artifacts: [...latest.artifacts, artifact],
+    events: [
+      ...latest.events,
+      {
+        id: newId("event"),
+        createdAt: nowIso(),
+        type: "local_agent_command_completed",
+        message: summary,
+        data: {
+          role: input.request.role,
+          provider: input.spec.providerId,
+          model: input.request.assignment.model,
+          command: input.spec.command,
+          workspaceMode: input.workspace.mode,
+          commandMode: commandMode(input.request),
+          ...(sandbox ? { sandbox } : {}),
+          ...(permissionMode ? { permissionMode } : {}),
+          exitCode: input.exitCode,
+          timedOut: input.timedOut,
+          durationMs: input.durationMs,
+          responseParsed: input.responseParsed,
+          responseStatus: input.responseStatus,
+          artifactRef: artifact.ref
+        }
+      }
+    ]
+  });
+
+  return artifact;
+};
+
 export const runLocalAgentCommand = async (
   request: AgentRequest,
   spec: LocalAgentCommandSpec
@@ -504,6 +614,8 @@ export const runLocalAgentCommand = async (
     schemaPath: schemaFile.path,
     workspacePath: workspace.path
   });
+  const startedAt = nowIso();
+  const startedMs = Date.now();
   const child = spawn(spec.command, args, {
     cwd: workspace.path,
     shell: false,
@@ -552,37 +664,53 @@ export const runLocalAgentCommand = async (
     const redactedStdout = redactText(stdout);
     const redactedStderr = redactText(stderr);
     const patchArtifact = await captureIsolatedPatch(request, workspace);
-
-    if (timedOut) {
-      return createFallbackAgentResponse(request, {
+    const parsedResponse = !timedOut && exitCode === 0
+      ? parseLocalAgentOutput(redactedStdout)
+      : undefined;
+    const response = timedOut
+      ? createFallbackAgentResponse(request, {
         status: "failed",
         summary: `${spec.providerId} timed out after ${timeoutMs}ms.`,
         exitCode,
         stdoutLength: redactedStdout.length,
         stderrLength: redactedStderr.length
-      });
-    }
-
-    if (exitCode !== 0) {
-      return createFallbackAgentResponse(request, {
+      })
+      : exitCode !== 0
+        ? createFallbackAgentResponse(request, {
         status: "failed",
         summary: `${spec.providerId} exited with code ${exitCode}.`,
         exitCode,
         stdoutLength: redactedStdout.length,
         stderrLength: redactedStderr.length
-      });
-    }
+      })
+        : parsedResponse ??
+          createFallbackAgentResponse(request, {
+            status: "blocked",
+            summary: `${spec.providerId} returned output that did not match the AgentResponse envelope.`,
+            exitCode,
+            stdoutLength: redactedStdout.length,
+            stderrLength: redactedStderr.length
+          });
+    const responseWithPatch = withPatchArtifact(request, response, patchArtifact, workspace);
 
-    const response = parseLocalAgentOutput(redactedStdout) ??
-      createFallbackAgentResponse(request, {
-        status: "blocked",
-        summary: `${spec.providerId} returned output that did not match the AgentResponse envelope.`,
-        exitCode,
-        stdoutLength: redactedStdout.length,
-        stderrLength: redactedStderr.length
-      });
+    await writeLocalAgentExecutionArtifact({
+      request,
+      spec,
+      workspace,
+      args,
+      startedAt,
+      completedAt: nowIso(),
+      durationMs: Date.now() - startedMs,
+      exitCode,
+      timedOut,
+      stdoutLength: redactedStdout.length,
+      stderrLength: redactedStderr.length,
+      responseParsed: Boolean(parsedResponse),
+      responseStatus: responseWithPatch.status,
+      ...(patchArtifact ? { patchArtifact } : {})
+    });
 
-    return withPatchArtifact(request, response, patchArtifact, workspace);
+    return responseWithPatch;
   } finally {
     clearTimeout(timer);
     await fs.rm(schemaFile.dir, { recursive: true, force: true });

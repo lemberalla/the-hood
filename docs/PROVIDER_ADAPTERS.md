@@ -254,6 +254,7 @@ Rules:
 - Use `read-only` sandbox for non-editing roles.
 - Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--output-schema`.
+- Write a bounded `provider_invocation` artifact after the local command exits so status can show the role, provider/model, command args, workspace mode, sandbox, exit code, timeout state, parse status, and isolated patch ref when present.
 - Do not pass dangerous sandbox bypass flags.
 - Built-in models are `default`, `spark`, and `configured`. `configured` is a wildcard for user-selected CLI aliases such as a future `fable`; TheHood passes non-default model names through with `--model`.
 

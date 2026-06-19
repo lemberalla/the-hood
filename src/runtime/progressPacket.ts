@@ -596,6 +596,7 @@ export const buildProgressPacket = (
   );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
+  const latestProviderExecution = latestArtifact(artifacts.items, (artifact) => artifact.kind === "provider_invocation");
   const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
   const latestCriticTrigger = latestArtifact(artifacts.items, (artifact) => artifact.kind === "critic_trigger");
   const latestRevisionPacket = latestArtifact(artifacts.items, (artifact) => artifact.kind === "revision_packet");
@@ -604,6 +605,7 @@ export const buildProgressPacket = (
   const latest = {
     ...(latestPlan ? { plan: latestPlan } : {}),
     ...(latestProviderResponse ? { providerResponse: latestProviderResponse } : {}),
+    ...(latestProviderExecution ? { providerExecution: latestProviderExecution } : {}),
     ...(latestVerifierResponse ? { verifierResponse: latestVerifierResponse } : {}),
     ...(latestCriticTrigger ? { criticTrigger: latestCriticTrigger } : {}),
     ...(latestRevisionPacket ? { revisionPacket: latestRevisionPacket } : {}),
@@ -669,6 +671,7 @@ export const buildProgressPacket = (
       canonicalSources,
       derivedFields: [
         "latest",
+        "latest.providerExecution",
         "evidence.providerResponses",
         "evidence.git",
         "evidence.validation",

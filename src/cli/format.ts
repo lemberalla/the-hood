@@ -217,6 +217,7 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
     ["reconciliation", insights.latestReconciliation],
     ["repoContext", insights.latestRepoContext],
     ["remoteRepoContext", insights.latestRemoteRepoContext],
+    ["providerExecution", insights.latestProviderExecution?.artifact],
     ["revisionPacket", insights.latestRevisionPacket?.artifact],
     ["reviewRouting", insights.latestReviewRouting?.artifact],
     ["fanout", insights.latestFanout?.artifact],
@@ -226,6 +227,32 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
   return refs.flatMap(([label, artifact]) =>
     artifact ? [`  ${label}: ${artifact.ref}`] : []
   );
+};
+
+const formatProviderExecutionLines = (insights: RunInsights): string[] => {
+  const executions = insights.recentProviderExecutions.slice(-5);
+
+  if (executions.length === 0) {
+    return [];
+  }
+
+  return [
+    "local agent executions:",
+    ...executions.map((execution) => {
+      const assignment = [execution.provider, execution.model].filter(Boolean).join(":");
+      const owner = [execution.role ?? "role", assignment].filter(Boolean).join(" ");
+      const exit = execution.exitCode === undefined ? "exit=unknown" : `exit=${execution.exitCode}`;
+      const parsed = execution.responseParsed === undefined ? "" : ` parsed=${execution.responseParsed}`;
+      const mode = [
+        execution.commandMode,
+        execution.workspaceMode,
+        execution.sandbox ? `sandbox=${execution.sandbox}` : undefined,
+        execution.permissionMode ? `permission=${execution.permissionMode}` : undefined
+      ].filter(Boolean).join(" ");
+
+      return `  ${owner}  ${exit}${parsed}  ${mode}  artifact=${execution.artifact.ref}`.trimEnd();
+    })
+  ];
 };
 
 const formatCriticTriggerLines = (insights: RunInsights): string[] => {
@@ -405,6 +432,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
+  const providerExecutions = formatProviderExecutionLines(insights);
   const criticTrigger = formatCriticTriggerLines(insights);
   const revisionPacket = formatRevisionPacketLines(insights);
   const reviewRouting = formatReviewRoutingLines(insights);
@@ -440,6 +468,12 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           "",
           "canonical memory refs:",
           ...memoryRefs
+        ]
+      : []),
+    ...(providerExecutions.length > 0
+      ? [
+          "",
+          ...providerExecutions
         ]
       : []),
     ...(criticTrigger.length > 0

@@ -113,6 +113,7 @@ export type RunArtifactKind =
   | "revision_packet"
   | "review_routing"
   | "fanout"
+  | "provider_invocation"
   | "transfer_manifest";
 
 export interface RunArtifact {
@@ -497,6 +498,7 @@ export interface ProgressPacketRunSnapshot {
 export interface ProgressPacketLatestState {
   plan?: ProgressPacketArtifactRef;
   providerResponse?: ProgressPacketProviderResponse;
+  providerExecution?: ProgressPacketArtifactRef;
   verifierResponse?: ProgressPacketProviderResponse;
   criticTrigger?: ProgressPacketArtifactRef;
   revisionPacket?: ProgressPacketArtifactRef;

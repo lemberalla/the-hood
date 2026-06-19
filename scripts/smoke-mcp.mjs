@@ -290,6 +290,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("provider_directive_ack"))
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("review_routing_policy"));
+assert.ok(doctorContent.runtime.capabilities.includes("local_agent_execution_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_session_isolation"));
@@ -1002,6 +1003,9 @@ const isolatedImplementation = isolatedPatchGate.provider_responses.find(
   (response) => response.data.implementationResult
 ).data.implementationResult;
 const isolatedDiffArtifact = isolatedPatchGate.artifacts.find((artifact) => artifact.kind === "diff");
+const isolatedProviderInvocationArtifact = isolatedPatchGate.artifacts.find(
+  (artifact) => artifact.kind === "provider_invocation"
+);
 const isolatedPatchApproval = isolatedPatchGate.next_actions.find(
   (action) => action.action === "continue_with_approval"
 );
@@ -1016,6 +1020,7 @@ assert.ok(isolatedPatchGate.approval_reason.includes("apply isolated patch"));
 assert.equal(isolatedImplementation.status, "changed");
 assert.equal(isolatedImplementation.isolatedWorkspace.mode, "isolated_git_worktree");
 assert.equal(isolatedImplementation.patchArtifact.ref, isolatedDiffArtifact.ref);
+assert.ok(isolatedProviderInvocationArtifact, "MCP isolated codex run should expose provider invocation evidence");
 assert.equal(isolatedPatchInspection.tool, "thehood_read_artifact");
 assert.equal(isolatedPatchInspection.arguments.ref, isolatedDiffArtifact.ref);
 assert.equal(isolatedPatchApproval.arguments.run_id, isolatedRunId);
