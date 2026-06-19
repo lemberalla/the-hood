@@ -104,8 +104,10 @@ node dist/cli/main.js loop <run-id> --repo .
 node dist/cli/main.js transfer preview <run-id> --repo .
 node dist/cli/main.js approvals policy set mode autopilot --repo .
 node dist/cli/main.js ui approvals --repo .
-node dist/cli/main.js ui actions --repo .
-node dist/cli/main.js ui set max-iterations 8 --repo .
+node dist/cli/main.js ui settings --repo .
+node dist/cli/main.js ui settings crew --repo .
+node dist/cli/main.js ui settings commands --repo .
+node dist/cli/main.js config set max-iterations 8 --repo .
 node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
 node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>

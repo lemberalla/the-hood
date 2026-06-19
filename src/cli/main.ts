@@ -118,10 +118,7 @@ Usage:
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
   thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
-  thehood ui [approvals|settings [page]|overview|actions|crew|providers|presets|budgets|safety|browser|commands|all] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
-  thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value> [--repo <path>] [--json]
-  thehood ui team <preset> [--repo <path>] [--json]
-  thehood ui role <role> <provider:model> [--repo <path>] [--json]
+  thehood ui [approvals|settings [overview|crew|providers|budgets|safety|browser|commands|all]] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
   thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
@@ -1040,10 +1037,10 @@ const handleUi = async (
     throw new InputError(`Unknown ui subcommand "${subcommand}".`);
   }
   if (subcommand === "settings" && args.length > 2) {
-    throw new InputError("Usage: thehood ui settings [overview|actions|crew|providers|presets|budgets|safety|browser|commands|all].");
+    throw new InputError("Usage: thehood ui settings [overview|crew|providers|budgets|safety|browser|commands|all].");
   }
   if (settingsPage && subcommand !== "settings" && args.length > 1) {
-    throw new InputError("Usage: thehood ui [overview|actions|crew|providers|presets|budgets|safety|browser|commands|all].");
+    throw new InputError("Usage: thehood ui settings [overview|crew|providers|budgets|safety|browser|commands|all].");
   }
 
   const repoPath = repoFromOptions(options);

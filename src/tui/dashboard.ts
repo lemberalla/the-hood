@@ -48,10 +48,8 @@ interface RenderOptions {
 
 export const settingsPageIds = [
   "overview",
-  "actions",
   "crew",
   "providers",
-  "presets",
   "budgets",
   "safety",
   "browser",
@@ -268,14 +266,14 @@ const approvalModeCommand = (repoPath: string, mode: string): string =>
 const externalTransferModeCommand = (repoPath: string, mode: string): string =>
   cliCommand(repoPath, ["approvals", "policy", "set", "external-transfers", mode]);
 
-const uiSetCommand = (repoPath: string, key: string, value: string | number): string =>
-  cliCommand(repoPath, ["ui", "set", key, String(value)]);
+const browserCommand = (subcommand: string): string =>
+  [...cliCommandPrefix(), "browser", subcommand].join(" ");
 
-const uiTeamCommand = (repoPath: string, presetId: string): string =>
-  cliCommand(repoPath, ["ui", "team", presetId]);
+const settingsCommandGroups = {
+  corePages: ["crew", "providers", "budgets", "safety", "browser", "commands"] as const
+};
 
-const uiRoleCommand = (repoPath: string, role: string, assignment: RoleAssignment | undefined): string =>
-  cliCommand(repoPath, ["ui", "role", role, assignment ? assignmentValue(assignment) : "<provider:model>"]);
+type CoreSettingsPageId = typeof settingsCommandGroups.corePages[number];
 
 const statusWord = (ready: boolean): string => ready ? "ready" : "needs attention";
 
@@ -869,7 +867,7 @@ const settingsCrewRows = (input: SettingsInput, width: number): string[] => {
         [role.role, 12],
         [truncateEnd(assignmentValue(role.assignment), 18), 18],
         [truncateEnd(rosterState(role), 9), 9],
-        [truncateEnd(uiRoleCommand(input.repoPath, role.role, role.assignment), commandWidth), commandWidth]
+        [truncateEnd(roleSetCommand(input.repoPath, role.role, role.assignment), commandWidth), commandWidth]
       ])
     )
   ];
@@ -890,7 +888,7 @@ const settingsTeamRows = (input: SettingsInput, width: number): string[] => {
         [teamPresetIsActive(input, preset) ? "yes" : "", 4],
         [preset.id, 16],
         [truncateEnd(preset.summary, 14), 14],
-        [truncateEnd(uiTeamCommand(input.repoPath, preset.id), commandWidth), commandWidth]
+        [truncateEnd(teamApplyCommand(input.repoPath, preset.id), commandWidth), commandWidth]
       ])
     )
   ];
@@ -905,12 +903,12 @@ const settingsBudgetLines = (input: SettingsInput, width: number): string[] => [
   tableRow([
     ["max iterations", 18],
     [String(input.config.defaults.maxIterations), 7],
-    [truncateEnd(uiSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations), Math.max(24, width - 29)), Math.max(24, width - 29)]
+    [truncateEnd(configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations), Math.max(24, width - 29)), Math.max(24, width - 29)]
   ]),
   tableRow([
     ["fanout max items", 18],
     [String(input.config.defaults.fanoutMaxItems), 7],
-    [truncateEnd(uiSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems), Math.max(24, width - 29)), Math.max(24, width - 29)]
+    [truncateEnd(configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems), Math.max(24, width - 29)), Math.max(24, width - 29)]
   ])
 ];
 
@@ -922,12 +920,12 @@ const settingsApprovalLines = (input: SettingsInput, width: number): string[] =>
     tableRow([
       ["approval posture", 18],
       [modeLabel(input.config.approvalPolicy.mode), 7],
-      [truncateEnd(uiSetCommand(input.repoPath, "approval-mode", modeLabel(input.config.approvalPolicy.mode)), commandWidth), commandWidth]
+      [truncateEnd(approvalModeCommand(input.repoPath, modeLabel(input.config.approvalPolicy.mode)), commandWidth), commandWidth]
     ]),
     tableRow([
       ["external transfers", 18],
       [modeLabel(input.config.approvalPolicy.externalTransfers.mode), 7],
-      [truncateEnd(uiSetCommand(input.repoPath, "external-transfers", modeLabel(input.config.approvalPolicy.externalTransfers.mode)), commandWidth), commandWidth]
+      [truncateEnd(externalTransferModeCommand(input.repoPath, modeLabel(input.config.approvalPolicy.externalTransfers.mode)), commandWidth), commandWidth]
     ]),
     tableRow([
       ["max auto bytes", 18],
@@ -993,26 +991,31 @@ const settingsBrowserLines = (input: SettingsInput, width: number): string[] => 
   `cdp ${input.browser.cdpReachable ? "reachable" : "unreachable"} ${truncateEnd(input.browser.cdpUrl, Math.max(10, width - 18))}`,
   `profile ${truncateMiddle(input.browser.profilePath, Math.max(10, width - 10))}`,
   `tab ${input.browser.chatGptTabFound ? "found" : "not found"}`,
-  `open ${truncateEnd("thehood browser start", Math.max(10, width - 6))}`,
-  `status ${truncateEnd("thehood browser status --json", Math.max(10, width - 8))}`
+  `start ${truncateEnd(browserCommand("start"), Math.max(10, width - 7))}`,
+  `status ${truncateEnd(browserCommand("status"), Math.max(10, width - 8))}`,
+  `stop ${truncateEnd(browserCommand("stop"), Math.max(10, width - 6))}`
 ];
 
 const settingsActionDeckLines = (input: SettingsInput, width: number): string[] => [
-  "Quick Actions",
+  "Source-Of-Truth Commands",
   "  Safety",
-  `    ${uiSetCommand(input.repoPath, "approval-mode", "manual")}`,
-  `    ${uiSetCommand(input.repoPath, "approval-mode", "auto-low-risk")}`,
-  `    ${uiSetCommand(input.repoPath, "approval-mode", "autopilot")}`,
-  `    ${uiSetCommand(input.repoPath, "external-transfers", "manual")}`,
-  `    ${uiSetCommand(input.repoPath, "external-transfers", "auto-low-risk")}`,
+  `    ${approvalModeCommand(input.repoPath, "manual")}`,
+  `    ${approvalModeCommand(input.repoPath, "auto-low-risk")}`,
+  `    ${approvalModeCommand(input.repoPath, "autopilot")}`,
+  `    ${externalTransferModeCommand(input.repoPath, "manual")}`,
+  `    ${externalTransferModeCommand(input.repoPath, "auto-low-risk")}`,
   "  Budgets",
-  `    ${uiSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
-  `    ${uiSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
+  `    ${configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
+  `    ${configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
   "  Team",
-  ...input.teamPresets.map((preset) => `    ${uiTeamCommand(input.repoPath, preset.id)}`),
+  ...input.teamPresets.map((preset) => `    ${teamApplyCommand(input.repoPath, preset.id)}`),
+  "  Browser",
+  `    ${browserCommand("status")}`,
+  `    ${browserCommand("start")}`,
+  `    ${browserCommand("stop")}`,
   "",
   "Current Crew",
-  ...input.roleRoster.map((role) => `  ${truncateEnd(uiRoleCommand(input.repoPath, role.role, role.assignment), width - 2)}`)
+  ...input.roleRoster.map((role) => `  ${truncateEnd(roleSetCommand(input.repoPath, role.role, role.assignment), width - 2)}`)
 ];
 
 const settingsUnderlyingCommandLines = (input: SettingsInput, width: number): string[] => [
@@ -1022,6 +1025,11 @@ const settingsUnderlyingCommandLines = (input: SettingsInput, width: number): st
   `  ${approvalModeCommand(input.repoPath, "autopilot")}`,
   `  ${configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
   `  ${configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
+  `  ${externalTransferModeCommand(input.repoPath, "manual")}`,
+  `  ${externalTransferModeCommand(input.repoPath, "auto-low-risk")}`,
+  `  ${browserCommand("status")}`,
+  `  ${browserCommand("start")}`,
+  `  ${browserCommand("stop")}`,
   `  ${cliCommand(input.repoPath, ["teams"])}`,
   `  ${cliCommand(input.repoPath, ["providers"])}`,
   `  ${cliCommand(input.repoPath, ["roster"])}`,
@@ -1048,10 +1056,8 @@ const settingsCommandDeckLines = (input: SettingsInput, width: number): string[]
 
 const settingsPageDescription: Record<SettingsPageId, string> = {
   overview: "compact status and page menu",
-  actions: "short commands for common settings",
   crew: "role assignments and set commands",
   providers: "provider states and available models",
-  presets: "team presets and apply commands",
   budgets: "iteration and fan-out limits",
   safety: "approval policy and protected rails",
   browser: "ChatGPT Web bridge status",
@@ -1061,8 +1067,8 @@ const settingsPageDescription: Record<SettingsPageId, string> = {
 
 const settingsPageCommand = (input: SettingsInput, page: SettingsPageId): string =>
   page === "overview"
-    ? cliCommand(input.repoPath, ["ui", "overview"])
-    : cliCommand(input.repoPath, ["ui", page]);
+    ? cliCommand(input.repoPath, ["ui", "settings"])
+    : cliCommand(input.repoPath, ["ui", "settings", page]);
 
 const settingsSummaryLines = (input: SettingsInput, width: number): string[] => {
   const readyCrew = input.roleRoster.filter((role) => rosterState(role) === "ready").length;
@@ -1098,7 +1104,7 @@ const settingsCrewSnapshotLines = (input: SettingsInput, width: number): string[
 };
 
 const settingsPageMenuLines = (input: SettingsInput, width: number): string[] => {
-  const pages = settingsPageIds.filter((page) => page !== "overview");
+  const pages: CoreSettingsPageId[] = [...settingsCommandGroups.corePages];
   const descriptionWidth = width >= 96 ? 34 : 24;
   const commandWidth = Math.max(16, width - descriptionWidth - 14);
 
@@ -1139,18 +1145,6 @@ const renderSettingsCrew = (input: SettingsInput, width: number, useColor: boole
   return frame("THEHOOD SETTINGS / CREW", lines, width, useColor, "amber");
 };
 
-const renderSettingsActions = (input: SettingsInput, width: number, useColor: boolean): string => {
-  const innerWidth = width - 4;
-
-  return frame(
-    "THEHOOD SETTINGS / ACTIONS",
-    settingsActionDeckLines(input, innerWidth),
-    width,
-    useColor,
-    "amber"
-  );
-};
-
 const renderSettingsProviders = (input: SettingsInput, width: number, useColor: boolean): string => {
   const innerWidth = width - 4;
   const lines = [
@@ -1159,16 +1153,6 @@ const renderSettingsProviders = (input: SettingsInput, width: number, useColor: 
   ];
 
   return frame("THEHOOD SETTINGS / PROVIDERS", lines, width, useColor, "amber");
-};
-
-const renderSettingsPresets = (input: SettingsInput, width: number, useColor: boolean): string => {
-  const innerWidth = width - 4;
-  const lines = [
-    "TEAM PRESETS",
-    ...settingsTeamRows(input, innerWidth)
-  ];
-
-  return frame("THEHOOD SETTINGS / PRESETS", lines, width, useColor, "amber");
 };
 
 const renderSettingsBudgets = (input: SettingsInput, width: number, useColor: boolean): string => {
@@ -1297,14 +1281,10 @@ const renderSettingsPage = (
   switch (page) {
     case "overview":
       return renderSettingsOverview(input, width, useColor);
-    case "actions":
-      return renderSettingsActions(input, width, useColor);
     case "crew":
       return renderSettingsCrew(input, width, useColor);
     case "providers":
       return renderSettingsProviders(input, width, useColor);
-    case "presets":
-      return renderSettingsPresets(input, width, useColor);
     case "budgets":
       return renderSettingsBudgets(input, width, useColor);
     case "safety":

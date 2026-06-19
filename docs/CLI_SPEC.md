@@ -53,13 +53,15 @@ thehood browser status
 thehood browser stop
 thehood ui
 thehood ui approvals
-thehood ui actions
-thehood ui set approval-mode autopilot
-thehood ui set external-transfers auto-low-risk
-thehood ui set max-iterations 8
-thehood ui set fanout-max-items 4
-thehood ui team codex-default
-thehood ui role qa codex-cli:spark
+thehood ui settings
+thehood ui settings crew
+thehood ui settings commands
+thehood approvals policy set mode autopilot
+thehood approvals policy set external-transfers auto-low-risk
+thehood config set max-iterations 8
+thehood config set fanout-max-items 4
+thehood teams apply codex-default
+thehood roles set qa codex-cli:spark
 ```
 
 ## Run Modes
@@ -321,20 +323,23 @@ thehood ui approvals --repo . --revise <run-id>
 
 The TUI only calls existing runtime approval transitions; it does not decide whether an approval is safe.
 
-`thehood ui settings --repo .` opens the settings cockpit. Settings pages can also be opened directly with `thehood ui overview|actions|crew|providers|presets|budgets|safety|browser|commands|all --repo .`.
+`thehood ui settings --repo .` opens the compact settings cockpit. Focused pages live under the same settings surface: `thehood ui settings crew|providers|budgets|safety|browser|commands|all --repo .`.
 
-The settings action deck exposes short commands for common edits while delegating to the same runtime-owned config, approval, team, and role handlers as the longer commands:
+The settings command deck prints the existing runtime-owned commands for common edits:
 
 ```bash
-thehood ui set approval-mode manual|auto-low-risk|autopilot --repo .
-thehood ui set external-transfers manual|auto-low-risk --repo .
-thehood ui set max-iterations 8 --repo .
-thehood ui set fanout-max-items 4 --repo .
-thehood ui team codex-default|pro-orchestrator|claude-critic --repo .
-thehood ui role verifier codex-cli:spark --repo .
+thehood approvals policy set mode manual|auto-low-risk|autopilot --repo .
+thehood approvals policy set external-transfers manual|auto-low-risk --repo .
+thehood config set max-iterations 8 --repo .
+thehood config set fanout-max-items 4 --repo .
+thehood teams apply codex-default|pro-orchestrator|claude-critic --repo .
+thehood roles set verifier codex-cli:spark --repo .
+thehood browser status
+thehood browser start
+thehood browser stop
 ```
 
-These shortcuts only update repo config through existing validation. They do not create a new orchestration path, bypass role invariants, or weaken approval gates.
+The settings UI displays and routes these controls. It does not create a new orchestration path, bypass role invariants, or weaken approval gates.
 
 ## ChatGPT MCP Tunnel Helper
 
