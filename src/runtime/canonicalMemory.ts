@@ -9,6 +9,7 @@ export interface CanonicalMemoryArtifactRefs {
   latestProgressPacket?: CanonicalMemoryArtifactRef;
   latestReconciliation?: CanonicalMemoryArtifactRef;
   latestRepoContext?: CanonicalMemoryArtifactRef;
+  latestRemoteRepoContext?: CanonicalMemoryArtifactRef;
   latestFinalReport?: CanonicalMemoryArtifactRef;
   latestCriticTrigger?: CanonicalMemoryArtifactRef;
   latestRevisionPacket?: CanonicalMemoryArtifactRef;
@@ -56,6 +57,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
   const latestProgressPacket = latestArtifact(run, (artifact) => artifact.kind === "progress");
   const latestReconciliation = latestArtifact(run, (artifact) => artifact.kind === "reconciliation");
   const latestRepoContext = latestArtifact(run, (artifact) => artifact.kind === "context");
+  const latestRemoteRepoContext = latestArtifact(run, (artifact) => artifact.kind === "remote_context");
   const latestCriticTrigger = latestArtifact(run, (artifact) => artifact.kind === "critic_trigger");
   const latestRevisionPacket = latestArtifact(run, (artifact) => artifact.kind === "revision_packet");
   const latestFanout = latestArtifact(run, (artifact) => artifact.kind === "fanout");
@@ -68,6 +70,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
     ...(latestProgressPacket ? { latestProgressPacket } : {}),
     ...(latestReconciliation ? { latestReconciliation } : {}),
     ...(latestRepoContext ? { latestRepoContext } : {}),
+    ...(latestRemoteRepoContext ? { latestRemoteRepoContext } : {}),
     ...(finalReport ? { latestFinalReport: finalReport } : {}),
     ...(latestCriticTrigger ? { latestCriticTrigger } : {}),
     ...(latestRevisionPacket ? { latestRevisionPacket } : {}),
@@ -137,6 +140,7 @@ export const buildCanonicalMemory = async (run: RunRecord): Promise<JsonObject> 
     "latestProgressPacket",
     "latestReconciliation",
     "latestRepoContext",
+    "latestRemoteRepoContext",
     "latestFinalReport",
     "latestRevisionPacket",
     "latestFanout",
@@ -158,7 +162,7 @@ export const buildCanonicalMemory = async (run: RunRecord): Promise<JsonObject> 
     instructions: [
       "Treat TheHood runtime state and artifact refs as authoritative.",
       "Ignore stale browser, chat, or provider session context unless it is repeated in this canonicalMemory or the current directive context.",
-      "Use artifact refs to ask the runtime for more evidence; do not assume large artifact bodies are present here.",
+      "Use artifact refs, including local and remote repo context refs, to ask the runtime for more evidence; do not assume large artifact bodies are present here.",
       "This object is a bounded project memory index, not a memory engine."
     ],
     currentRun: summarizeRun(run),

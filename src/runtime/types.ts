@@ -105,6 +105,7 @@ export type RunArtifactKind =
   | "agent"
   | "directive"
   | "context"
+  | "remote_context"
   | "progress"
   | "reconciliation"
   | "critic_trigger"

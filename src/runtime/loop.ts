@@ -33,6 +33,12 @@ import {
   readCombinedRepoContext,
   repoContextArtifacts
 } from "./repoContext.js";
+import {
+  captureRemoteRepoContext,
+  latestRemoteRepoContextArtifact,
+  readLatestRemoteRepoContext,
+  remoteRepoContextArtifacts
+} from "./remoteRepoContext.js";
 import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
@@ -1294,10 +1300,14 @@ const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
   const repoContext = await readCombinedRepoContext(run);
   const contextArtifact = latestRepoContextArtifact(run);
   const contextArtifacts = repoContextArtifacts(run);
+  const remoteRepoContext = await readLatestRemoteRepoContext(run);
+  const remoteContextArtifact = latestRemoteRepoContextArtifact(run);
+  const remoteContextArtifacts = remoteRepoContextArtifacts(run);
 
   return {
     phase: run.mode,
     ...(repoContext ? { repoContext: repoContext as unknown as JsonObject } : {}),
+    ...(remoteRepoContext ? { remoteRepoContext: remoteRepoContext as unknown as JsonObject } : {}),
     ...(contextArtifact
       ? {
           repoContextArtifact: {
@@ -1310,6 +1320,24 @@ const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
     ...(contextArtifacts.length > 0
       ? {
           repoContextArtifacts: contextArtifacts.map((artifact) => ({
+            kind: artifact.kind,
+            ref: artifact.ref,
+            summary: artifact.summary
+          }))
+        }
+      : {}),
+    ...(remoteContextArtifact
+      ? {
+          remoteRepoContextArtifact: {
+            kind: remoteContextArtifact.kind,
+            ref: remoteContextArtifact.ref,
+            summary: remoteContextArtifact.summary
+          }
+        }
+      : {}),
+    ...(remoteContextArtifacts.length > 0
+      ? {
+          remoteRepoContextArtifacts: remoteContextArtifacts.map((artifact) => ({
             kind: artifact.kind,
             ref: artifact.ref,
             summary: artifact.summary
@@ -1522,6 +1550,7 @@ const executeReadOnlyRun = async (
     }
 
     const existingContextArtifact = latestRepoContextArtifact(result.run);
+    const existingRemoteContextArtifact = latestRemoteRepoContextArtifact(result.run);
     let preferredPaths: string[] = [];
 
     if (existingContextArtifact) {
@@ -1563,6 +1592,52 @@ const executeReadOnlyRun = async (
           response: result.response,
           advanced: true,
           stopReason: approvalReason
+        };
+      }
+    }
+
+    if (!existingContextArtifact && existingRemoteContextArtifact) {
+      const approvalReason =
+        `${role} requested another delegation after GitHub connector repo context was already selected.`;
+      const gated = await updateRun(
+        result.run,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [
+          createEvent("approval_required", approvalReason, {
+            role,
+            reason: "repeated_remote_repo_context_delegate",
+            existingRemoteContextArtifactRef: existingRemoteContextArtifact.ref
+          })
+        ],
+        [approvalGateHandoff(result.run, {
+          reason: approvalReason,
+          role,
+          gate: "repeated_remote_repo_context_delegate",
+          artifactRefs: [existingRemoteContextArtifact.ref]
+        })]
+      );
+
+      return {
+        run: gated,
+        response: result.response,
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
+
+    if (!existingContextArtifact && !existingRemoteContextArtifact) {
+      const remoteContext = await captureRemoteRepoContext(result.run, assignment, decision);
+
+      if (remoteContext.selected) {
+        return {
+          run: remoteContext.run,
+          response: result.response,
+          advanced: true,
+          stopReason: "Selected GitHub connector repo context for delegated read-only planning."
         };
       }
     }

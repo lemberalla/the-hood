@@ -199,6 +199,7 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
     ["progress", insights.latestProgressPacket],
     ["reconciliation", insights.latestReconciliation],
     ["repoContext", insights.latestRepoContext],
+    ["remoteRepoContext", insights.latestRemoteRepoContext],
     ["revisionPacket", insights.latestRevisionPacket?.artifact],
     ["fanout", insights.latestFanout?.artifact],
     ["transferManifest", insights.latestTransferManifest]

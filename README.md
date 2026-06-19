@@ -37,6 +37,7 @@ It supports:
 - runtime-owned final reports for completed runs
 - runtime-owned progress packet artifacts for completed runs
 - runtime-owned external transfer manifests before repo context or progress packets leave the machine
+- GitHub connector-aware repo context routing for clean pushed repos in ChatGPT Web
 - user-configurable approval policy with manual, auto-low-risk, and autopilot modes
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
@@ -57,10 +58,11 @@ It supports:
 - terminal approval inbox for pending runtime gates
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
 - run status insights for latest provider output and final reports
-- run status insights for latest progress, reconciliation, repo context, final report, and transfer manifest refs
+- run status insights for latest progress, reconciliation, repo context, remote repo context, final report, and transfer manifest refs
 - runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
+- refs-only GitHub connector context when ChatGPT Web can inspect a clean pushed GitHub repo at the current commit
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths
 - schema-bound planner reconciliation from completed run progress packets
 - bounded MCP artifact reads for inspecting guest-agent responses from chat

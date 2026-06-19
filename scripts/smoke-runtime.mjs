@@ -9,6 +9,9 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
 const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
+const { chooseRepoContextRoute, parseGitHubRemoteUrl } = await import(
+  pathToFileURL(path.join(root, "dist", "runtime", "remoteRepoContext.js")).href
+);
 
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
@@ -75,6 +78,86 @@ const runNodeScript = async (scriptPath, args, stdin = "", options = {}) => {
     exitCode
   };
 };
+
+const runLocalCommand = async (command, args, cwd) => {
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const exitCode = await new Promise((resolve) => {
+    child.on("close", resolve);
+  });
+
+  assert.equal(exitCode, 0, stderr || stdout);
+
+  return {
+    stdout,
+    stderr,
+    exitCode
+  };
+};
+
+assert.deepEqual(parseGitHubRemoteUrl("https://github.com/owner/repo.git"), {
+  owner: "owner",
+  repo: "repo",
+  normalizedUrl: "https://github.com/owner/repo"
+});
+assert.deepEqual(parseGitHubRemoteUrl("git@github.com:owner/repo.git"), {
+  owner: "owner",
+  repo: "repo",
+  normalizedUrl: "https://github.com/owner/repo"
+});
+assert.deepEqual(parseGitHubRemoteUrl("ssh://git@github.com/owner/repo.git"), {
+  owner: "owner",
+  repo: "repo",
+  normalizedUrl: "https://github.com/owner/repo"
+});
+assert.equal(parseGitHubRemoteUrl("https://example.com/owner/repo.git"), undefined);
+assert.equal(
+  chooseRepoContextRoute({
+    provider: "chatgpt-web",
+    repoPath: "/tmp/repo",
+    githubRemote: {
+      name: "origin",
+      owner: "owner",
+      repo: "repo",
+      url: "git@github.com:owner/repo.git",
+      normalizedUrl: "https://github.com/owner/repo"
+    },
+    branch: "main",
+    commit: "abc",
+    upstream: "origin/main",
+    upstreamCommit: "abc",
+    clean: true,
+    pushed: true,
+    statusPathCount: 0,
+    statusPaths: [],
+    reasons: []
+  }).route,
+  "github_connector"
+);
+assert.equal(
+  chooseRepoContextRoute({
+    provider: "codex-cli",
+    repoPath: "/tmp/repo",
+    clean: true,
+    pushed: true,
+    statusPathCount: 0,
+    statusPaths: [],
+    reasons: []
+  }).route,
+  "local_bundle"
+);
 
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
 const fakeCodexDir = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-fake-codex-"));
@@ -150,6 +233,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("final_report_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_manifests"));
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("targeted_repo_context_followups"));
+assert.ok(doctorResult.runtime.capabilities.includes("github_connector_repo_context"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("canonical_memory_rehydration"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_directive_ack"));
@@ -823,6 +907,7 @@ await fs.writeFile(
     "process.stdin.on('data', (chunk) => { input += chunk; });",
     "process.stdin.on('end', async () => {",
     "  const hasRepoContext = input.includes('\"repoContext\"');",
+    "  const hasRemoteRepoContext = input.includes('\"remoteRepoContext\"');",
     "  const hasProgressPacket = input.includes('\"progressPacket\"');",
     "  const isTargetedContextSmoke = input.includes('targeted-follow-up-context-smoke');",
     "  const isTruncatedContextSmoke = input.includes('truncated-follow-up-context-smoke');",
@@ -833,15 +918,18 @@ await fs.writeFile(
     "  const targetFiles = Array.from({ length: 8 }, (_, index) => `notes/targeted-evidence-${index}.md`);",
     "  const truncatedTargetFile = 'notes/truncated-context.md';",
     "  if (logPath) {",
-    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRepoContext ? hasTruncatedInitial && hasTruncatedContinuation ? 'truncated-combined-context\\n' : hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
+    "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRemoteRepoContext ? 'remote-context\\n' : hasRepoContext ? hasTruncatedInitial && hasTruncatedContinuation ? 'truncated-combined-context\\n' : hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
-    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasTruncatedInitial && hasTruncatedContinuation ? 'fake ChatGPT received combined truncated repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
+    "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasRemoteRepoContext ? 'fake ChatGPT used GitHub connector repo context' : hasTruncatedInitial && hasTruncatedContinuation ? 'fake ChatGPT received combined truncated repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
     "      decision: hasProgressPacket ? {",
     "        action: 'complete',",
     "        reason: 'Approved progress packet was reconciled.'",
+    "      } : hasRemoteRepoContext ? {",
+    "        action: 'complete',",
+    "        reason: 'GitHub connector repo context was enough for a plan.'",
     "      } : hasTruncatedInitial && hasTruncatedContinuation ? {",
     "        action: 'complete',",
     "        reason: 'Combined continuation repo context was enough for a plan.'",
@@ -887,6 +975,110 @@ const fakeExternalEnv = {
   THEHOOD_CHATGPT_WEB_COMMAND: fakeExternalBridgePath,
   THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath
 };
+const remoteContextRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-remote-context-smoke-"));
+await runCli(["init", "--repo", remoteContextRepoPath]);
+await fs.writeFile(path.join(remoteContextRepoPath, "README.md"), "# Remote Context Smoke\n", "utf8");
+await runLocalCommand("git", ["init"], remoteContextRepoPath);
+await runLocalCommand("git", ["branch", "-M", "main"], remoteContextRepoPath);
+await runLocalCommand("git", ["config", "user.name", "TheHood Smoke"], remoteContextRepoPath);
+await runLocalCommand("git", ["config", "user.email", "smoke@example.invalid"], remoteContextRepoPath);
+await runLocalCommand("git", ["add", "README.md"], remoteContextRepoPath);
+await runLocalCommand("git", ["commit", "-m", "init"], remoteContextRepoPath);
+await runLocalCommand(
+  "git",
+  ["remote", "add", "origin", "git@github.com:thehood/remote-context-smoke.git"],
+  remoteContextRepoPath
+);
+await runLocalCommand("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], remoteContextRepoPath);
+await runLocalCommand("git", ["branch", "--set-upstream-to=origin/main", "main"], remoteContextRepoPath);
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const remoteContextPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "remote-github-connector-context-smoke provider milestone",
+        "--repo",
+        remoteContextRepoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const remoteContextInvocationGate = JSON.parse(
+  (
+    await runCli(["continue", remoteContextPlan.runId, "--repo", remoteContextRepoPath, "--json"], {
+      env: fakeExternalEnv
+    })
+  ).stdout
+);
+assert.equal(remoteContextInvocationGate.run.state, "awaiting_approval");
+assert.ok(remoteContextInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli([
+  "approve",
+  remoteContextPlan.runId,
+  "--repo",
+  remoteContextRepoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for remote context smoke."
+]);
+const remoteContextCompleted = JSON.parse(
+  (
+    await runCli(["continue", remoteContextPlan.runId, "--repo", remoteContextRepoPath, "--json"], {
+      env: fakeExternalEnv
+    })
+  ).stdout
+);
+assert.equal(remoteContextCompleted.run.state, "completed");
+assert.deepEqual(remoteContextCompleted.providerResponses.map((response) => response.data.decision.action), [
+  "delegate",
+  "complete"
+]);
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "remote-context"
+]);
+const remoteContextArtifact = remoteContextCompleted.run.artifacts.find((artifact) => artifact.kind === "remote_context");
+assert.ok(remoteContextArtifact, "clean pushed GitHub repo should attach a refs-only remote context artifact");
+assert.ok(
+  !remoteContextCompleted.run.artifacts.some((artifact) => artifact.kind === "context"),
+  "clean pushed GitHub repo should not capture local context excerpts for ChatGPT Web"
+);
+assert.ok(
+  !remoteContextCompleted.run.artifacts.some((artifact) => artifact.kind === "transfer_manifest"),
+  "refs-only GitHub connector context should not create a local repo-context transfer manifest"
+);
+const remoteContext = JSON.parse(await fs.readFile(remoteContextArtifact.ref, "utf8"));
+assert.equal(remoteContext.kind, "github_connector_repo_context");
+assert.equal(remoteContext.remote.owner, "thehood");
+assert.equal(remoteContext.remote.repo, "remote-context-smoke");
+assert.equal(remoteContext.remote.branch, "main");
+assert.equal(remoteContext.localState.clean, true);
+assert.equal(remoteContext.localState.pushed, true);
+const remoteContextStatus = JSON.parse(
+  (await runCli(["status", remoteContextPlan.runId, "--repo", remoteContextRepoPath, "--json"])).stdout
+);
+assert.equal(remoteContextStatus.insights.latestRemoteRepoContext.ref, remoteContextArtifact.ref);
+assert.equal(
+  remoteContextStatus.insights.canonicalMemory.currentRun.artifacts.latestRemoteRepoContext.ref,
+  remoteContextArtifact.ref
+);
+const remoteContextStatusText = await runCli(["status", remoteContextPlan.runId, "--repo", remoteContextRepoPath]);
+assert.ok(remoteContextStatusText.stdout.includes("remoteRepoContext:"));
+const remoteDirectiveArtifacts = remoteContextCompleted.run.artifacts.filter((artifact) => artifact.kind === "directive");
+const remoteDirective = await Promise.all(
+  remoteDirectiveArtifacts.map(async (artifact) => JSON.parse(await fs.readFile(artifact.ref, "utf8")))
+);
+assert.ok(
+  remoteDirective.some((directive) => directive.variables.context.remoteRepoContext?.kind === "github_connector_repo_context"),
+  "provider directive should include remoteRepoContext for GitHub connector rehydration"
+);
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
 const externalContextPlan = JSON.parse(
   (
     await runCli(
@@ -929,7 +1121,7 @@ const uiApprovalResult = JSON.parse(
   (await runCli(["ui", "approvals", "--repo", repoPath, "--approve", externalContextPlan.runId, "--json"])).stdout
 );
 assert.equal(uiApprovalResult.approvalEvents.at(-1).decision, "approve");
-await assert.rejects(fs.readFile(fakeExternalBridgeLogPath, "utf8"));
+assert.equal(await fs.readFile(fakeExternalBridgeLogPath, "utf8"), "");
 const externalContextGate = JSON.parse(
   (await runCli(["continue", externalContextPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
 );

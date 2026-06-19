@@ -15,6 +15,7 @@ export const runtimeCapabilities = [
   "external_transfer_manifests",
   "external_transfer_approval_policy",
   "targeted_repo_context_followups",
+  "github_connector_repo_context",
   "planner_reconciliation",
   "canonical_memory_rehydration",
   "provider_directive_ack",

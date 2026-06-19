@@ -102,6 +102,7 @@ export interface RunInsights {
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
   latestRepoContext?: RunArtifactSummary;
+  latestRemoteRepoContext?: RunArtifactSummary;
   latestTransferManifest?: RunArtifactSummary;
   canonicalMemory?: JsonObject;
   loopResponsibilities: LoopResponsibilitySchedule;
@@ -388,6 +389,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
 
   if (latestRefs.latestRepoContext) {
     insights.latestRepoContext = latestRefs.latestRepoContext;
+  }
+
+  if (latestRefs.latestRemoteRepoContext) {
+    insights.latestRemoteRepoContext = latestRefs.latestRemoteRepoContext;
   }
 
   if (latestRefs.latestTransferManifest) {

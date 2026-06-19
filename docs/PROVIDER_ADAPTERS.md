@@ -147,6 +147,7 @@ Rules:
 - Fail closed when the requested model cannot be confirmed.
 - Fail closed when a fresh composer cannot be verified or when the response does not acknowledge the current directive.
 - The bridge must not log cookies, local storage, tokens, or private browser profile data.
+- When the directive includes `context.remoteRepoContext`, use ChatGPT Web's GitHub connector for the named owner, repo, branch, and commit instead of asking TheHood to send local file excerpts. If the connector cannot access the repo or commit, ask TheHood for bounded local repo context.
 
 Best roles:
 

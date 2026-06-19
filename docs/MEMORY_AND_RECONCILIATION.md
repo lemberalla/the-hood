@@ -130,7 +130,7 @@ The packet may include compact descriptions for navigation, but every important 
 
 Provider directives should tell the model to ignore stale browser or conversation memory and reason only from TheHood-provided state.
 
-Current provider directives include a compact `canonicalMemory` object. This is not a memory engine. It is a bounded runtime-owned index with the current run snapshot, recent run summaries, and latest artifact refs for progress packets, reconciliation, repo context, final reports, and transfer manifests. It intentionally excludes large artifact bodies so browser/API providers can be rehydrated without making ChatGPT conversation history the source of truth.
+Current provider directives include a compact `canonicalMemory` object. This is not a memory engine. It is a bounded runtime-owned index with the current run snapshot, recent run summaries, and latest artifact refs for progress packets, reconciliation, local repo context, remote repo context, final reports, and transfer manifests. It intentionally excludes large artifact bodies so browser/API providers can be rehydrated without making ChatGPT conversation history the source of truth.
 
 ## Repo Context Retrieval
 
@@ -149,7 +149,7 @@ The runtime should include a bounded tree, then prioritize files explicitly name
 
 Generic high-priority files such as `README.md`, `AGENTS.md`, architecture docs, runtime contracts, and key runtime modules should fill the remaining budget after requested files.
 
-Huge files should not silently consume the packet. When a source file is too large to include fully, the runtime preserves refs and excerpts, then allows a follow-up targeted context capture when the provider delegates concrete repo paths that were not already captured. Broad or duplicate follow-up delegations still stop rather than pretending the model has complete evidence.
+Huge files should not silently consume the packet. When a source file is too large to include fully, the runtime preserves refs and excerpts, then allows a follow-up targeted context capture when the provider delegates concrete repo paths that were not already captured. For clean pushed GitHub repos used through ChatGPT Web, the runtime may preserve a refs-only remote context instead of local excerpts and ask the provider to use its GitHub connector at the exact commit. Broad or duplicate follow-up delegations still stop rather than pretending the model has complete evidence.
 
 ## Planner Reconciliation
 
