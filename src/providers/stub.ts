@@ -12,6 +12,9 @@ const hasRepoContext = (request: AgentRequest): boolean =>
 const shouldExerciseRepoContext = (request: AgentRequest): boolean =>
   request.run.mode === "plan" && request.run.userGoal.includes("repo-context-smoke");
 
+const shouldExerciseRoleDelegate = (request: AgentRequest): boolean =>
+  request.run.mode === "plan" && request.run.userGoal.includes("role-delegate-smoke");
+
 const orchestratorResponse = (request: AgentRequest): AgentResponse => {
   if (shouldExerciseRepoContext(request) && !hasRepoContext(request)) {
     return response("Stub orchestrator requested deterministic repo context.", {
@@ -23,6 +26,23 @@ const orchestratorResponse = (request: AgentRequest): AgentResponse => {
           task: "Capture bounded repository context for planning."
         }
       }
+    });
+  }
+
+  if (shouldExerciseRoleDelegate(request)) {
+    return response("Stub orchestrator delegated a ready implementation slice.", {
+      decision: {
+        action: "delegate",
+        reason: "Planning is complete; this slice is ready for implementation.",
+        delegateTo: "implementer",
+        sliceName: "role-delegate-smoke-ready-slice",
+        requiresMoreEvidence: false,
+        requiresUserApproval: false
+      },
+      acceptanceCriteria: [
+        "Plan runs complete after a ready implementer handoff.",
+        "Repo context is not recaptured for implementation handoffs."
+      ]
     });
   }
 

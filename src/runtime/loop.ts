@@ -30,18 +30,19 @@ import {
 import { loadRun, saveRun } from "./store.js";
 import { captureValidationEvidence } from "./validationCommands.js";
 import type { AgentResponse } from "../providers/types.js";
-import type {
-  ApprovalEvent,
-  JsonObject,
-  JsonValue,
-  RoleAssignment,
-  RunArtifact,
-  RunEvent,
-  RunHandoffEvent,
-  RunRecord,
-  RunState,
-  RuntimeRole,
-  ToolEvent
+import {
+  runtimeRoles,
+  type ApprovalEvent,
+  type JsonObject,
+  type JsonValue,
+  type RoleAssignment,
+  type RunArtifact,
+  type RunEvent,
+  type RunHandoffEvent,
+  type RunRecord,
+  type RunState,
+  type RuntimeRole,
+  type ToolEvent
 } from "./types.js";
 
 export interface AdvanceRunInput {
@@ -273,6 +274,35 @@ const decisionFromResponse = (response: AgentResponse): JsonObject | undefined =
 const actionFromResponse = (response: AgentResponse): string | undefined => {
   const action = decisionFromResponse(response)?.action;
   return typeof action === "string" ? action : undefined;
+};
+
+const decisionStringField = (decision: JsonObject | undefined, field: string): string | undefined => {
+  const value = decision?.[field];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+};
+
+const decisionBooleanField = (decision: JsonObject | undefined, field: string): boolean | undefined => {
+  const value = decision?.[field];
+  return typeof value === "boolean" ? value : undefined;
+};
+
+const runtimeRoleFromDecisionField = (
+  decision: JsonObject | undefined,
+  field: string
+): RuntimeRole | undefined => {
+  const value = decisionStringField(decision, field);
+  return value && runtimeRoles.includes(value as RuntimeRole) ? value as RuntimeRole : undefined;
+};
+
+const readyDelegateRole = (decision: JsonObject | undefined): RuntimeRole | undefined => {
+  const role = runtimeRoleFromDecisionField(decision, "delegateTo") ??
+    runtimeRoleFromDecisionField(decision, "nextRole");
+
+  if (role !== "implementer") {
+    return undefined;
+  }
+
+  return decisionBooleanField(decision, "requiresMoreEvidence") === true ? undefined : role;
 };
 
 const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
@@ -964,6 +994,37 @@ const readOnlyContext = async (run: RunRecord): Promise<JsonObject> => {
   };
 };
 
+const completeReadOnlyRun = async (
+  run: RunRecord,
+  input: {
+    role: RuntimeRole;
+    response: AgentResponse;
+    stopReason: string;
+    eventMessage: string;
+    handoffReason?: string;
+    eventData?: JsonObject;
+  }
+): Promise<{ run: RunRecord; response: AgentResponse; advanced: true }> => {
+  const runWithFinalReport = await writeFinalReport(run, {
+    role: input.role,
+    response: input.response,
+    stopReason: input.stopReason
+  });
+  const completed = await updateRun(
+    runWithFinalReport,
+    { state: "completed", stopReason: input.stopReason },
+    [createEvent("run_completed", input.eventMessage, input.eventData)],
+    [completionHandoff(runWithFinalReport, input.role, input.handoffReason ?? input.stopReason)]
+  );
+  const progress = await writeProgressPacketArtifact(completed);
+
+  return {
+    run: progress.run,
+    response: input.response,
+    advanced: true
+  };
+};
+
 const executeReadOnlyRun = async (
   run: RunRecord,
   role: RuntimeRole
@@ -1110,8 +1171,32 @@ const executeReadOnlyRun = async (
   }
 
   if (actionFromResponse(result.response) === "delegate") {
-    const existingContextArtifact = latestRepoContextArtifact(result.run);
     const decision = decisionFromResponse(result.response);
+    const delegateRole = readyDelegateRole(decision);
+
+    if (delegateRole) {
+      const sliceName = decisionStringField(decision, "sliceName");
+      const eventData: JsonObject = {
+        reason: "role_handoff_delegate",
+        delegateTo: delegateRole,
+        requiresMoreEvidence: decisionBooleanField(decision, "requiresMoreEvidence") ?? false
+      };
+
+      if (sliceName) {
+        eventData.sliceName = sliceName;
+      }
+
+      return completeReadOnlyRun(result.run, {
+        role,
+        response: result.response,
+        stopReason: `${role} produced a ready ${delegateRole} handoff.`,
+        eventMessage: `${role} produced a ready ${delegateRole} handoff.`,
+        handoffReason: `${role} completed read-only planning with a ready handoff to ${delegateRole}.`,
+        eventData
+      });
+    }
+
+    const existingContextArtifact = latestRepoContextArtifact(result.run);
     let preferredPaths: string[] = [];
 
     if (existingContextArtifact) {
@@ -1197,24 +1282,12 @@ const executeReadOnlyRun = async (
   }
 
   const stopReason = `${role} run completed by provider response.`;
-  const runWithFinalReport = await writeFinalReport(result.run, {
+  return completeReadOnlyRun(result.run, {
     role,
     response: result.response,
-    stopReason
+    stopReason,
+    eventMessage: `${role} run completed.`
   });
-  const completed = await updateRun(
-    runWithFinalReport,
-    { state: "completed", stopReason },
-    [createEvent("run_completed", `${role} run completed.`)],
-    [completionHandoff(runWithFinalReport, role, stopReason)]
-  );
-  const progress = await writeProgressPacketArtifact(completed);
-
-  return {
-    run: progress.run,
-    response: result.response,
-    advanced: true
-  };
 };
 
 const advanceOneStep = async (

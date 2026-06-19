@@ -499,6 +499,46 @@ assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
   );
   assert.equal(repoContextReconciledStatus.insights.latestAgentResponse.artifact.kind, "reconciliation");
 
+  const roleDelegatePlan = JSON.parse(
+    (
+      await runCli([
+        "plan",
+        "role-delegate-smoke plan ready implementation slice",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "stub:orchestrator",
+        "--json"
+      ])
+    ).stdout
+  );
+  const roleDelegateContinue = JSON.parse(
+    (await runCli(["continue", roleDelegatePlan.runId, "--repo", repoPath, "--json"])).stdout
+  );
+  assert.equal(roleDelegateContinue.run.state, "completed");
+  assert.equal(roleDelegateContinue.providerResponses.length, 1);
+  assert.equal(roleDelegateContinue.providerResponses[0].data.decision.action, "delegate");
+  assert.equal(roleDelegateContinue.providerResponses[0].data.decision.delegateTo, "implementer");
+  assert.equal(roleDelegateContinue.providerResponses[0].data.decision.requiresMoreEvidence, false);
+  assert.ok(
+    !roleDelegateContinue.run.artifacts.some((artifact) => artifact.kind === "context"),
+    "ready implementer handoff should not capture repo context"
+  );
+  assert.ok(
+    roleDelegateContinue.run.events.some(
+      (event) => event.type === "run_completed" && event.data?.reason === "role_handoff_delegate"
+    ),
+    "ready implementer handoff should complete the plan run with explicit event metadata"
+  );
+  const roleDelegateFinalReportArtifact = roleDelegateContinue.run.artifacts.find(
+    (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+  );
+  assert.ok(roleDelegateFinalReportArtifact, "ready implementer handoff should write a final report");
+  const roleDelegateProgressArtifact = roleDelegateContinue.run.artifacts.find(
+    (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
+  );
+  assert.ok(roleDelegateProgressArtifact, "ready implementer handoff should write a progress packet");
+
   const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
 const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");
 await fs.writeFile(
