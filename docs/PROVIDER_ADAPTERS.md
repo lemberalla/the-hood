@@ -64,6 +64,8 @@ The runtime writes each directive as a `directive` artifact before provider exec
 
 When the runtime supplies `context.criticTrigger` to a critic, the provider should treat it as the reason for an advisory review only. The adapter must not turn critic output into validation success, verifier approval, or edit authority.
 
+The product default is Codex-first: `codex-cli:default` for orchestration and implementation, and `codex-cli:spark` for QA, verification, and critique. Users can replace any role assignment, including orchestrator, with ChatGPT Web, Claude Code, API providers once implemented, or future CLI model aliases.
+
 ## Local Command Runner
 
 The local command runner is shared by CLI-backed adapters.
@@ -201,6 +203,8 @@ Best roles:
 
 Notes:
 
+- Current implementation status: provider config exists, but the adapter is not wired yet.
+- Default API key env name: `OPENAI_API_KEY`.
 - Prefer structured output features when available.
 - Keep raw provider responses out of public logs if they contain sensitive context.
 
@@ -219,6 +223,8 @@ Best roles:
 
 Notes:
 
+- Current implementation status: provider config exists, but the adapter is not wired yet.
+- Default API key env name: `ANTHROPIC_API_KEY`.
 - Claude can be especially useful as an independent reviewer because it brings a different model family into the loop.
 - It still must obey the same runtime permissions.
 
@@ -226,13 +232,15 @@ Notes:
 
 Purpose:
 
-- Use Codex as an implementation or investigation worker.
+- Use Codex as the default orchestrator, implementation, QA, verification, critique, or investigation worker.
 
 Best roles:
 
+- orchestrator
 - implementer
 - researcher
 - qa tester
+- verifier
 - reviewer
 
 Rules:
@@ -246,6 +254,7 @@ Rules:
 - Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--output-schema`.
 - Do not pass dangerous sandbox bypass flags.
+- Built-in models are `default`, `spark`, and `configured`. `configured` is a wildcard for user-selected CLI aliases such as a future `fable`; TheHood passes non-default model names through with `--model`.
 
 ## Claude Code Adapter
 
@@ -268,6 +277,7 @@ Rules:
 - Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--json-schema`.
 - Do not pass permission bypass flags.
+- Built-in models are `default` and `configured`. `configured` is a wildcard for user-selected Claude Code aliases such as Sonnet or Opus when available in the user's local Claude CLI.
 
 ## Local Model Adapter
 

@@ -77,6 +77,23 @@ const runNodeScript = async (scriptPath, args, stdin = "", options = {}) => {
 };
 
 const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-smoke-"));
+const fakeCodexDir = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-fake-codex-"));
+const fakeCodexPath = path.join(fakeCodexDir, "fake-codex.mjs");
+await fs.writeFile(
+  fakeCodexPath,
+  [
+    "#!/usr/bin/env node",
+    "process.stdout.write(JSON.stringify({",
+    "  status: 'ok',",
+    "  summary: 'fake codex smoke response',",
+    "  data: {}",
+    "}));",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeCodexPath, 0o755);
+process.env.THEHOOD_CODEX_COMMAND = fakeCodexPath;
 const mcpConfig = await runCli(["mcp", "config", "--json"]);
 const mcpConfigResult = JSON.parse(mcpConfig.stdout);
 assert.equal(mcpConfigResult.installed.command, "thehood");
@@ -164,13 +181,23 @@ const chatGptHealth = doctorResult.providers.find((provider) => provider.id === 
 assert.ok(chatGptHealth.accessModes.includes("agent-bridge"));
 assert.ok(chatGptHealth.accessModes.includes("mcp-connector"));
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
+assert.equal(defaultOrchestratorHealth.assignment.provider, "codex-cli");
+assert.equal(defaultOrchestratorHealth.assignment.model, "default");
 assert.equal(defaultOrchestratorHealth.providerImplemented, true);
-assert.ok(defaultOrchestratorHealth.issues.includes("bridge_command_not_configured"));
+assert.deepEqual(defaultOrchestratorHealth.issues, []);
 const defaultQaHealth = doctorResult.roles.find((role) => role.role === "qa");
 assert.equal(defaultQaHealth.assignment.provider, "codex-cli");
 assert.equal(defaultQaHealth.assignment.model, "spark");
 assert.equal(defaultQaHealth.providerImplemented, true);
 assert.equal(defaultQaHealth.modelConfigured, true);
+const defaultVerifierHealth = doctorResult.roles.find((role) => role.role === "verifier");
+assert.equal(defaultVerifierHealth.assignment.provider, "codex-cli");
+assert.equal(defaultVerifierHealth.assignment.model, "spark");
+assert.deepEqual(defaultVerifierHealth.issues, []);
+const defaultCriticHealth = doctorResult.roles.find((role) => role.role === "critic");
+assert.equal(defaultCriticHealth.assignment.provider, "codex-cli");
+assert.equal(defaultCriticHealth.assignment.model, "spark");
+assert.deepEqual(defaultCriticHealth.issues, []);
 const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
 const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));
 delete staleConfig.roles.qa;
@@ -182,10 +209,32 @@ const staleCodexProvider = staleConfigDoctor.providers.find((provider) => provid
 const staleStubProvider = staleConfigDoctor.providers.find((provider) => provider.id === "stub");
 const staleQaHealth = staleConfigDoctor.roles.find((role) => role.role === "qa");
 assert.ok(staleCodexProvider.models.includes("spark"), "stale repo config should not hide built-in codex spark model");
+assert.ok(
+  staleCodexProvider.models.includes("configured"),
+  "stale repo config should not hide built-in codex configured model passthrough"
+);
 assert.ok(staleStubProvider.models.includes("qa"), "stale repo config should not hide built-in stub qa model");
 assert.equal(staleQaHealth.assignment.provider, "codex-cli");
 assert.equal(staleQaHealth.assignment.model, "spark");
 assert.equal(staleQaHealth.modelConfigured, true);
+const codexFutureModelConfigPath = path.join(repoPath, ".thehood", "config.json");
+const codexFutureModelConfig = JSON.parse(await fs.readFile(codexFutureModelConfigPath, "utf8"));
+codexFutureModelConfig.roles.orchestrator = {
+  provider: "codex-cli",
+  model: "fable"
+};
+await fs.writeFile(codexFutureModelConfigPath, `${JSON.stringify(codexFutureModelConfig, null, 2)}\n`, "utf8");
+const codexFutureModelDoctor = JSON.parse((await runCli(["doctor", "--repo", repoPath, "--json"])).stdout);
+const codexFutureModelOrchestrator = codexFutureModelDoctor.roles.find((role) => role.role === "orchestrator");
+assert.equal(codexFutureModelOrchestrator.assignment.provider, "codex-cli");
+assert.equal(codexFutureModelOrchestrator.assignment.model, "fable");
+assert.equal(codexFutureModelOrchestrator.modelConfigured, true);
+assert.deepEqual(codexFutureModelOrchestrator.issues, []);
+codexFutureModelConfig.roles.orchestrator = {
+  provider: "codex-cli",
+  model: "default"
+};
+await fs.writeFile(codexFutureModelConfigPath, `${JSON.stringify(codexFutureModelConfig, null, 2)}\n`, "utf8");
 const unconfirmedDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
   env: {
     THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
@@ -251,7 +300,19 @@ const readyChatGptProvider = readyDoctorResult.providers.find((provider) => prov
 const readyOrchestrator = readyDoctorResult.roles.find((role) => role.role === "orchestrator");
 assert.deepEqual(readyChatGptProvider.issues, []);
 assert.deepEqual(readyOrchestrator.issues, []);
-const blockedChatGptPlan = JSON.parse((await runCli(["plan", "block missing ChatGPT bridge", "--repo", repoPath, "--json"])).stdout);
+const blockedChatGptPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "block missing ChatGPT bridge",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "chatgpt-web:chatgpt-pro",
+      "--json"
+    ])
+  ).stdout
+);
 const blockedChatGptInvocation = JSON.parse(
   (await runCli(["continue", blockedChatGptPlan.runId, "--repo", repoPath, "--json"])).stdout
 );

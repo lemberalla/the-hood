@@ -24,6 +24,6 @@ export const getProviderAdapter = (assignment: RoleAssignment): ProviderAdapter 
   }
 
   throw new ProviderUnavailableError(
-    `Provider "${assignment.provider}" is not implemented yet. Use stub:<role>, chatgpt-web:chatgpt-pro, codex-cli:default, codex-cli:spark, or claude-code:default.`
+    `Provider "${assignment.provider}" is not implemented yet. Use stub:<role>, chatgpt-web:chatgpt-pro, codex-cli:<model>, or claude-code:<model>.`
   );
 };

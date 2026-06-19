@@ -8,7 +8,7 @@ The core idea is simple:
 - The runtime enforces.
 - Users stay in control.
 
-TheHood lets a user assign different models or agent tools to different responsibilities. ChatGPT Pro can orchestrate, Claude Opus can critique, Codex can implement, a cheaper GPT model can perform scoped QA, and a separate verifier can test without edit permissions.
+TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into ChatGPT Pro, Claude Code, OpenAI API, Anthropic API, or local models for any role.
 
 The first product surface is a CLI plus an MCP server. The macOS menubar app should remain a thin trigger and status surface over the same local runtime.
 
@@ -20,6 +20,7 @@ It supports:
 
 - local project initialization
 - JSON config under `.thehood/config.json`
+- Codex-first default role mapping for orchestrator, implementer, QA, verifier, and critic
 - provider and role inspection
 - provider and role health inspection
 - Codex-facing MCP tools for role assignment and guest-agent consultation
@@ -64,7 +65,7 @@ It supports:
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 - read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
 
-ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses.
+ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet, though OpenAI and Anthropic API key env names are represented in provider config for future adapters. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses. Codex CLI and Claude Code model names support a config passthrough so users can select newly available CLI model aliases without waiting for a TheHood release.
 
 Users can choose between two ChatGPT Pro paths:
 

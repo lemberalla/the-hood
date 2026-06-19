@@ -194,7 +194,7 @@ Input:
 
 ### `thehood_consult`
 
-Run one read-only guest role immediately. This is the fast path for Codex chat to bring in Claude or another agent for planning, research, or critique.
+Run one read-only guest role immediately. This is the fast path for Codex chat to bring in Codex Spark, Pro, Claude, or another agent for planning, research, QA, or critique.
 
 Input:
 
@@ -215,7 +215,7 @@ Example:
   "goal": "Critique the current approach before implementation.",
   "repo_path": "/path/to/repo",
   "role": "critic",
-  "agent": "claude-code:opus"
+  "agent": "codex-cli:spark"
 }
 ```
 
@@ -501,7 +501,7 @@ Input:
 Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
-2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Claude as critic or verifier.
-3. Call `thehood_consult` or `thehood_summon` to bring in a guest read-only agent such as a critic or QA tester; approve the provider-invocation gate before Claude, Codex, or Pro is actually called.
+2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator or Claude as critic/verifier.
+3. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic or QA tester; approve the provider-invocation gate before a model-backed provider is actually called.
 4. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
 5. Call `thehood_continue` with approval only after the user authorizes the next runtime transition.

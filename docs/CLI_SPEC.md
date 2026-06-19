@@ -14,6 +14,7 @@ thehood models
 thehood providers
 thehood doctor
 thehood roles
+thehood roles set orchestrator codex-cli:default
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood run "Implement the requested change" --repo .
 thehood plan "Design the feature" --repo .
@@ -59,16 +60,28 @@ thehood ui approvals
 
 Role mapping can be set globally, per repo, or per run.
 
+Codex is the product default:
+
+```bash
+thehood roles set orchestrator codex-cli:default --repo .
+thehood roles set implementer codex-cli:default --repo .
+thehood roles set qa codex-cli:spark --repo .
+thehood roles set verifier codex-cli:spark --repo .
+thehood roles set critic codex-cli:spark --repo .
+```
+
+Users can tune every role, including orchestrator. Provider model strings are passed to CLI-backed adapters; for example, `codex-cli:fable` can be used if that alias is available in the user's Codex CLI.
+
 ```bash
 thehood run "Add export flow" \
   --repo . \
   --orchestrator chatgpt-web:chatgpt-pro \
-  --planner claude-code:opus \
-  --researcher claude-code:sonnet \
-  --implementer codex-cli:gpt-5.5-low \
+  --planner codex-cli:default \
+  --researcher codex-cli:default \
+  --implementer codex-cli:default \
   --qa codex-cli:spark \
-  --verifier anthropic-api:claude-opus \
-  --critic anthropic-api:claude-sonnet
+  --verifier codex-cli:spark \
+  --critic claude-code:sonnet
 ```
 
 Deterministic local loop smoke:
@@ -134,13 +147,13 @@ Initial config shape:
     },
     "codex-cli": {
       "enabled": true,
-      "models": ["default", "spark"],
+      "models": ["default", "spark", "configured"],
       "accessModes": ["agent-bridge"],
       "defaultAccessMode": "agent-bridge"
     },
     "claude-code": {
       "enabled": true,
-      "models": ["default"],
+      "models": ["default", "configured"],
       "accessModes": ["agent-bridge"],
       "defaultAccessMode": "agent-bridge"
     },
@@ -153,8 +166,8 @@ Initial config shape:
   },
   "roles": {
     "orchestrator": {
-      "provider": "chatgpt-web",
-      "model": "chatgpt-pro"
+      "provider": "codex-cli",
+      "model": "default"
     },
     "implementer": {
       "provider": "codex-cli",
@@ -165,12 +178,12 @@ Initial config shape:
       "model": "spark"
     },
     "verifier": {
-      "provider": "claude-code",
-      "model": "default"
+      "provider": "codex-cli",
+      "model": "spark"
     },
     "critic": {
-      "provider": "claude-code",
-      "model": "default"
+      "provider": "codex-cli",
+      "model": "spark"
     }
   }
 }
@@ -234,7 +247,9 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact and pause at an approval gate before that repo context is sent back to the provider. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
-When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call.
+When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. CLI-backed providers list `configured` as a model wildcard, so `thehood doctor` accepts custom model aliases and the provider CLI remains responsible for rejecting unavailable models at execution time.
+
+OpenAI and Anthropic API provider configs include `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` env names for future API adapters. Those providers are disabled and not implemented until their adapters are wired; use Codex CLI, ChatGPT Web, Claude Code, or `stub` for current runs.
 
 ## Doctor Command
 

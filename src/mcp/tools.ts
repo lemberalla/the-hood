@@ -397,7 +397,7 @@ const createConsultTool = (): McpTool => ({
   definition: {
     name: "thehood_consult",
     title: "Consult TheHood Guest Agent",
-    description: "Create or advance a single read-only guest role, useful for asking Claude or another agent to plan, research, or critique from Codex chat. Model-backed providers may stop for invocation approval before the provider is called.",
+    description: "Create or advance a single read-only guest role, useful for asking Codex Spark, Pro, Claude, or another agent to plan, research, QA, or critique from Codex chat. Model-backed providers may stop for invocation approval before the provider is called.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -414,7 +414,7 @@ const createConsultTool = (): McpTool => ({
         },
         agent: {
           type: "string",
-          description: "provider:model assignment, for example claude-code:opus or stub:critic."
+          description: "provider:model assignment, for example codex-cli:spark, chatgpt-web:chatgpt-pro, claude-code:sonnet, or stub:critic."
         },
         constraints: {
           type: "array",

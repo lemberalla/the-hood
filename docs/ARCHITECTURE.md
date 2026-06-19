@@ -149,21 +149,23 @@ Example:
 ```yaml
 roles:
   orchestrator:
-    provider: chatgpt-web
-    model: chatgpt-pro
+    provider: codex-cli
+    model: default
   implementer:
     provider: codex-cli
-    model: gpt-5.5-low
+    model: default
   qa:
     provider: codex-cli
     model: spark
   verifier:
-    provider: claude-code
-    model: default
+    provider: codex-cli
+    model: spark
   critic:
-    provider: claude-code
-    model: default
+    provider: codex-cli
+    model: spark
 ```
+
+This is the product default. Users can tune any role, including orchestrator, through repo config or CLI role assignment. For example, a user may choose `chatgpt-web:chatgpt-pro` for Pro planning, `claude-code:sonnet` for critique, or a future Codex alias such as `codex-cli:fable` when that model is available in their local CLI.
 
 Providers can expose multiple access modes:
 

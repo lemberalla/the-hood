@@ -34,13 +34,13 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   "codex-cli": {
     enabled: true,
-    models: ["default", "spark"],
+    models: ["default", "spark", "configured"],
     accessModes: ["agent-bridge"],
     defaultAccessMode: "agent-bridge"
   },
   "claude-code": {
     enabled: true,
-    models: ["default"],
+    models: ["default", "configured"],
     accessModes: ["agent-bridge"],
     defaultAccessMode: "agent-bridge"
   },
@@ -60,8 +60,8 @@ export const builtinProviders: Record<string, ProviderConfig> = {
 
 export const defaultRoles: RoleMap = {
   orchestrator: {
-    provider: "chatgpt-web",
-    model: "chatgpt-pro"
+    provider: "codex-cli",
+    model: "default"
   },
   implementer: {
     provider: "codex-cli",
@@ -72,12 +72,12 @@ export const defaultRoles: RoleMap = {
     model: "spark"
   },
   verifier: {
-    provider: "claude-code",
-    model: "default"
+    provider: "codex-cli",
+    model: "spark"
   },
   critic: {
-    provider: "claude-code",
-    model: "default"
+    provider: "codex-cli",
+    model: "spark"
   }
 };
 

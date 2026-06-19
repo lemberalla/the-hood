@@ -71,8 +71,10 @@ const nextActions = (browser: BrowserStatus): string[] => {
     actions.push("open ChatGPT in the TheHood browser profile");
   }
 
+  actions.push("thehood doctor --repo <repo>");
+  actions.push("thehood plan \"...\"");
+
   if (browser.readyForBridge) {
-    actions.push("thehood doctor --repo <repo>");
     actions.push("thehood plan \"...\" --orchestrator chatgpt-web:chatgpt-pro");
   }
 
