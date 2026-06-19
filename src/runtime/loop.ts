@@ -550,7 +550,10 @@ const isolatedPatchApprovalReason = (artifact: RunArtifact): string =>
 
 const latestIsolatedPatchArtifact = (run: RunRecord): RunArtifact | undefined => {
   const event = run.events
-    .filter((candidate) => candidate.type === "approval_required" && candidate.data?.reason === "isolated_patch_application")
+    .filter((candidate) =>
+      (candidate.type === "approval_required" && candidate.data?.reason === "isolated_patch_application") ||
+      (candidate.type === "approval_auto_approved" && candidate.data?.gate === "isolated_patch_application")
+    )
     .at(-1);
   const artifactRef = event?.data?.artifactRef;
 

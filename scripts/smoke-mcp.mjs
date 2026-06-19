@@ -1125,6 +1125,73 @@ assert.equal(isolatedIntegrationReport.protectedChangeCount, 0);
 assert.equal(isolatedIntegrationReport.sourceArtifactRef, isolatedDiffArtifact.ref);
 assert.ok(isolatedIntegrationReport.approvedPatchArtifactRef.endsWith(".patch"));
 
+const autopilotIsolatedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-autopilot-isolated-"));
+await runRawCommand("git", ["init"], autopilotIsolatedRepoPath);
+await fs.writeFile(path.join(autopilotIsolatedRepoPath, "README.md"), "# Autopilot Isolated Smoke\n", "utf8");
+await runRawCommand("git", ["add", "README.md"], autopilotIsolatedRepoPath);
+await runRawCommand(
+  "git",
+  [
+    "-c",
+    "user.name=TheHood Smoke",
+    "-c",
+    "user.email=smoke@example.invalid",
+    "commit",
+    "-m",
+    "initial"
+  ],
+  autopilotIsolatedRepoPath
+);
+await runCommand(["init", "--repo", autopilotIsolatedRepoPath]);
+await runCommand(["approvals", "policy", "set", "mode", "autopilot", "--repo", autopilotIsolatedRepoPath]);
+const autopilotIsolatedPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_orchestrate",
+      arguments: {
+        goal: "exercise autopilot isolated patch integration",
+        repo_path: autopilotIsolatedRepoPath,
+        mode: "implement",
+        role_mapping: {
+          orchestrator: "stub:orchestrator",
+          implementer: "codex-cli:default",
+          qa: "stub:qa",
+          verifier: "stub:verifier",
+          critic: "stub:critic"
+        },
+        auto_loop: true,
+        max_cycles: 3
+      }
+    }
+  }
+]);
+const autopilotIsolatedContent = autopilotIsolatedPath[1].result.structuredContent;
+const autopilotIsolatedRunId = autopilotIsolatedContent.run_id;
+const autopilotIsolatedStatus = JSON.parse(
+  await runCommand(["status", autopilotIsolatedRunId, "--repo", autopilotIsolatedRepoPath, "--json"])
+);
+
+assert.equal(autopilotIsolatedContent.status, "completed");
+assert.equal(autopilotIsolatedContent.stop_kind, "terminal");
+assert.equal(await fs.readFile(path.join(autopilotIsolatedRepoPath, "implemented.txt"), "utf8"), "isolated implementation\n");
+assert.ok(
+  autopilotIsolatedStatus.events.some(
+    (event) =>
+      event.type === "approval_auto_approved" &&
+      event.data?.gate === "isolated_patch_application" &&
+      typeof event.data?.artifactRef === "string"
+  ),
+  "autopilot should auto-approve isolated patch application with an artifact ref"
+);
+assert.ok(
+  autopilotIsolatedStatus.events.some((event) => event.type === "patch_applied"),
+  "autopilot isolated patch should be applied before completion"
+);
+
 const protectedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-protected-"));
 await runRawCommand("git", ["init"], protectedRepoPath);
 await fs.writeFile(path.join(protectedRepoPath, "README.md"), "# Protected Smoke\n", "utf8");
