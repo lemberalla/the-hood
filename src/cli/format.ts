@@ -26,6 +26,21 @@ export const printJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 };
 
+export interface CliSetupReport {
+  commandName: string;
+  repoPath: string;
+  localBuildCommand: string;
+  installedCommand: string;
+  oneSessionAlias: string;
+  npmLinkCommand: string;
+  npmInstallCommand: string;
+  localMcpConfigCommand: string;
+  installedMcpConfigCommand: string;
+  localUiCommand: string;
+  installedUiCommand: string;
+  notes: string[];
+}
+
 const quoteArg = (value: string): string =>
   /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 
@@ -627,6 +642,31 @@ export const formatMcpConfigReport = (report: McpConfigReport): string => [
   "",
   "local build:",
   report.localToml
+].join("\n");
+
+export const formatCliSetupReport = (report: CliSetupReport): string => [
+  "TheHood CLI Setup",
+  "",
+  "run this local build:",
+  `  ${report.localBuildCommand}`,
+  "",
+  "temporary shell alias:",
+  `  ${report.oneSessionAlias}`,
+  "",
+  "optional install/link commands:",
+  `  ${report.npmLinkCommand}`,
+  `  ${report.npmInstallCommand}`,
+  "",
+  "MCP config:",
+  `  local: ${report.localMcpConfigCommand}`,
+  `  installed: ${report.installedMcpConfigCommand}`,
+  "",
+  "TUI:",
+  `  local: ${report.localUiCommand}`,
+  `  installed: ${report.installedUiCommand}`,
+  "",
+  "notes:",
+  ...report.notes.map((note) => `  - ${note}`)
 ].join("\n");
 
 export const formatMcpTunnelConfigReport = (report: McpTunnelConfigReport): string => [

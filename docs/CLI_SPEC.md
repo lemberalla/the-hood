@@ -8,6 +8,7 @@ The working command name is `thehood`.
 
 ```bash
 thehood init
+thehood setup
 thehood config show
 thehood config set max-iterations 8
 thehood config set fanout-max-items 4
@@ -206,6 +207,12 @@ Initial config shape:
 ```
 
 `thehood config set max-iterations <n>` updates the provider-call budget used when new runs are created. `thehood config set fanout-max-items <n>` updates the repo-local fan-out policy cap. The runtime hard cap for fan-out remains 8 items; users can lower the repo cap for cost or latency control.
+
+## Setup Helper
+
+`thehood setup --repo .` is a read-only launcher report. It prints the correct local-build command, a temporary shell alias, optional `npm link` and future package install commands, MCP config commands, and local/installed TUI launch commands. It does not install, link, mutate shell profiles, or change runtime config.
+
+Use it when a local checkout works through `node dist/cli/main.js ...` but `thehood` is not on the shell `PATH` yet.
 
 ## Exit Codes
 

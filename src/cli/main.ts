@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectBrowser, startBrowser, stopBrowser, type BrowserManagerOptions } from "../runtime/browserManager.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
@@ -49,6 +50,7 @@ import {
   formatBrowserStartResult,
   formatBrowserStatus,
   formatBrowserStopResult,
+  formatCliSetupReport,
   formatConfig,
   formatAdvanceRunResult,
   formatCommandResult,
@@ -66,7 +68,8 @@ import {
   formatRunList,
   formatRunSummary,
   formatSummonAgentResult,
-  printJson
+  printJson,
+  type CliSetupReport
 } from "./format.js";
 import {
   renderApprovalInbox,
@@ -81,6 +84,7 @@ const helpText = `TheHood local agent runtime
 
 Usage:
   thehood init [--repo <path>]
+  thehood setup [--repo <path>] [--json]
   thehood config show [--repo <path>] [--json]
   thehood config set max-iterations|fanout-max-items <n> [--repo <path>] [--json]
   thehood providers [--repo <path>] [--json]
@@ -141,6 +145,43 @@ const repoFromOptions = (options: Record<string, CliOptionValue>): string =>
 
 const shouldPrintJson = (options: Record<string, CliOptionValue>): boolean =>
   getBooleanOption(options, "json");
+
+const shellQuote = (value: string): string =>
+  /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
+
+const currentCliEntryPath = (): string => {
+  const entry = process.argv[1];
+  return entry ? path.resolve(entry) : path.resolve("dist/cli/main.js");
+};
+
+const buildCliSetupReport = (options: Record<string, CliOptionValue>): CliSetupReport => {
+  const entryPath = currentCliEntryPath();
+  const packageRoot = path.resolve(path.dirname(entryPath), "..", "..");
+  const repoPath = repoFromOptions(options);
+  const localBuildCommand = `node ${shellQuote(entryPath)}`;
+  const installedCommand = "thehood";
+  const repoArg = `--repo ${shellQuote(repoPath)}`;
+
+  return {
+    commandName: installedCommand,
+    repoPath,
+    localBuildCommand,
+    installedCommand,
+    oneSessionAlias: `alias thehood=${shellQuote(`node ${entryPath}`)}`,
+    npmLinkCommand: `cd ${shellQuote(packageRoot)} && npm link`,
+    npmInstallCommand: "npm install -g thehood",
+    localMcpConfigCommand: `${localBuildCommand} mcp config`,
+    installedMcpConfigCommand: `${installedCommand} mcp config`,
+    localUiCommand: `${localBuildCommand} ui ${repoArg}`,
+    installedUiCommand: `${installedCommand} ui ${repoArg}`,
+    notes: [
+      "Use the local build command while developing this checkout.",
+      "Run npm run build after source edits so dist/cli/main.js reflects the current code.",
+      "npm link is optional and creates a global shell command pointing at this checkout.",
+      "npm install -g is for a published or otherwise available package."
+    ]
+  };
+};
 
 const parseSettingsPage = (value: string | undefined): SettingsPageId => {
   if (value === undefined) {
@@ -404,6 +445,11 @@ const handleInit = async (options: Record<string, CliOptionValue>): Promise<void
   process.stdout.write(
     `${result.created ? "Created" : "Found existing"} config: ${result.configPath}\n`
   );
+};
+
+const handleSetup = async (options: Record<string, CliOptionValue>): Promise<void> => {
+  const report = buildCliSetupReport(options);
+  shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatCliSetupReport(report)}\n`);
 };
 
 const handleConfig = async (
@@ -1054,6 +1100,9 @@ const runCli = async (argv: string[]): Promise<void> => {
   switch (command) {
     case "init":
       await handleInit(parsed.options);
+      return;
+    case "setup":
+      await handleSetup(parsed.options);
       return;
     case "config":
       await handleConfig(args, parsed.options);

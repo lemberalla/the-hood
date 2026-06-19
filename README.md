@@ -87,6 +87,7 @@ npm run build
 npm run smoke:runtime
 npm run smoke:mcp
 node dist/cli/main.js init --repo .
+node dist/cli/main.js setup --repo .
 node dist/cli/main.js doctor --repo .
 node dist/cli/main.js roster --repo .
 node dist/cli/main.js teams --repo .

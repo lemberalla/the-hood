@@ -7,7 +7,10 @@ TheHood is exposed to Codex through its MCP server.
 ```bash
 npm install
 npm run build
+node dist/cli/main.js setup --repo .
 ```
+
+`setup` is read-only. It prints the local-build command, a temporary shell alias, optional `npm link` guidance, MCP config commands, and TUI launch commands for the current checkout.
 
 ## Get MCP Config
 
