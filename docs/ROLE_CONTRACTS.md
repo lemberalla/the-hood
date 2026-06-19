@@ -55,6 +55,7 @@ Review ownership is derived by the runtime from canonical run evidence. A lane r
 - QA tester ownership is advisory model evidence and cannot satisfy runtime validation.
 - Critic ownership is advisory. The runtime may call the critic from a `critic_trigger` policy decision, but critic output cannot satisfy validation, verifier, or completion gates.
 - Same-run summons are sidecar evidence and remain read-only.
+- Fixable QA, critic, or verifier findings can become a runtime-owned `revision_packet` handoff back to the implementer. The packet does not grant reviewer edit power and does not satisfy validation or verifier gates.
 
 ## Orchestrator
 
@@ -129,6 +130,8 @@ Outputs:
 - commands run
 - self-check notes
 - unresolved risks
+
+When a repair pass is delegated, inputs also include the latest `revision_packet` ref and compact repair objective. The implementer must treat it as a narrow patch brief, not permission to broaden scope or accept the work.
 
 ## QA Tester
 

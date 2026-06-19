@@ -24,6 +24,8 @@ export const runtimeCapabilities = [
   "validation_command_capture",
   "model_assisted_qa_tester",
   "critic_trigger_artifacts",
+  "revision_packet_artifacts",
+  "runtime_revision_delegation",
   "branded_tui_shell",
   "approval_inbox_tui",
   "operator_run_monitor",

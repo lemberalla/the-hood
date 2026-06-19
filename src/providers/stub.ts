@@ -15,6 +15,18 @@ const shouldExerciseRepoContext = (request: AgentRequest): boolean =>
 const shouldExerciseRoleDelegate = (request: AgentRequest): boolean =>
   request.run.mode === "plan" && request.run.userGoal.includes("role-delegate-smoke");
 
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const hasRevisionPacket = (request: AgentRequest): boolean =>
+  isJsonObject(request.context.latestRevisionPacket);
+
+const shouldExerciseQaRevisionLoop = (request: AgentRequest): boolean =>
+  request.run.mode === "implement" && request.run.userGoal.includes("qa-revision-loop-smoke");
+
+const shouldExerciseVerifierRevisionLoop = (request: AgentRequest): boolean =>
+  request.run.mode === "implement" && request.run.userGoal.includes("verifier-revision-loop-smoke");
+
 const orchestratorResponse = (request: AgentRequest): AgentResponse => {
   if (shouldExerciseRepoContext(request) && !hasRepoContext(request)) {
     return response("Stub orchestrator requested deterministic repo context.", {
@@ -80,8 +92,10 @@ const researcherResponse = (): AgentResponse =>
     }
   });
 
-const implementerResponse = (): AgentResponse =>
-  response("Stub implementer performed no file edits.", {
+const implementerResponse = (request: AgentRequest): AgentResponse =>
+  response(hasRevisionPacket(request)
+    ? "Stub implementer handled the runtime revision packet."
+    : "Stub implementer performed no file edits.", {
     implementationResult: {
       status: "no_change",
       changedFiles: [],
@@ -90,8 +104,19 @@ const implementerResponse = (): AgentResponse =>
     }
   });
 
-const qaResponse = (): AgentResponse =>
-  response("Stub QA tester found no missing validation concerns.", {
+const qaResponse = (request: AgentRequest): AgentResponse => {
+  if (shouldExerciseQaRevisionLoop(request) && !hasRevisionPacket(request)) {
+    return response("Stub QA tester requested a repair loop.", {
+      qaResult: {
+        verdict: "needs_revision",
+        summary: "QA found a deterministic missed-case marker for the repair loop smoke.",
+        suggestedCommands: ["npm run smoke:runtime"],
+        risks: ["The first pass intentionally needs a repair delegation."]
+      }
+    });
+  }
+
+  return response("Stub QA tester found no missing validation concerns.", {
     qaResult: {
       verdict: "pass",
       summary: "Stub QA tester reviewed available evidence and found no extra concerns.",
@@ -99,23 +124,30 @@ const qaResponse = (): AgentResponse =>
       risks: []
     }
   });
+};
 
 const verifierResponse = (request: AgentRequest): AgentResponse => {
   const protectedChangeCount = Number(request.context.protectedChangeCount ?? 0);
   const validationFailureCount = Number(request.context.validationFailureCount ?? 0);
-  const verdict = protectedChangeCount > 0 || validationFailureCount > 0 ? "ask_user" : "approve";
+  const exerciseVerifierRevision = shouldExerciseVerifierRevisionLoop(request) && !hasRevisionPacket(request);
+  const verdict = exerciseVerifierRevision
+    ? "revise"
+    : protectedChangeCount > 0 || validationFailureCount > 0 ? "ask_user" : "approve";
 
   return response(`Stub verifier returned ${verdict}.`, {
     verificationResult: {
       verdict,
       summary:
-        protectedChangeCount > 0
+        exerciseVerifierRevision
+          ? "Verifier found a deterministic repair-loop marker."
+          : protectedChangeCount > 0
           ? "Protected files changed; user approval is required."
           : validationFailureCount > 0
             ? "Runtime validation commands failed; user review is required."
           : "No protected changes were detected in runtime evidence.",
-      failedCriteria: [],
+      failedCriteria: exerciseVerifierRevision ? ["Repair-loop verifier criterion was not satisfied on first pass."] : [],
       risks: [
+        ...(exerciseVerifierRevision ? ["The first verifier pass intentionally needs a repair delegation."] : []),
         ...(protectedChangeCount > 0 ? ["Protected path changes need explicit review."] : []),
         ...(validationFailureCount > 0 ? ["Runtime validation command failures need review."] : [])
       ],
@@ -133,9 +165,9 @@ export const stubProvider: ProviderAdapter = {
       case "researcher":
         return researcherResponse();
       case "implementer":
-        return implementerResponse();
+        return implementerResponse(request);
       case "qa":
-        return qaResponse();
+        return qaResponse(request);
       case "verifier":
         return verifierResponse(request);
       case "critic":

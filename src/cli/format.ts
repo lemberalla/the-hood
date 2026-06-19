@@ -155,6 +155,7 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
     ["progress", insights.latestProgressPacket],
     ["reconciliation", insights.latestReconciliation],
     ["repoContext", insights.latestRepoContext],
+    ["revisionPacket", insights.latestRevisionPacket?.artifact],
     ["transferManifest", insights.latestTransferManifest]
   ] as const;
 
@@ -177,6 +178,25 @@ const formatCriticTriggerLines = (insights: RunInsights): string[] => {
     ...(trigger.sourceRoles.length > 0 ? [`  sourceRoles: ${trigger.sourceRoles.join(", ")}`] : []),
     `  artifact: ${trigger.artifact.ref}`,
     ...(trigger.criticResponseRef ? [`  criticResponse: ${trigger.criticResponseRef}`] : [])
+  ];
+};
+
+const formatRevisionPacketLines = (insights: RunInsights): string[] => {
+  const packet = insights.latestRevisionPacket;
+
+  if (!packet) {
+    return [];
+  }
+
+  return [
+    "revision packet:",
+    ...(packet.sourceRole ? [`  sourceRole: ${packet.sourceRole}`] : []),
+    ...(packet.reasonCode ? [`  reasonCode: ${packet.reasonCode}`] : []),
+    ...(packet.reason ? [`  reason: ${packet.reason}`] : []),
+    ...(packet.repairObjective ? [`  repairObjective: ${packet.repairObjective}`] : []),
+    `  artifact: ${packet.artifact.ref}`,
+    ...(packet.sourceResponseRef ? [`  sourceResponse: ${packet.sourceResponseRef}`] : []),
+    ...(packet.criticTriggerRef ? [`  criticTrigger: ${packet.criticTriggerRef}`] : [])
   ];
 };
 
@@ -282,6 +302,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
   const criticTrigger = formatCriticTriggerLines(insights);
+  const revisionPacket = formatRevisionPacketLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
   const loopResponsibilities = formatLoopResponsibilityLines(insights);
   const operatorNextActions = formatOperatorNextActionLines(insights);
@@ -319,6 +340,12 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
       ? [
           "",
           ...criticTrigger
+        ]
+      : []),
+    ...(revisionPacket.length > 0
+      ? [
+          "",
+          ...revisionPacket
         ]
       : []),
     ...(reviewLanes.length > 0

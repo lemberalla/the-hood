@@ -20,6 +20,11 @@ import { decideCriticTrigger, type CriticTriggerDecision } from "./criticPolicy.
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
+import {
+  decideRevisionPacket,
+  writeRevisionPacketArtifact,
+  type RevisionPacketDecision
+} from "./revisionPacket.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import {
   analyzeRepoContextRequest,
@@ -374,6 +379,50 @@ const hasProviderResponded = (run: RunRecord, role: RuntimeRole, assignment: Rol
     return event.data.role === role && event.data.provider === assignment.provider && event.data.model === assignment.model;
   });
 
+const providerResponseEventMatches = (
+  event: RunEvent,
+  role: RuntimeRole,
+  assignment?: RoleAssignment
+): boolean => {
+  if (event.type !== "agent_response" || !event.data || event.data.role !== role) {
+    return false;
+  }
+
+  return assignment
+    ? event.data.provider === assignment.provider && event.data.model === assignment.model
+    : true;
+};
+
+const latestProviderResponseEventIndex = (
+  run: RunRecord,
+  role: RuntimeRole,
+  assignment?: RoleAssignment
+): number | undefined => {
+  for (let index = run.events.length - 1; index >= 0; index -= 1) {
+    const event = run.events[index];
+    if (event && providerResponseEventMatches(event, role, assignment)) {
+      return index;
+    }
+  }
+
+  return undefined;
+};
+
+const hasProviderRespondedSince = (
+  run: RunRecord,
+  role: RuntimeRole,
+  assignment: RoleAssignment,
+  afterIndex: number | undefined
+): boolean => {
+  if (afterIndex === undefined) {
+    return hasProviderResponded(run, role, assignment);
+  }
+
+  return run.events
+    .slice(afterIndex + 1)
+    .some((event) => providerResponseEventMatches(event, role, assignment));
+};
+
 const providerInvocationApprovalReason = (role: RuntimeRole, assignment: RoleAssignment): string =>
   `Invoking ${assignment.provider}:${assignment.model} for ${role} requires explicit approval. ` +
   `Approval message must mention "invoke ${assignment.provider}".`;
@@ -458,7 +507,7 @@ const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentRe
   };
 };
 
-const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
+const isJsonObject = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const implementationPatchArtifact = (response: AgentResponse): RunArtifact | undefined => {
@@ -556,6 +605,9 @@ const latestProviderResponseArtifactRef = (run: RunRecord, role: RuntimeRole): s
 const latestCriticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "critic_trigger").at(-1);
 
+const latestRevisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "revision_packet").at(-1);
+
 const writeCriticTriggerArtifact = async (
   run: RunRecord,
   decision: CriticTriggerDecision,
@@ -595,6 +647,141 @@ const writeCriticTriggerArtifact = async (
       ...(criticResponseRef ? { criticResponseRef } : {})
     })
   );
+};
+
+const latestRevisionPacketContext = async (run: RunRecord): Promise<JsonObject | undefined> => {
+  const artifact = latestRevisionPacketArtifact(run);
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(await fs.readFile(artifact.ref, "utf8")) as unknown;
+  if (!isJsonObject(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+};
+
+const writeAndDelegateRevision = async (
+  run: RunRecord,
+  input: {
+    decision: RevisionPacketDecision;
+    response: AgentResponse;
+    evidenceRefs: string[];
+    sourceResponseRef?: string;
+    criticTriggerRef?: string;
+  }
+): Promise<{ run: RunRecord; response: AgentResponse; advanced: true; stopReason: string }> => {
+  const { artifact, packet } = await writeRevisionPacketArtifact(run, input);
+  const runWithPacket = await attachRunArtifact(
+    run,
+    artifact,
+    createEvent("revision_packet_written", `Wrote revision packet from ${packet.sourceRole}.`, {
+      artifactRef: artifact.ref,
+      sourceRole: packet.sourceRole,
+      reasonCode: packet.reasonCode,
+      evidenceRefs: packet.evidenceRefs,
+      ...(packet.sourceResponseRef ? { sourceResponseRef: packet.sourceResponseRef } : {}),
+      ...(packet.criticTriggerRef ? { criticTriggerRef: packet.criticTriggerRef } : {})
+    })
+  );
+  const stopReason = `Revision delegated to implementer: ${packet.reasonCode}.`;
+  const { approvalReason: _approvalReason, ...runForDelegation } = runWithPacket;
+  const delegated = await updateRun(
+    runForDelegation,
+    {
+      state: "implementing",
+      approvalRequired: false
+    },
+    [
+      createEvent("revision_delegated", stopReason, {
+        artifactRef: artifact.ref,
+        sourceRole: packet.sourceRole,
+        reasonCode: packet.reasonCode,
+        repairObjective: packet.repairObjective
+      })
+    ],
+    [agentHandoff(runWithPacket, {
+      reason: stopReason,
+      stateAfter: "implementing",
+      fromRole: packet.sourceRole,
+      toRole: "implementer",
+      artifactRefs: [artifact.ref]
+    })]
+  );
+
+  return {
+    run: delegated,
+    response: input.response,
+    advanced: true,
+    stopReason
+  };
+};
+
+const critiqueResultFromResponse = (response: AgentResponse): JsonObject | undefined =>
+  isJsonObject(response.data.critiqueResult) ? response.data.critiqueResult : undefined;
+
+const stringArrayField = (value: JsonValue | undefined): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+const criticSafetyGateReason = (response: AgentResponse): string | undefined => {
+  const critique = critiqueResultFromResponse(response);
+  const verdict = typeof critique?.verdict === "string" ? critique.verdict : undefined;
+  const blockingConcerns = stringArrayField(critique?.blockingConcerns);
+
+  if (verdict === "unsafe") {
+    return "Critic returned unsafe; user review is required before revision or verification can continue.";
+  }
+
+  if (verdict === "unclear" && blockingConcerns.length > 0) {
+    return "Critic returned unclear with blocking concerns; user review is required before revision or verification can continue.";
+  }
+
+  return undefined;
+};
+
+const stopForCriticSafetyGate = async (
+  run: RunRecord,
+  response: AgentResponse
+): Promise<{ run: RunRecord; response: AgentResponse; advanced: true; stopReason: string } | undefined> => {
+  const approvalReason = criticSafetyGateReason(response);
+
+  if (!approvalReason) {
+    return undefined;
+  }
+
+  const criticResponseRef = latestProviderResponseArtifactRef(run, "critic");
+  const gated = await updateRun(
+    run,
+    {
+      state: "awaiting_approval",
+      approvalRequired: true,
+      approvalReason
+    },
+    [
+      createEvent("approval_required", approvalReason, {
+        reason: "critic_safety_review",
+        ...(criticResponseRef ? { artifactRef: criticResponseRef } : {})
+      })
+    ],
+    [approvalGateHandoff(run, {
+      reason: approvalReason,
+      role: "critic",
+      gate: "critic_safety_review",
+      artifactRefs: criticResponseRef ? [criticResponseRef] : []
+    })]
+  );
+
+  return {
+    run: gated,
+    response,
+    advanced: true,
+    stopReason: approvalReason
+  };
 };
 
 const writeFinalReport = async (
@@ -1020,7 +1207,8 @@ const runCriticForTrigger = async (
   }
 
   const assignment = run.roleMapping.critic;
-  if (!assignment || hasProviderResponded(run, "critic", assignment)) {
+  const implementationResponseIndex = latestProviderResponseEventIndex(run, "implementer");
+  if (!assignment || hasProviderRespondedSince(run, "critic", assignment, implementationResponseIndex)) {
     return undefined;
   }
 
@@ -1509,8 +1697,10 @@ const advanceOneStep = async (
   }
 
   if (run.state === "implementing") {
+    const revisionPacket = await latestRevisionPacketContext(run);
     const result = await runAgent(run, "implementer", {
-      phase: "implement"
+      phase: "implement",
+      ...(revisionPacket ? { latestRevisionPacket: revisionPacket } : {})
     });
     const stopped = await stopForProviderStatus(result.run, "implementer", result.response);
 
@@ -1611,8 +1801,9 @@ const advanceOneStep = async (
     const evidence = await captureGitEvidence(run.repoPath, run.runId);
     const validation = await captureValidationEvidence(evidence.run);
     const qaAssignment = validation.run.roleMapping.qa;
+    const implementationResponseIndex = latestProviderResponseEventIndex(validation.run, "implementer");
 
-    if (qaAssignment && !hasProviderResponded(validation.run, "qa", qaAssignment)) {
+    if (qaAssignment && !hasProviderRespondedSince(validation.run, "qa", qaAssignment, implementationResponseIndex)) {
       let qaRun = validation.run;
       const invocationGate = await stopForProviderInvocationApproval(qaRun, "qa", qaAssignment);
 
@@ -1629,13 +1820,15 @@ const advanceOneStep = async (
         };
       }
 
+      const revisionPacket = await latestRevisionPacketContext(qaRun);
       const qaResult = await runAgent(qaRun, "qa", {
         phase: "qa",
         changedPathCount: evidence.changedPaths.length,
         protectedChangeCount: evidence.protectedChanges.length,
         validationCommandCount: validation.executedCommands.length,
         validationFailureCount: validation.failedCommands.length,
-        validationSummaryRef: validation.artifact.ref
+        validationSummaryRef: validation.artifact.ref,
+        ...(revisionPacket ? { latestRevisionPacket: revisionPacket } : {})
       });
       const stopped = await stopForProviderStatus(qaResult.run, "qa", qaResult.response);
 
@@ -1659,18 +1852,66 @@ const advanceOneStep = async (
           toRole: "verifier"
         })]
       );
+      const qaResponseRef = latestProviderResponseArtifactRef(qaCompleted, "qa");
+      const qaEvidenceRefs = [
+        validation.artifact.ref,
+        ...[qaResponseRef].filter((ref): ref is string => Boolean(ref))
+      ];
+      const qaRevision = decideRevisionPacket("qa", qaResult.response);
       const criticDecision = decideCriticTrigger({
         qaResponse: qaResult.response,
         validationFailureCount: validation.failedCommands.length,
-        evidenceRefs: [
-          validation.artifact.ref,
-          ...[latestProviderResponseArtifactRef(qaCompleted, "qa")].filter((ref): ref is string => Boolean(ref))
-        ]
+        evidenceRefs: qaEvidenceRefs
       });
       const critic = await runCriticForTrigger(qaCompleted, criticDecision);
 
       if (critic) {
+        if (critic.response) {
+          const criticSafetyGate = await stopForCriticSafetyGate(critic.run, critic.response);
+          if (criticSafetyGate) {
+            return criticSafetyGate;
+          }
+
+          const criticResponseRef = latestProviderResponseArtifactRef(critic.run, "critic");
+          const criticTriggerRef = latestCriticTriggerArtifact(critic.run)?.ref;
+          const criticRevision = decideRevisionPacket("critic", critic.response);
+          if (criticRevision.shouldRevise) {
+            return writeAndDelegateRevision(critic.run, {
+              decision: criticRevision,
+              response: critic.response,
+              evidenceRefs: [
+                ...qaEvidenceRefs,
+                ...[criticResponseRef, criticTriggerRef].filter((ref): ref is string => Boolean(ref))
+              ],
+              ...(criticResponseRef ? { sourceResponseRef: criticResponseRef } : {}),
+              ...(criticTriggerRef ? { criticTriggerRef } : {})
+            });
+          }
+
+          if (qaRevision.shouldRevise) {
+            return writeAndDelegateRevision(critic.run, {
+              decision: qaRevision,
+              response: qaResult.response,
+              evidenceRefs: [
+                ...qaEvidenceRefs,
+                ...[criticResponseRef, criticTriggerRef].filter((ref): ref is string => Boolean(ref))
+              ],
+              ...(qaResponseRef ? { sourceResponseRef: qaResponseRef } : {}),
+              ...(criticTriggerRef ? { criticTriggerRef } : {})
+            });
+          }
+        }
+
         return critic;
+      }
+
+      if (qaRevision.shouldRevise) {
+        return writeAndDelegateRevision(qaCompleted, {
+          decision: qaRevision,
+          response: qaResult.response,
+          evidenceRefs: qaEvidenceRefs,
+          ...(qaResponseRef ? { sourceResponseRef: qaResponseRef } : {})
+        });
       }
 
       return {
@@ -1680,13 +1921,15 @@ const advanceOneStep = async (
       };
     }
 
+    const revisionPacket = await latestRevisionPacketContext(validation.run);
     const result = await runAgent(validation.run, "verifier", {
       phase: "verify",
       changedPathCount: evidence.changedPaths.length,
       protectedChangeCount: evidence.protectedChanges.length,
       validationCommandCount: validation.executedCommands.length,
       validationFailureCount: validation.failedCommands.length,
-      validationSummaryRef: validation.artifact.ref
+      validationSummaryRef: validation.artifact.ref,
+      ...(revisionPacket ? { latestRevisionPacket: revisionPacket } : {})
     });
     const stopped = await stopForProviderStatus(result.run, "verifier", result.response);
 
@@ -1700,6 +1943,7 @@ const advanceOneStep = async (
     }
 
     const verdict = verdictFromResponse(result.response);
+    const verifierResponseRef = latestProviderResponseArtifactRef(result.run, "verifier");
 
     if (verdict === "approve") {
       const stopReason = "Verifier approved runtime evidence.";
@@ -1728,22 +1972,74 @@ const advanceOneStep = async (
       validationFailureCount: validation.failedCommands.length,
       evidenceRefs: [
         validation.artifact.ref,
-        ...[latestProviderResponseArtifactRef(result.run, "verifier")].filter((ref): ref is string => Boolean(ref))
+        ...[verifierResponseRef].filter((ref): ref is string => Boolean(ref))
       ]
     });
     const critic = await runCriticForTrigger(result.run, criticDecision);
-    const runForGate = critic?.run ?? result.run;
-    const gateResponse = critic?.response ?? result.response;
+    const verifierRevision = decideRevisionPacket("verifier", result.response);
+    if (critic?.response) {
+      const criticSafetyGate = await stopForCriticSafetyGate(critic.run, critic.response);
+      if (criticSafetyGate) {
+        return criticSafetyGate;
+      }
+
+      const criticResponseRef = latestProviderResponseArtifactRef(critic.run, "critic");
+      const criticTriggerRef = latestCriticTriggerArtifact(critic.run)?.ref;
+      const criticRevision = decideRevisionPacket("critic", critic.response);
+
+      if (criticRevision.shouldRevise) {
+        return writeAndDelegateRevision(critic.run, {
+          decision: criticRevision,
+          response: critic.response,
+          evidenceRefs: [
+            validation.artifact.ref,
+            ...[verifierResponseRef, criticResponseRef, criticTriggerRef].filter((ref): ref is string => Boolean(ref))
+          ],
+          ...(criticResponseRef ? { sourceResponseRef: criticResponseRef } : {}),
+          ...(criticTriggerRef ? { criticTriggerRef } : {})
+        });
+      }
+
+      if (verifierRevision.shouldRevise) {
+        return writeAndDelegateRevision(critic.run, {
+          decision: verifierRevision,
+          response: result.response,
+          evidenceRefs: [
+            validation.artifact.ref,
+            ...[verifierResponseRef, criticResponseRef, criticTriggerRef].filter((ref): ref is string => Boolean(ref))
+          ],
+          ...(verifierResponseRef ? { sourceResponseRef: verifierResponseRef } : {}),
+          ...(criticTriggerRef ? { criticTriggerRef } : {})
+        });
+      }
+    }
+
+    if (critic) {
+      return critic;
+    }
+
+    if (verifierRevision.shouldRevise) {
+      return writeAndDelegateRevision(result.run, {
+        decision: verifierRevision,
+        response: result.response,
+        evidenceRefs: [
+          validation.artifact.ref,
+          ...[verifierResponseRef].filter((ref): ref is string => Boolean(ref))
+        ],
+        ...(verifierResponseRef ? { sourceResponseRef: verifierResponseRef } : {})
+      });
+    }
+
     const approvalReason = `Verifier returned ${verdict ?? "no verdict"}.`;
     const gated = await updateRun(
-      runForGate,
+      result.run,
       {
         state: "awaiting_approval",
         approvalRequired: true,
         approvalReason
       },
       [createEvent("approval_required", approvalReason)],
-      [approvalGateHandoff(runForGate, {
+      [approvalGateHandoff(result.run, {
         reason: approvalReason,
         role: "verifier",
         gate: "verifier_verdict"
@@ -1752,7 +2048,7 @@ const advanceOneStep = async (
 
     return {
       run: gated,
-      response: gateResponse,
+      response: result.response,
       advanced: true,
       stopReason: approvalReason
     };

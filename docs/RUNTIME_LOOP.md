@@ -15,9 +15,10 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 8. Ask the mapped read-only QA tester for missed cases and validation suggestions
 9. Ask verifier for verdict using raw evidence
 10. Ask critic when risk or ambiguity warrants it
-11. Replan, revise, ask user, abort, or integrate
-12. Produce final report with evidence
-13. Reconcile planner state against implementation evidence when needed
+11. Write a revision packet and delegate repair when findings are fixable
+12. Ask user, abort, or integrate when runtime policy requires it
+13. Produce final report with evidence
+14. Reconcile planner state against implementation evidence when needed
 ```
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
@@ -33,6 +34,8 @@ Same-run summons are read-only sidecar calls attached to an existing run. A summ
 Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, runtime QA/validation, QA tester, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, QA tester responses, critic responses, and read-only summon responses. Each lane carries bounded ownership metadata: owner label, role or runtime owner, provider/model assignment when known, required or optional status, current state, compact summary, and artifact/event refs. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only sidecar evidence, but a summon does not satisfy or replace a required verifier or runtime QA/validation lane.
 
 Critic triggers are runtime decisions, not model decisions. When QA, verifier, or deterministic validation evidence indicates risk, the runtime can invoke the configured read-only critic and write a `critic_trigger` artifact with the reason code, source roles, evidence refs, and critic response ref. The critic can recommend revision or missing evidence, but it cannot edit, satisfy validation, approve completion, or replace verifier ownership.
+
+Revision packets are runtime repair handoffs, not reviewer authority. When QA returns `needs_revision`, verifier returns `revise`, or critic returns `needs_revision`, the runtime writes a compact `revision_packet` artifact and moves the run back to `implementing` with that packet in the implementer directive context. The next QA/verifier pass must use fresh post-repair runtime evidence. Verifier `ask_user` or `abort`, protected test gates, unsafe critic feedback, max-iteration failures, and other hard policy gates still stop instead of silently revising.
 
 Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
 
@@ -100,7 +103,7 @@ User approval is required before:
 - continuing to verification after an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - switching orchestrator or verifier mid-run for an active task
 
-When `approvalPolicy.mode` is `autopilot`, the user has pre-authorized the runtime to approve bounded low-risk gates without another prompt. Autopilot may approve provider invocation, implementation start, external transfers that pass transfer-manifest policy, and isolated patch application. It must still stop for secret-risk transfers, protected test/fixture/snapshot/eval changes, destructive or dependency/network commands that require explicit command approval, dirty-checkout integration blockers, max-iteration failures, and verifier revise/ask-user outcomes.
+When `approvalPolicy.mode` is `autopilot`, the user has pre-authorized the runtime to approve bounded low-risk gates without another prompt. Autopilot may approve provider invocation, implementation start, external transfers that pass transfer-manifest policy, isolated patch application, and runtime-owned revision packet repair while the provider-call budget allows. It must still stop for secret-risk transfers, protected test/fixture/snapshot/eval changes, destructive or dependency/network commands that require explicit command approval, dirty-checkout integration blockers, max-iteration failures, verifier `ask_user` or `abort`, and unsafe critic outcomes.
 
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
@@ -126,6 +129,7 @@ The runtime captures evidence directly:
 - progress packet artifacts for later planner reconciliation
 - derived review ownership metadata for verifier, runtime QA/validation, model-assisted QA tester, critic, and read-only summon evidence
 - critic trigger artifacts explaining why an advisory critic was called
+- revision packet artifacts explaining why repair was delegated back to the implementer
 - external transfer manifest artifacts before approved provider transfers
 - typed handoff records for role delegation, approval mediation, and completion
 
@@ -195,6 +199,7 @@ delegating
   -> package validation command capture
   -> mapped QA tester response
   -> critic response when runtime trigger policy detects QA, verifier, or validation risk
+  -> revision packet and implementer repair pass when QA, critic, or verifier returns a fixable revision finding
   -> verifier response
   -> verifier response schema validation
   -> final report and progress packet artifacts

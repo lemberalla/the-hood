@@ -244,6 +244,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("revision_packet_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("runtime_revision_delegation"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));

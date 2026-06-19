@@ -108,6 +108,7 @@ export type RunArtifactKind =
   | "progress"
   | "reconciliation"
   | "critic_trigger"
+  | "revision_packet"
   | "transfer_manifest";
 
 export interface RunArtifact {
@@ -494,6 +495,7 @@ export interface ProgressPacketLatestState {
   providerResponse?: ProgressPacketProviderResponse;
   verifierResponse?: ProgressPacketProviderResponse;
   criticTrigger?: ProgressPacketArtifactRef;
+  revisionPacket?: ProgressPacketArtifactRef;
   finalReport?: ProgressPacketArtifactRef;
   repoContext?: ProgressPacketArtifactRef;
 }

@@ -196,6 +196,8 @@ The QA tester contract is advisory. It can inspect runtime evidence, call out mi
 
 The critic contract is also advisory. Automatic critic calls are initiated by runtime policy from structured QA, verifier, and validation evidence and are recorded as `critic_trigger` artifacts.
 
+When QA, critic, or verifier evidence contains a fixable revision finding, the runtime can write a compact `revision_packet` artifact and delegate a repair pass back to the implementer. The packet carries refs, reason code, repair objective, and acceptance criteria; it does not give reviewers edit tools or let the implementer self-verify.
+
 ### Rehydration And Reconciliation
 
 Before calling a model provider, the runtime can build a bounded context packet from canonical memory. The packet includes exact refs and selected excerpts so a provider can reason without relying on browser or API session history.

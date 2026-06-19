@@ -58,6 +58,15 @@ const providerResponseEvents = (run: RunRecord, role: RuntimeRole): RunEvent[] =
 const latestProviderResponseEvent = (run: RunRecord, role: RuntimeRole): RunEvent | undefined =>
   providerResponseEvents(run, role).at(-1);
 
+const latestRevisionPacketEvent = (run: RunRecord): RunEvent | undefined =>
+  run.events.filter((event) => event.type === "revision_packet_written").at(-1);
+
+const eventIndex = (run: RunRecord, event: RunEvent | undefined): number =>
+  event ? run.events.findIndex((candidate) => candidate.id === event.id) : -1;
+
+const eventIsAfter = (run: RunRecord, left: RunEvent | undefined, right: RunEvent | undefined): boolean =>
+  eventIndex(run, left) > eventIndex(run, right);
+
 const summonResponseEvents = (run: RunRecord, role: RuntimeRole): RunEvent[] =>
   run.events.filter((event) => event.type === "summon_response" && event.data?.role === role);
 
@@ -195,6 +204,9 @@ const summonEvidence = (run: RunRecord, role: RuntimeRole): ReviewLaneEvidence[]
 const verifierLane = (run: RunRecord): ReviewLane | undefined => {
   const event = latestProviderResponseEvent(run, "verifier");
   const sidecarEvidence = summonEvidence(run, "verifier");
+  const revisionEvent = latestRevisionPacketEvent(run);
+  const revisionAfterVerifier = eventIsAfter(run, revisionEvent, event);
+  const revisionArtifact = artifactForEvent(run, revisionEvent);
 
   if (!event && !implementationReviewRequired(run) && sidecarEvidence.length === 0) {
     return undefined;
@@ -204,12 +216,12 @@ const verifierLane = (run: RunRecord): ReviewLane | undefined => {
   const latestSummon = latestSummonResponseEvent(run, "verifier");
   const required = implementationReviewRequired(run);
   const owner = roleOwnerFromEvent(run, "verifier", event ?? (!required ? latestSummon : undefined));
-  const state = event
+  const state = event && !revisionAfterVerifier
     ? verifierLaneState(run, event)
     : latestSummon && sidecarEvidence.length > 0 && !required
       ? providerLaneState(latestSummon)
       : "pending";
-  const sourceKind = event
+  const sourceKind = event && !revisionAfterVerifier
     ? "verifier_response"
     : sidecarEvidence.length > 0 && !required
       ? "summon_evidence"
@@ -223,25 +235,33 @@ const verifierLane = (run: RunRecord): ReviewLane | undefined => {
     state,
     required,
     sourceKind,
-    summary: event
+    summary: revisionAfterVerifier
+      ? "A revision packet is active; verifier review must run again after the repair."
+      : event
       ? providerLaneSummary(event, artifact, "Verifier review is recorded.")
       : sidecarEvidence.length > 0 && !required
         ? "Read-only verifier summon evidence is recorded; it does not replace required verification."
         : "Verifier review is required before implementation work can be accepted.",
-    sourceRefs: event
+    sourceRefs: revisionAfterVerifier && revisionEvent
+      ? [eventSource(run, revisionEvent), ...(revisionArtifact ? [artifactSource(run, revisionArtifact)] : [])]
+      : event
       ? providerLaneSourceRefs(run, event, artifact)
       : sidecarEvidence.length > 0 && !required
         ? sidecarEvidence.flatMap((evidence) => evidence.sourceRefs)
         : [runSource(run)],
-    artifactRefs: event
+    artifactRefs: revisionAfterVerifier
+      ? revisionArtifact ? [revisionArtifact.ref] : []
+      : event
       ? artifact ? [artifact.ref] : []
       : sidecarEvidence.flatMap((evidence) => evidence.artifactRefs),
-    eventRefs: event
+    eventRefs: revisionAfterVerifier && revisionEvent
+      ? [revisionEvent.id]
+      : event
       ? [event.id]
       : sidecarEvidence.flatMap((evidence) => evidence.eventRefs),
     owner,
-    canSatisfyRequired: Boolean(event),
-    satisfiesRequired: required && state === "satisfied" && Boolean(event),
+    canSatisfyRequired: Boolean(event && !revisionAfterVerifier),
+    satisfiesRequired: required && state === "satisfied" && Boolean(event && !revisionAfterVerifier),
     sidecarEvidence
   };
 };
@@ -325,18 +345,26 @@ const qaLane = (run: RunRecord): ReviewLane | undefined => {
     : "pending";
   const latestArtifact = artifacts.at(-1);
   const latestEvent = events.at(-1);
+  const revisionEvent = latestRevisionPacketEvent(run);
+  const revisionAfterValidation = eventIsAfter(run, revisionEvent, latestEvent);
+  const revisionArtifact = artifactForEvent(run, revisionEvent);
   const latestToolEvents = toolEvents.slice(-3);
+  const hasCurrentValidationEvidence = hasValidationEvidence && !revisionAfterValidation;
   const sourceRefs = [
-    ...(latestArtifact ? [artifactSource(run, latestArtifact)] : []),
-    ...(latestEvent ? [eventSource(run, latestEvent)] : []),
-    ...latestToolEvents.map((event) => toolSource(run, event)),
-    ...(!hasValidationEvidence ? sidecarEvidence.flatMap((evidence) => evidence.sourceRefs) : [])
+    ...(hasCurrentValidationEvidence && latestArtifact ? [artifactSource(run, latestArtifact)] : []),
+    ...(hasCurrentValidationEvidence && latestEvent ? [eventSource(run, latestEvent)] : []),
+    ...(hasCurrentValidationEvidence ? latestToolEvents.map((event) => toolSource(run, event)) : []),
+    ...(revisionAfterValidation && revisionEvent ? [eventSource(run, revisionEvent)] : []),
+    ...(revisionAfterValidation && revisionArtifact ? [artifactSource(run, revisionArtifact)] : []),
+    ...(!hasCurrentValidationEvidence ? sidecarEvidence.flatMap((evidence) => evidence.sourceRefs) : [])
   ];
   const executedCount = latestEvent && isJsonObject(latestEvent.data)
     ? numberField(latestEvent.data.executedCommandCount) ?? toolEvents.length
     : toolEvents.length;
-  const summary = hasValidationEvidence
+  const summary = hasCurrentValidationEvidence
     ? `Runtime validation captured ${executedCount} command(s), ${failures} failed.`
+    : revisionAfterValidation
+      ? "A revision packet is active; runtime validation must rerun after the repair."
     : sidecarEvidence.length > 0
       ? "Runtime validation evidence is still missing; QA tester sidecar evidence is advisory."
       : "Runtime validation evidence is required for QA ownership.";
@@ -345,20 +373,23 @@ const qaLane = (run: RunRecord): ReviewLane | undefined => {
     id: "review-lane-qa",
     label: "Runtime QA / Validation",
     kind: "qa",
-    state,
+    state: hasCurrentValidationEvidence ? state : "pending",
     required,
-    sourceKind: hasValidationEvidence ? "validation_evidence" : "required_gate",
+    sourceKind: hasCurrentValidationEvidence ? "validation_evidence" : "required_gate",
     summary,
     sourceRefs,
-    artifactRefs: latestArtifact ? [latestArtifact.ref] : [],
+    artifactRefs: hasCurrentValidationEvidence
+      ? latestArtifact ? [latestArtifact.ref] : []
+      : revisionArtifact ? [revisionArtifact.ref] : [],
     eventRefs: [
-      ...(latestEvent ? [latestEvent.id] : []),
-      ...latestToolEvents.map((event) => event.id),
-      ...(!hasValidationEvidence ? sidecarEvidence.flatMap((evidence) => evidence.eventRefs) : [])
+      ...(hasCurrentValidationEvidence && latestEvent ? [latestEvent.id] : []),
+      ...(hasCurrentValidationEvidence ? latestToolEvents.map((event) => event.id) : []),
+      ...(revisionAfterValidation && revisionEvent ? [revisionEvent.id] : []),
+      ...(!hasCurrentValidationEvidence ? sidecarEvidence.flatMap((evidence) => evidence.eventRefs) : [])
     ],
     owner: runtimeOwner("Runtime QA / Validation"),
-    canSatisfyRequired: hasValidationEvidence,
-    satisfiesRequired: required && hasValidationEvidence && state === "satisfied",
+    canSatisfyRequired: hasCurrentValidationEvidence,
+    satisfiesRequired: required && hasCurrentValidationEvidence && state === "satisfied",
     sidecarEvidence
   };
 };

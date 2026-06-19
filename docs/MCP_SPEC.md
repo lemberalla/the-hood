@@ -255,7 +255,7 @@ Output:
   "approval_reason": "string",
   "artifacts": [
     {
-      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation | critic_trigger | transfer_manifest",
+      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation | critic_trigger | revision_packet | transfer_manifest",
       "ref": "string"
     }
   ]
@@ -353,7 +353,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, critic trigger, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
+Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, critic trigger, revision packet, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
 
 Input:
 

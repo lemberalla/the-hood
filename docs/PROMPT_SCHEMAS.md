@@ -334,6 +334,28 @@ critic_trigger:
 
 This artifact is written by the runtime. Providers may inspect it as context, but they do not decide whether it exists.
 
+## Revision Packet Artifact
+
+```yaml
+revision_packet:
+  schemaVersion: 1
+  kind: revision_packet
+  runId: string
+  createdAt: string
+  sourceRole: qa | verifier | critic
+  reasonCode: qa_needs_revision | verifier_revise | critic_needs_revision | critic_blocking_concerns
+  reason: string
+  repairObjective: string
+  acceptanceCriteria:
+    - string
+  evidenceRefs:
+    - string
+  sourceResponseRef: string
+  criticTriggerRef: string | null
+```
+
+This artifact is written by the runtime before a repair pass. Implementers may use it as a narrow brief; reviewers do not gain edit authority, and post-repair QA/verifier evidence must be captured again.
+
 ## Reconciliation Output
 
 ```yaml

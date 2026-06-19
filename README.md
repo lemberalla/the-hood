@@ -41,6 +41,7 @@ It supports:
 - runtime-captured package validation command evidence during verifier review
 - read-only model-assisted QA tester lane for missed cases and validation suggestions
 - runtime-owned critic trigger artifacts when QA, verifier, or validation evidence indicates risk
+- runtime-owned revision packet artifacts that route fixable QA, critic, or verifier findings back to the implementer
 - provider config merging that preserves newly added built-in models in stale repo-local configs
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
@@ -124,6 +125,7 @@ Agents
 - The QA tester does not get edit tools and cannot satisfy runtime validation gates.
 - Runtime-captured logs are the source of truth, not model summaries.
 - Model session context is disposable; TheHood preserves exact artifacts and rehydrates providers from runtime state.
+- Fixable reviewer findings become runtime revision packets before the implementer gets another pass.
 - Test changes require separate classification and review.
 - The frontend never owns orchestration logic. It triggers runtime actions.
 - Provider choice is user-controlled per role.

@@ -51,6 +51,7 @@ Rules:
 - Do not invoke ChatGPT Web for repo work until the user explicitly approves that provider invocation.
 - Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer or has configured low-risk external transfer auto-approval.
 - In autopilot mode, treat the user-configured approval policy as the approval source and still fail closed on secret-risk transfers, protected test changes, destructive commands, dependency installs, and dirty-checkout integration blockers.
+- Runtime-owned revision packets may route fixable reviewer findings back to the implementer, but unsafe critic feedback, verifier `ask_user` or `abort`, and protected-path gates must still stop for review.
 
 ## Filesystem Safety
 

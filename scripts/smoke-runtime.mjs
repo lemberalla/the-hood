@@ -150,6 +150,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
+assert.ok(doctorResult.runtime.capabilities.includes("revision_packet_artifacts"));
+assert.ok(doctorResult.runtime.capabilities.includes("runtime_revision_delegation"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -1561,6 +1563,177 @@ const autopilotLoopContinue = JSON.parse(
 );
 assert.equal(autopilotLoopContinue.run.state, "completed");
 assert.equal(autopilotLoopContinue.providerResponses.length, 4);
+
+const qaRevisionRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-qa-revision-smoke-"));
+await runCli(["init", "--repo", qaRevisionRepoPath]);
+await fs.writeFile(
+  path.join(qaRevisionRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('qa revision validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const qaRevisionRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "qa-revision-loop-smoke exercise repair delegation",
+      "--repo",
+      qaRevisionRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--qa",
+      "stub:qa",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--json"
+    ])
+  ).stdout
+);
+await runCli(["approve", qaRevisionRun.runId, "--repo", qaRevisionRepoPath, "--reason", "smoke-approved"]);
+const qaRevisionContinue = JSON.parse(
+  (await runCli(["continue", qaRevisionRun.runId, "--repo", qaRevisionRepoPath, "--json"])).stdout
+);
+assert.equal(qaRevisionContinue.run.state, "completed");
+assert.equal(
+  qaRevisionContinue.run.events.filter((event) => event.type === "agent_response").length,
+  7
+);
+assert.ok(
+  qaRevisionContinue.providerResponses.some((response) => response.data.qaResult?.verdict === "needs_revision"),
+  "QA revision smoke should include the first QA revision finding"
+);
+assert.ok(
+  qaRevisionContinue.providerResponses.some((response) =>
+    response.data.implementationResult?.status === "no_change" &&
+    response.summary.includes("handled the runtime revision packet")
+  ),
+  "implementer should receive the revision packet on the repair pass"
+);
+const qaRevisionPacketArtifact = qaRevisionContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "revision_packet"
+);
+assert.ok(qaRevisionPacketArtifact, "QA revision should attach a revision packet");
+const qaRevisionPacket = JSON.parse(await fs.readFile(qaRevisionPacketArtifact.ref, "utf8"));
+assert.equal(qaRevisionPacket.kind, "revision_packet");
+assert.equal(qaRevisionPacket.sourceRole, "qa");
+assert.equal(qaRevisionPacket.reasonCode, "qa_needs_revision");
+assert.ok(qaRevisionPacket.evidenceRefs.some((ref) => ref.includes("/agent/")));
+assert.ok(
+  qaRevisionContinue.run.events.some(
+    (event) => event.type === "revision_delegated" && event.data?.reasonCode === "qa_needs_revision"
+  )
+);
+assert.ok(
+  qaRevisionContinue.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "qa" &&
+      handoff.toRole === "implementer" &&
+      handoff.artifactRefs?.includes(qaRevisionPacketArtifact.ref)
+  ),
+  "QA revision should hand repair back to the implementer"
+);
+const qaRevisionStatus = JSON.parse(
+  (await runCli(["status", qaRevisionRun.runId, "--repo", qaRevisionRepoPath, "--json"])).stdout
+);
+assert.equal(qaRevisionStatus.insights.latestRevisionPacket.reasonCode, "qa_needs_revision");
+assert.equal(
+  qaRevisionStatus.insights.canonicalMemory.currentRun.artifacts.latestRevisionPacket.ref,
+  qaRevisionPacketArtifact.ref
+);
+const qaRevisionProgressArtifact = qaRevisionContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
+);
+assert.ok(qaRevisionProgressArtifact, "QA revision loop should still complete with a progress packet");
+const qaRevisionProgress = JSON.parse(await fs.readFile(qaRevisionProgressArtifact.ref, "utf8"));
+assert.equal(qaRevisionProgress.latest.revisionPacket.ref, qaRevisionPacketArtifact.ref);
+const qaRevisionStatusText = await runCli(["status", qaRevisionRun.runId, "--repo", qaRevisionRepoPath]);
+assert.ok(qaRevisionStatusText.stdout.includes("revision packet:"));
+assert.ok(qaRevisionStatusText.stdout.includes("reasonCode: qa_needs_revision"));
+
+const verifierRevisionRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-verifier-revision-smoke-"));
+await runCli(["init", "--repo", verifierRevisionRepoPath]);
+await fs.writeFile(
+  path.join(verifierRevisionRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('verifier revision validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const verifierRevisionRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "verifier-revision-loop-smoke exercise repair delegation",
+      "--repo",
+      verifierRevisionRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--qa",
+      "stub:qa",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--json"
+    ])
+  ).stdout
+);
+await runCli(["approve", verifierRevisionRun.runId, "--repo", verifierRevisionRepoPath, "--reason", "smoke-approved"]);
+const verifierRevisionContinue = JSON.parse(
+  (await runCli(["continue", verifierRevisionRun.runId, "--repo", verifierRevisionRepoPath, "--json"])).stdout
+);
+assert.equal(verifierRevisionContinue.run.state, "completed");
+assert.equal(
+  verifierRevisionContinue.run.events.filter((event) => event.type === "agent_response").length,
+  8
+);
+assert.ok(
+  verifierRevisionContinue.providerResponses.some((response) => response.data.verificationResult?.verdict === "revise"),
+  "verifier revision smoke should include a revise verdict"
+);
+assert.ok(
+  verifierRevisionContinue.run.artifacts.some(
+    (artifact) => artifact.kind === "critic_trigger" && artifact.summary.includes("verifier_failed")
+  ),
+  "verifier revision should still trigger advisory critic review"
+);
+const verifierRevisionPacketArtifact = verifierRevisionContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "revision_packet"
+);
+assert.ok(verifierRevisionPacketArtifact, "verifier revision should attach a revision packet");
+const verifierRevisionPacket = JSON.parse(await fs.readFile(verifierRevisionPacketArtifact.ref, "utf8"));
+assert.equal(verifierRevisionPacket.sourceRole, "verifier");
+assert.equal(verifierRevisionPacket.reasonCode, "verifier_revise");
+assert.ok(
+  verifierRevisionContinue.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "verifier" &&
+      handoff.toRole === "implementer" &&
+      handoff.artifactRefs?.includes(verifierRevisionPacketArtifact.ref)
+  ),
+  "verifier revision should hand repair back to the implementer"
+);
 
 const maxIterationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-max-iterations-smoke-"));
 await runCli(["init", "--repo", maxIterationRepoPath]);

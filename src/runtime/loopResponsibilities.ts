@@ -252,7 +252,9 @@ const implementationResponsibility = (run: RunRecord, waitingDirective: RunEvent
       : applicable
         ? "pending"
         : "skipped";
-  const status = event
+  const status = waitingForImplementer || run.state === "implementing"
+    ? "in_progress"
+    : event
     ? providerResponsibilityStatus(event, activeStatus)
     : activeStatus;
   const handoff = latestHandoff(run, (candidate) => candidate.toRole === "implementer");

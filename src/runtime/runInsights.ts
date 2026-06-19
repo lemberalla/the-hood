@@ -61,10 +61,23 @@ export interface CriticTriggerInsight {
   criticResponseRef?: string;
 }
 
+export interface RevisionPacketInsight {
+  artifact: RunArtifactSummary;
+  sourceRole?: string;
+  reasonCode?: string;
+  reason?: string;
+  repairObjective?: string;
+  acceptanceCriteria: string[];
+  evidenceRefs: string[];
+  sourceResponseRef?: string;
+  criticTriggerRef?: string;
+}
+
 export interface RunInsights {
   latestAgentResponse?: LatestAgentResponseInsight;
   finalReport?: FinalReportInsight;
   latestCriticTrigger?: CriticTriggerInsight;
+  latestRevisionPacket?: RevisionPacketInsight;
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
   latestRepoContext?: RunArtifactSummary;
@@ -203,6 +216,9 @@ const finalReportArtifact = (run: RunRecord): RunArtifact | undefined => {
 const criticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "critic_trigger").at(-1);
 
+const revisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "revision_packet").at(-1);
+
 const parseFinalReport = (
   artifact: RunArtifact,
   payload: JsonObject
@@ -227,6 +243,21 @@ const parseCriticTrigger = (
   ...(typeof payload.criticResponseRef === "string" ? { criticResponseRef: payload.criticResponseRef } : {})
 });
 
+const parseRevisionPacket = (
+  artifact: RunArtifact,
+  payload: JsonObject
+): RevisionPacketInsight => ({
+  artifact: summarizeArtifact(artifact),
+  ...(typeof payload.sourceRole === "string" ? { sourceRole: payload.sourceRole } : {}),
+  ...(typeof payload.reasonCode === "string" ? { reasonCode: payload.reasonCode } : {}),
+  ...(typeof payload.reason === "string" ? { reason: payload.reason } : {}),
+  ...(typeof payload.repairObjective === "string" ? { repairObjective: payload.repairObjective } : {}),
+  acceptanceCriteria: stringArray(payload.acceptanceCriteria),
+  evidenceRefs: stringArray(payload.evidenceRefs),
+  ...(typeof payload.sourceResponseRef === "string" ? { sourceResponseRef: payload.sourceResponseRef } : {}),
+  ...(typeof payload.criticTriggerRef === "string" ? { criticTriggerRef: payload.criticTriggerRef } : {})
+});
+
 export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const issues: string[] = [];
   const latestRefs = latestCanonicalArtifactRefs(run);
@@ -241,6 +272,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const criticTrigger = criticTriggerArtifact(run);
   const criticTriggerPayload = criticTrigger
     ? await readArtifactJson(run, criticTrigger, issues)
+    : undefined;
+  const revisionPacket = revisionPacketArtifact(run);
+  const revisionPacketPayload = revisionPacket
+    ? await readArtifactJson(run, revisionPacket, issues)
     : undefined;
   const latestAgentResponse = latestAgent && latestAgentPayload
     ? parseAgentResponse(latestAgent, latestAgentPayload, issues)
@@ -292,6 +327,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
 
   if (criticTrigger && criticTriggerPayload) {
     insights.latestCriticTrigger = parseCriticTrigger(criticTrigger, criticTriggerPayload);
+  }
+
+  if (revisionPacket && revisionPacketPayload) {
+    insights.latestRevisionPacket = parseRevisionPacket(revisionPacket, revisionPacketPayload);
   }
 
   return insights;
