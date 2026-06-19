@@ -65,6 +65,7 @@ Implemented tools:
 - `thehood_orchestrate`
 - `thehood_consult`
 - `thehood_summon`
+- `thehood_fanout`
 - `thehood_continue`
 - `thehood_reconcile`
 - `thehood_status`
@@ -255,7 +256,7 @@ Output:
   "approval_reason": "string",
   "artifacts": [
     {
-      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation | critic_trigger | revision_packet | transfer_manifest",
+      "kind": "plan | diff | log | report | metadata | status | agent | directive | context | progress | reconciliation | critic_trigger | revision_packet | fanout | transfer_manifest",
       "ref": "string"
     }
   ]
@@ -285,6 +286,33 @@ Input:
 The runtime records `agent_summoned`, a typed handoff, and provider directive/response artifacts when the provider runs. A one-call `agent` override does not rewrite the run's role mapping. Model-backed providers still pass through the provider-invocation approval gate; autopilot may auto-approve that bounded gate according to policy. A `qa` summon records model-assisted tester evidence, but runtime-captured validation artifacts remain the proof for runtime QA/validation gates.
 
 Output includes the run summary, summoned role, summoned agent, summon kind, stop reason, directive and response artifact refs when present, provider response count, and normalized provider response summaries. Long provider-authored plans, reports, reviews, and critique should be returned as markdown in the role payload and are bounded in tool responses.
+
+### `thehood_fanout`
+
+Run a bounded group of read-only same-run summons on an existing run. This is the MCP path for asking several advisory agents to inspect the same state, such as QA tester plus critic, without giving those agents edit authority or acceptance authority.
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string",
+  "max_items": "optional number, hard-capped at 8",
+  "items": [
+    {
+      "role": "orchestrator | planner | researcher | qa | verifier | critic",
+      "brief": "string",
+      "agent": "optional provider:model",
+      "kind": "optional summon kind",
+      "persona": "optional string",
+      "constraints": ["string"],
+      "evidence_refs": ["artifact ref"]
+    }
+  ]
+}
+```
+
+Output includes the run summary, `fanout_status`, bounds, the compact `fanout` artifact ref, and one item summary per attempted summon with role, summon kind, status, stop reason, agent, directive artifact, response artifact, and provider status when present. Execution is currently sequential. If a provider invocation or transfer gate blocks one item, the runtime stops before later items and records the group artifact. Fan-out evidence is sidecar-only; it may appear in QA tester or critic lanes, but it cannot satisfy required verifier, runtime QA, approval, or completion gates.
 
 ### `thehood_continue`
 
@@ -353,7 +381,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, critic trigger, revision packet, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
+Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, critic trigger, revision packet, fan-out, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
 
 Input:
 

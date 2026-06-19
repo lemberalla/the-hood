@@ -152,6 +152,10 @@ assert.ok(
   "tools/list should expose thehood_summon"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_fanout"),
+  "tools/list should expose thehood_fanout"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_reconcile"),
   "tools/list should expose thehood_reconcile"
 );
@@ -201,6 +205,43 @@ assert.equal(summonContent.provider_response_count, 1);
 assert.equal(summonContent.provider_responses[0].data.qaResult.verdict, "pass");
 assert.equal(summonContent.response_artifact.kind, "agent");
 
+const fanoutPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_fanout",
+      arguments: {
+        run_id: happyPath[2].result.structuredContent.run_id,
+        repo_path: repoPath,
+        items: [
+          {
+            role: "qa",
+            agent: "stub:qa",
+            kind: "qa",
+            brief: "QA this run as advisory sidecar evidence."
+          },
+          {
+            role: "critic",
+            agent: "stub:critic",
+            kind: "critique",
+            brief: "Critique this run as advisory sidecar evidence."
+          }
+        ]
+      }
+    }
+  }
+]);
+const fanoutContent = fanoutPath[1].result.structuredContent;
+assert.equal(fanoutContent.fanout_status, "completed");
+assert.equal(fanoutContent.bounds.requestedItems, 2);
+assert.equal(fanoutContent.bounds.executedItems, 2);
+assert.equal(fanoutContent.fanout_artifact.kind, "fanout");
+assert.deepEqual(fanoutContent.items.map((item) => item.status), ["completed", "completed"]);
+assert.equal(fanoutContent.items[0].response_artifact.kind, "agent");
+
 const doctorPath = await runMcp([
   ...baseMessages,
   {
@@ -242,6 +283,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
+assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("revision_packet_artifacts"));

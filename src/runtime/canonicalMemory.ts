@@ -12,6 +12,7 @@ export interface CanonicalMemoryArtifactRefs {
   latestFinalReport?: CanonicalMemoryArtifactRef;
   latestCriticTrigger?: CanonicalMemoryArtifactRef;
   latestRevisionPacket?: CanonicalMemoryArtifactRef;
+  latestFanout?: CanonicalMemoryArtifactRef;
   latestTransferManifest?: CanonicalMemoryArtifactRef;
 }
 
@@ -57,6 +58,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
   const latestRepoContext = latestArtifact(run, (artifact) => artifact.kind === "context");
   const latestCriticTrigger = latestArtifact(run, (artifact) => artifact.kind === "critic_trigger");
   const latestRevisionPacket = latestArtifact(run, (artifact) => artifact.kind === "revision_packet");
+  const latestFanout = latestArtifact(run, (artifact) => artifact.kind === "fanout");
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
   const finalReport = latestFinalReport(run);
 
@@ -69,6 +71,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
     ...(finalReport ? { latestFinalReport: finalReport } : {}),
     ...(latestCriticTrigger ? { latestCriticTrigger } : {}),
     ...(latestRevisionPacket ? { latestRevisionPacket } : {}),
+    ...(latestFanout ? { latestFanout } : {}),
     ...(latestTransferManifest ? { latestTransferManifest } : {})
   };
 };
@@ -136,6 +139,7 @@ export const buildCanonicalMemory = async (run: RunRecord): Promise<JsonObject> 
     "latestRepoContext",
     "latestFinalReport",
     "latestRevisionPacket",
+    "latestFanout",
     "latestTransferManifest"
   ] as const) {
     const artifact = latestProjectArtifact(recentRuns, key);

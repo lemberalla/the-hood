@@ -109,6 +109,7 @@ export type RunArtifactKind =
   | "reconciliation"
   | "critic_trigger"
   | "revision_packet"
+  | "fanout"
   | "transfer_manifest";
 
 export interface RunArtifact {

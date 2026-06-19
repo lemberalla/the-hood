@@ -46,6 +46,8 @@ A summon does not grant edit tools, apply patches, accept work, or rewrite the r
 
 Summon responses can appear as read-only sidecar evidence on review ownership lanes. They are useful for QA, critique, and second opinions, but they cannot satisfy required verifier ownership, replace runtime-captured validation evidence, or advance the main state machine.
 
+A fan-out is a bounded group of summons on the same run. It uses the same read-only role limits, provider approval gates, and sidecar evidence rules as individual summons. Fan-out writes a compact group artifact for visibility, but it does not create a new scheduler, grant edit tools, or satisfy required review gates.
+
 ## Review Ownership
 
 Review ownership is derived by the runtime from canonical run evidence. A lane records the owner, provider/model assignment when the owner is a role, whether the lane is required, whether its evidence can satisfy required gates, and compact artifact/event refs.
@@ -55,6 +57,7 @@ Review ownership is derived by the runtime from canonical run evidence. A lane r
 - QA tester ownership is advisory model evidence and cannot satisfy runtime validation.
 - Critic ownership is advisory. The runtime may call the critic from a `critic_trigger` policy decision, but critic output cannot satisfy validation, verifier, or completion gates.
 - Same-run summons are sidecar evidence and remain read-only.
+- Same-run fan-outs are grouped sidecar evidence and remain read-only.
 - Fixable QA, critic, or verifier findings can become a runtime-owned `revision_packet` handoff back to the implementer. The packet does not grant reviewer edit power and does not satisfy validation or verifier gates.
 
 ## Orchestrator

@@ -9,6 +9,7 @@ import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
 import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
+import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
 import { listProviders } from "../runtime/providers.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -52,6 +53,7 @@ import {
   formatMcpConfigReport,
   formatMcpTunnelConfigReport,
   formatExternalTransferPreview,
+  formatFanoutAgentsResult,
   formatProviders,
   formatReconcileRunResult,
   formatRoles,
@@ -89,6 +91,7 @@ Usage:
   thehood continue <run-id> [--repo <path>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
   thehood summon <run-id> --role <role> --brief <text> [--agent <provider:model>] [--kind <kind>] [--json]
+  thehood fanout <run-id> --items-json <json-array> [--max-items <n>] [--repo <path>] [--json]
   thehood transfer preview <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
@@ -111,6 +114,9 @@ Role override options for plan/run:
 
 Summon roles:
   orchestrator | planner | researcher | qa | verifier | critic
+
+Fan-out item JSON:
+  [{"role":"qa","agent":"stub:qa","brief":"QA sidecar"},{"role":"critic","agent":"stub:critic","brief":"Critique sidecar"}]
 `;
 
 const repoFromOptions = (options: Record<string, CliOptionValue>): string =>
@@ -196,6 +202,97 @@ const parsePositiveIntegerOption = (
   }
 
   return parsed;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const requiredStringField = (value: Record<string, unknown>, key: string, label: string): string => {
+  const raw = value[key];
+
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw;
+  }
+
+  throw new InputError(`${label}.${key} must be a non-empty string.`);
+};
+
+const optionalStringField = (value: Record<string, unknown>, key: string, label: string): string | undefined => {
+  const raw = value[key];
+
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw;
+  }
+
+  throw new InputError(`${label}.${key} must be a non-empty string when provided.`);
+};
+
+const optionalStringArrayField = (value: Record<string, unknown>, key: string, label: string): string[] => {
+  const raw = value[key];
+
+  if (raw === undefined) {
+    return [];
+  }
+
+  if (Array.isArray(raw) && raw.every((item) => typeof item === "string")) {
+    return raw;
+  }
+
+  throw new InputError(`${label}.${key} must be an array of strings when provided.`);
+};
+
+const parseFanoutItem = (value: unknown, index: number): FanoutItemInput => {
+  if (!isPlainObject(value)) {
+    throw new InputError(`Fan-out item ${index + 1} must be an object.`);
+  }
+
+  const label = `itemsJson[${index}]`;
+  const agent = optionalStringField(value, "agent", label);
+  const summonKind = optionalStringField(value, "kind", label) ?? optionalStringField(value, "summonKind", label);
+  const persona = optionalStringField(value, "persona", label);
+  const evidenceRefs = [
+    ...optionalStringArrayField(value, "evidenceRefs", label),
+    ...optionalStringArrayField(value, "evidence_refs", label)
+  ];
+
+  return {
+    role: parseRole(requiredStringField(value, "role", label)),
+    brief: requiredStringField(value, "brief", label),
+    ...(summonKind ? { summonKind } : {}),
+    ...(persona ? { persona } : {}),
+    ...(agent ? { agent: parseRoleAssignment(agent) } : {}),
+    constraints: optionalStringArrayField(value, "constraints", label),
+    evidenceRefs
+  };
+};
+
+const parseFanoutItems = (options: Record<string, CliOptionValue>): FanoutItemInput[] => {
+  const raw = getStringOption(options, "itemsJson");
+
+  if (!raw) {
+    throw new InputError("Option --items-json is required for fanout.");
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      throw new InputError("Option --items-json must be a JSON array.");
+    }
+
+    return parsed.map(parseFanoutItem);
+  } catch (error) {
+    if (error instanceof InputError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new InputError(`Invalid --items-json: ${message}`);
+  }
 };
 
 const artifactReadOptions = (
@@ -562,6 +659,21 @@ const handleSummon = async (
   shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatSummonAgentResult(result)}\n`);
 };
 
+const handleFanout = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const maxItems = parsePositiveIntegerOption(options, "maxItems");
+  const result = await fanoutAgents({
+    repoPath: repoFromOptions(options),
+    runId: ensureRunId(args[0]),
+    items: parseFanoutItems(options),
+    ...(maxItems === undefined ? {} : { maxItems })
+  });
+
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatFanoutAgentsResult(result)}\n`);
+};
+
 const handleTransfer = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -775,6 +887,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "summon":
       await handleSummon(args, parsed.options);
+      return;
+    case "fanout":
+      await handleFanout(args, parsed.options);
       return;
     case "transfer":
       await handleTransfer(args, parsed.options);

@@ -149,6 +149,7 @@ evidence:
 - Final report says "tests passed" without command names and exit codes.
 - Runtime applies an isolated patch before explicit approval.
 - A same-run summon labeled `qa`, `review`, or `critique` is treated as satisfying a required verifier or QA gate.
+- A same-run fan-out is treated as a scheduler, acceptance vote, or substitute for runtime validation.
 - A model QA response is treated as proof that validation commands passed.
 - A critic response is treated as proof that implementation is accepted or deterministic validation passed.
 - A stale pre-revision verifier or validation result is treated as satisfying the post-repair review gate.

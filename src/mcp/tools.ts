@@ -2,6 +2,7 @@ import { loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
+import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
 import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
@@ -153,6 +154,38 @@ const optionalBoolean = (source: JsonObject, key: string): boolean | undefined =
   }
 
   throw new Error(`${key} must be a boolean when provided.`);
+};
+
+const requiredObjectArray = (source: JsonObject, key: string): JsonObject[] => {
+  const value = source[key];
+
+  if (!Array.isArray(value) || value.some((item) => item === null || typeof item !== "object" || Array.isArray(item))) {
+    throw new Error(`${key} must be an array of objects.`);
+  }
+
+  return value as JsonObject[];
+};
+
+const parseFanoutItem = (item: JsonObject): FanoutItemInput => {
+  const agent = optionalString(item, "agent");
+  const kind = optionalString(item, "kind");
+  const summonKind = optionalString(item, "summon_kind");
+  const persona = optionalString(item, "persona");
+  const evidenceRefs = [
+    ...optionalStringList(item, "evidence_refs"),
+    ...optionalStringList(item, "evidenceRefs")
+  ];
+
+  return {
+    role: parseRole(requiredString(item, "role")),
+    brief: requiredString(item, "brief"),
+    ...(kind ? { summonKind: kind } : {}),
+    ...(summonKind ? { summonKind } : {}),
+    ...(persona ? { persona } : {}),
+    ...(agent ? { agent: parseRoleAssignment(agent) } : {}),
+    constraints: optionalStringList(item, "constraints"),
+    evidenceRefs
+  };
 };
 
 const readOnlyAnnotations = (): JsonObject => ({
@@ -501,6 +534,111 @@ const createSummonTool = (): McpTool => ({
         response_artifact: result.responseArtifact ? artifactSummary(result.responseArtifact) : null,
         provider_response_count: result.providerResponses.length,
         provider_responses: agentResponsesSummary(result.providerResponses)
+      };
+    })
+});
+
+const createFanoutTool = (): McpTool => ({
+  definition: {
+    name: "thehood_fanout",
+    title: "Fan Out Same-Run TheHood Agents",
+    description: "Run a bounded group of read-only same-run summons for advisory QA, critique, research, or planning evidence. Fan-out evidence is sidecar-only and cannot satisfy required verifier or runtime QA gates.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        max_items: {
+          type: "number",
+          description: "Optional cap for this call. The runtime hard cap is 8."
+        },
+        items: {
+          type: "array",
+          minItems: 1,
+          maxItems: 8,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              role: {
+                type: "string",
+                enum: ["orchestrator", "planner", "researcher", "qa", "verifier", "critic"]
+              },
+              brief: {
+                type: "string"
+              },
+              agent: {
+                type: "string",
+                description: "Optional one-call provider:model assignment, for example stub:qa."
+              },
+              kind: {
+                type: "string",
+                description: "Optional summon kind such as qa, critique, research, review, or plan."
+              },
+              summon_kind: {
+                type: "string"
+              },
+              persona: {
+                type: "string"
+              },
+              constraints: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              },
+              evidence_refs: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              },
+              evidenceRefs: {
+                type: "array",
+                items: {
+                  type: "string"
+                }
+              }
+            },
+            required: ["role", "brief"]
+          }
+        }
+      },
+      required: ["run_id", "repo_path", "items"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const maxItems = optionalNumber(args, "max_items");
+      const result = await fanoutAgents({
+        repoPath: requiredString(args, "repo_path"),
+        runId: requiredString(args, "run_id"),
+        items: requiredObjectArray(args, "items").map(parseFanoutItem),
+        ...(maxItems === undefined ? {} : { maxItems: Math.floor(maxItems) })
+      });
+
+      return {
+        ...runSummary(result.run),
+        fanout_status: result.status,
+        bounds: result.bounds as unknown as JsonObject,
+        fanout_artifact: artifactSummary(result.artifact),
+        items: result.items.map((item) => ({
+          index: item.index,
+          role: item.role,
+          summon_kind: item.summonKind,
+          status: item.status,
+          stop_reason: item.stopReason,
+          agent: item.assignment ? formatRoleAssignment(item.assignment) : null,
+          directive_artifact: item.directiveArtifact ? artifactSummary(item.directiveArtifact) : null,
+          response_artifact: item.responseArtifact ? artifactSummary(item.responseArtifact) : null,
+          provider_response_count: item.providerResponseCount,
+          provider_status: item.providerStatus ?? null
+        }))
       };
     })
 });
@@ -1050,6 +1188,7 @@ export const mcpTools: McpTool[] = [
   createOrchestrateTool(),
   createConsultTool(),
   createSummonTool(),
+  createFanoutTool(),
   createContinueTool(),
   createReconcileTool(),
   createTransferPreviewTool(),

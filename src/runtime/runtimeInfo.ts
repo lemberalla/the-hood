@@ -34,6 +34,7 @@ export const runtimeCapabilities = [
   "autopilot_approval_policy",
   "run_status_insights",
   "same_run_agent_summons",
+  "bounded_same_run_fanout",
   "provider_access_modes",
   "mcp_repo_gateway_tools",
   "chatgpt_mcp_connector_mode"

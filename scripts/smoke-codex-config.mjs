@@ -262,6 +262,7 @@ for (const expectedTool of [
   "thehood_runs",
   "thehood_read_artifact",
   "thehood_capture_evidence",
+  "thehood_fanout",
   "thehood_abort"
 ]) {
   assert.ok(toolNames.includes(expectedTool), `tools/list should expose ${expectedTool}`);
@@ -287,7 +288,8 @@ for (const expectedCapability of [
   "operator_next_actions",
   "autopilot_approval_policy",
   "run_status_insights",
-  "same_run_agent_summons"
+  "same_run_agent_summons",
+  "bounded_same_run_fanout"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),

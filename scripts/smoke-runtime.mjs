@@ -148,6 +148,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
+assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("revision_packet_artifacts"));
@@ -403,6 +404,73 @@ assert.equal(summonCriticLane.satisfiesRequired, false);
 assert.equal(summonCriticLane.owner.role, "critic");
 assert.equal(summonCriticLane.owner.assignment, "stub:critic");
 assert.ok(summonCriticLane.sidecarEvidence.length > 0, "summon evidence should be marked as sidecar");
+
+const fanoutPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "fan out advisory QA and critic sidecars",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+const fanoutItems = JSON.stringify([
+  {
+    role: "qa",
+    agent: "stub:qa",
+    kind: "qa",
+    brief: "QA this run as advisory sidecar evidence."
+  },
+  {
+    role: "critic",
+    agent: "stub:critic",
+    kind: "critique",
+    brief: "Critique this run as advisory sidecar evidence."
+  }
+]);
+const fanoutResult = JSON.parse(
+  (
+    await runCli([
+      "fanout",
+      fanoutPlan.runId,
+      "--repo",
+      repoPath,
+      "--items-json",
+      fanoutItems,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(fanoutResult.status, "completed");
+assert.equal(fanoutResult.bounds.requestedItems, 2);
+assert.equal(fanoutResult.bounds.executedItems, 2);
+assert.equal(fanoutResult.bounds.maxItems, 8);
+assert.equal(fanoutResult.artifact.kind, "fanout");
+assert.deepEqual(fanoutResult.items.map((item) => item.status), ["completed", "completed"]);
+assert.equal(fanoutResult.items[0].responseArtifact.kind, "agent");
+assert.equal(fanoutResult.items[1].assignment.provider, "stub");
+const fanoutStatus = JSON.parse((await runCli(["status", fanoutPlan.runId, "--repo", repoPath, "--json"])).stdout);
+assert.equal(fanoutStatus.insights.latestFanout.artifact.ref, fanoutResult.artifact.ref);
+assert.equal(fanoutStatus.insights.latestFanout.status, "completed");
+assert.equal(fanoutStatus.insights.latestFanout.executedItems, 2);
+assert.equal(fanoutStatus.insights.latestFanout.canSatisfyRequiredGates, false);
+assert.equal(
+  fanoutStatus.insights.canonicalMemory.currentRun.artifacts.latestFanout.ref,
+  fanoutResult.artifact.ref
+);
+const fanoutQaTesterLane = fanoutStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
+assert.ok(fanoutQaTesterLane, "fan-out QA item should appear as advisory tester evidence");
+assert.equal(fanoutQaTesterLane.canSatisfyRequired, false);
+const fanoutCriticLane = fanoutStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-critic");
+assert.ok(fanoutCriticLane, "fan-out critic item should appear as advisory critic evidence");
+assert.equal(fanoutCriticLane.canSatisfyRequired, false);
+const fanoutStatusText = await runCli(["status", fanoutPlan.runId, "--repo", repoPath]);
+assert.ok(fanoutStatusText.stdout.includes("agent fan-out:"));
+assert.ok(fanoutStatusText.stdout.includes("gates: advisory only"));
 
 const qaSidecarRun = JSON.parse(
   (

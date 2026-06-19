@@ -356,6 +356,37 @@ revision_packet:
 
 This artifact is written by the runtime before a repair pass. Implementers may use it as a narrow brief; reviewers do not gain edit authority, and post-repair QA/verifier evidence must be captured again.
 
+## Fan-Out Artifact
+
+```yaml
+fanout:
+  schemaVersion: 1
+  kind: fanout
+  runId: string
+  createdAt: string
+  status: completed | blocked | failed
+  bounds:
+    requestedItems: number
+    maxItems: number
+    hardMaxItems: number
+    executedItems: number
+    execution: sequential
+  safety:
+    sidecarOnly: true
+    readOnlyRolesOnly: true
+    canSatisfyRequiredGates: false
+    instruction: string
+  items:
+    - index: number
+      role: orchestrator | planner | researcher | qa | verifier | critic
+      summonKind: string
+      status: completed | blocked | failed
+      responseArtifact:
+        ref: string
+```
+
+This artifact is written by the runtime after a bounded group of same-run summons. It summarizes advisory evidence refs only; it does not satisfy required verifier, runtime QA, approval, or completion gates.
+
 ## Reconciliation Output
 
 ```yaml

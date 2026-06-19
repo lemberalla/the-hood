@@ -73,11 +73,32 @@ export interface RevisionPacketInsight {
   criticTriggerRef?: string;
 }
 
+export interface FanoutInsight {
+  artifact: RunArtifactSummary;
+  status?: string;
+  requestedItems?: number;
+  executedItems?: number;
+  maxItems?: number;
+  sidecarOnly: boolean;
+  canSatisfyRequiredGates: boolean;
+  items: FanoutItemInsight[];
+}
+
+export interface FanoutItemInsight {
+  index: number;
+  role?: string;
+  summonKind?: string;
+  status?: string;
+  responseArtifactRef?: string;
+  directiveArtifactRef?: string;
+}
+
 export interface RunInsights {
   latestAgentResponse?: LatestAgentResponseInsight;
   finalReport?: FinalReportInsight;
   latestCriticTrigger?: CriticTriggerInsight;
   latestRevisionPacket?: RevisionPacketInsight;
+  latestFanout?: FanoutInsight;
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
   latestRepoContext?: RunArtifactSummary;
@@ -219,6 +240,9 @@ const criticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
 const revisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "revision_packet").at(-1);
 
+const fanoutArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "fanout").at(-1);
+
 const parseFinalReport = (
   artifact: RunArtifact,
   payload: JsonObject
@@ -258,6 +282,59 @@ const parseRevisionPacket = (
   ...(typeof payload.criticTriggerRef === "string" ? { criticTriggerRef: payload.criticTriggerRef } : {})
 });
 
+const numberField = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const artifactRefField = (value: unknown): string | undefined =>
+  isJsonObject(value) && typeof value.ref === "string" ? value.ref : undefined;
+
+const parseFanoutItem = (value: unknown): FanoutItemInsight | undefined => {
+  if (!isJsonObject(value)) {
+    return undefined;
+  }
+
+  const index = numberField(value.index);
+  if (index === undefined) {
+    return undefined;
+  }
+  const responseArtifactRef = artifactRefField(value.responseArtifact);
+  const directiveArtifactRef = artifactRefField(value.directiveArtifact);
+
+  return {
+    index,
+    ...(typeof value.role === "string" ? { role: value.role } : {}),
+    ...(typeof value.summonKind === "string" ? { summonKind: value.summonKind } : {}),
+    ...(typeof value.status === "string" ? { status: value.status } : {}),
+    ...(responseArtifactRef ? { responseArtifactRef } : {}),
+    ...(directiveArtifactRef ? { directiveArtifactRef } : {})
+  };
+};
+
+const parseFanout = (
+  artifact: RunArtifact,
+  payload: JsonObject
+): FanoutInsight => {
+  const bounds = isJsonObject(payload.bounds) ? payload.bounds : {};
+  const safety = isJsonObject(payload.safety) ? payload.safety : {};
+  const items = Array.isArray(payload.items)
+    ? payload.items.map(parseFanoutItem).filter((item): item is FanoutItemInsight => Boolean(item))
+    : [];
+  const requestedItems = numberField(bounds.requestedItems);
+  const executedItems = numberField(bounds.executedItems);
+  const maxItems = numberField(bounds.maxItems);
+
+  return {
+    artifact: summarizeArtifact(artifact),
+    ...(typeof payload.status === "string" ? { status: payload.status } : {}),
+    ...(requestedItems !== undefined ? { requestedItems } : {}),
+    ...(executedItems !== undefined ? { executedItems } : {}),
+    ...(maxItems !== undefined ? { maxItems } : {}),
+    sidecarOnly: safety.sidecarOnly === true,
+    canSatisfyRequiredGates: safety.canSatisfyRequiredGates === true,
+    items
+  };
+};
+
 export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const issues: string[] = [];
   const latestRefs = latestCanonicalArtifactRefs(run);
@@ -276,6 +353,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const revisionPacket = revisionPacketArtifact(run);
   const revisionPacketPayload = revisionPacket
     ? await readArtifactJson(run, revisionPacket, issues)
+    : undefined;
+  const latestFanout = fanoutArtifact(run);
+  const latestFanoutPayload = latestFanout
+    ? await readArtifactJson(run, latestFanout, issues)
     : undefined;
   const latestAgentResponse = latestAgent && latestAgentPayload
     ? parseAgentResponse(latestAgent, latestAgentPayload, issues)
@@ -331,6 +412,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
 
   if (revisionPacket && revisionPacketPayload) {
     insights.latestRevisionPacket = parseRevisionPacket(revisionPacket, revisionPacketPayload);
+  }
+
+  if (latestFanout && latestFanoutPayload) {
+    insights.latestFanout = parseFanout(latestFanout, latestFanoutPayload);
   }
 
   return insights;

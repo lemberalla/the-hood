@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import { agentMarkdownField } from "../providers/markdownPayload.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
+import type { FanoutAgentsResult } from "../runtime/fanout.js";
 import type { ReconcileRunResult } from "../runtime/reconciliation.js";
 import type { SummonAgentResult } from "../runtime/summons.js";
 import type { ExternalTransferPreview } from "../runtime/externalTransfer.js";
@@ -156,6 +157,7 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
     ["reconciliation", insights.latestReconciliation],
     ["repoContext", insights.latestRepoContext],
     ["revisionPacket", insights.latestRevisionPacket?.artifact],
+    ["fanout", insights.latestFanout?.artifact],
     ["transferManifest", insights.latestTransferManifest]
   ] as const;
 
@@ -197,6 +199,27 @@ const formatRevisionPacketLines = (insights: RunInsights): string[] => {
     `  artifact: ${packet.artifact.ref}`,
     ...(packet.sourceResponseRef ? [`  sourceResponse: ${packet.sourceResponseRef}`] : []),
     ...(packet.criticTriggerRef ? [`  criticTrigger: ${packet.criticTriggerRef}`] : [])
+  ];
+};
+
+const formatFanoutLines = (insights: RunInsights): string[] => {
+  const fanout = insights.latestFanout;
+
+  if (!fanout) {
+    return [];
+  }
+
+  return [
+    "agent fan-out:",
+    ...(fanout.status ? [`  status: ${fanout.status}`] : []),
+    ...(fanout.executedItems !== undefined && fanout.requestedItems !== undefined
+      ? [`  items: ${fanout.executedItems}/${fanout.requestedItems}`]
+      : []),
+    `  artifact: ${fanout.artifact.ref}`,
+    `  gates: ${fanout.canSatisfyRequiredGates ? "can satisfy required gates" : "advisory only"}`,
+    ...fanout.items.slice(0, 6).map((item) =>
+      `  - #${item.index + 1} ${item.role ?? "role"} ${item.status ?? "unknown"} ${item.responseArtifactRef ?? ""}`.trimEnd()
+    )
   ];
 };
 
@@ -303,6 +326,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const memoryRefs = formatMemoryRefLines(insights);
   const criticTrigger = formatCriticTriggerLines(insights);
   const revisionPacket = formatRevisionPacketLines(insights);
+  const fanout = formatFanoutLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
   const loopResponsibilities = formatLoopResponsibilityLines(insights);
   const operatorNextActions = formatOperatorNextActionLines(insights);
@@ -346,6 +370,12 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
       ? [
           "",
           ...revisionPacket
+        ]
+      : []),
+    ...(fanout.length > 0
+      ? [
+          "",
+          ...fanout
         ]
       : []),
     ...(reviewLanes.length > 0
@@ -511,6 +541,18 @@ export const formatSummonAgentResult = (result: SummonAgentResult): string => [
   ...(result.directiveArtifact ? [`directiveArtifact: ${result.directiveArtifact.ref}`] : []),
   ...(result.responseArtifact ? [`responseArtifact: ${result.responseArtifact.ref}`] : []),
   `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatFanoutAgentsResult = (result: FanoutAgentsResult): string => [
+  formatRunSummary(result.run),
+  "",
+  `fanoutStatus: ${result.status}`,
+  `items: ${result.bounds.executedItems}/${result.bounds.requestedItems}`,
+  `maxItems: ${result.bounds.maxItems}`,
+  `artifact: ${result.artifact.ref}`,
+  ...result.items.map((item) =>
+    `  #${item.index + 1} ${item.role}/${item.summonKind} ${item.status}: ${item.stopReason}`
+  )
 ].join("\n");
 
 export const formatExternalTransferPreview = (preview: ExternalTransferPreview): string => [
