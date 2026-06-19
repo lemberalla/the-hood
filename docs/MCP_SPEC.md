@@ -136,9 +136,14 @@ Input:
   "goal": "string",
   "repo_path": "string",
   "orchestrator": "optional provider:model",
-  "constraints": ["string"]
+  "constraints": ["string"],
+  "auto_loop": "optional boolean",
+  "max_cycles": "optional positive integer for auto_loop",
+  "max_steps_per_cycle": "optional positive integer for auto_loop"
 }
 ```
+
+When `auto_loop` is true, the created plan run is immediately advanced through the headless loop runner until terminal state, required manual approval, no progress, or the cycle cap.
 
 Output:
 
@@ -188,9 +193,14 @@ Input:
     "verifier": "provider:model",
     "critic": "provider:model"
   },
-  "constraints": ["string"]
+  "constraints": ["string"],
+  "auto_loop": "optional boolean",
+  "max_cycles": "optional positive integer for auto_loop",
+  "max_steps_per_cycle": "optional positive integer for auto_loop"
 }
 ```
+
+When `auto_loop` is true, the created run is immediately advanced through the headless loop runner. Manual gates are still not approved by this flag; runtime autopilot policy may auto-approve bounded gates when configured.
 
 ### `thehood_consult`
 

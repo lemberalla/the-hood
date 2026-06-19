@@ -96,8 +96,8 @@ Usage:
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
-  thehood plan <goal> [--repo <path>] [--json]
-  thehood run <goal> [--repo <path>] [--mode <mode>] [--json]
+  thehood plan <goal> [--repo <path>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
+  thehood run <goal> [--repo <path>] [--mode <mode>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood status [run-id] [--repo <path>] [--json]
   thehood logs <run-id> [--repo <path>] [--json]
   thehood artifact <run-id> <artifact-ref> [--repo <path>] [--max-bytes <n>] [--json]
@@ -609,6 +609,7 @@ const handleCreateRun = async (
 ): Promise<void> => {
   const goal = args.join(" ").trim();
   const mode = command === "plan" ? "plan" : parseMode(getStringOption(options, "mode"), "implement");
+  const shouldLoop = getBooleanOption(options, "loop");
   const run = await createRun({
     repoPath: repoFromOptions(options),
     goal,
@@ -616,6 +617,20 @@ const handleCreateRun = async (
     roleOverrides: parseRoleOverrides(options),
     constraints: getStringListOption(options, "constraint")
   });
+
+  if (shouldLoop) {
+    const maxCycles = parsePositiveIntegerOption(options, "maxCycles");
+    const maxStepsPerCycle = parsePositiveIntegerOption(options, "maxSteps");
+    const result = await runAutopilotLoop({
+      repoPath: run.repoPath,
+      runId: run.runId,
+      ...(maxCycles === undefined ? {} : { maxCycles }),
+      ...(maxStepsPerCycle === undefined ? {} : { maxStepsPerCycle })
+    });
+
+    shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatRunLoopResult(result)}\n`);
+    return;
+  }
 
   shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
 };

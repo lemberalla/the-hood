@@ -372,6 +372,35 @@ assert.equal(mcpLoopContent.status, "completed");
 assert.equal(mcpLoopContent.stop_kind, "terminal");
 assert.equal(mcpLoopContent.provider_response_count, 4);
 assert.equal(mcpLoopContent.cycles.length, 1);
+const mcpAutoLoopPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_orchestrate",
+      arguments: {
+        goal: "exercise mcp auto loop",
+        repo_path: mcpLoopRepoPath,
+        mode: "implement",
+        role_mapping: {
+          orchestrator: "stub:orchestrator",
+          implementer: "stub:implementer",
+          qa: "stub:qa",
+          verifier: "stub:verifier",
+          critic: "stub:critic"
+        },
+        auto_loop: true,
+        max_cycles: 3
+      }
+    }
+  }
+]);
+const mcpAutoLoopContent = mcpAutoLoopPath[1].result.structuredContent;
+assert.equal(mcpAutoLoopContent.status, "completed");
+assert.equal(mcpAutoLoopContent.stop_kind, "terminal");
+assert.equal(mcpAutoLoopContent.provider_response_count, 4);
 
 const reconciliationSeedPath = await runMcp([
   ...baseMessages,

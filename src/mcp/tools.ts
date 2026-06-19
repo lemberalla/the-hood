@@ -82,6 +82,18 @@ const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
     data: boundAgentMarkdownPayloads(response.data, 2_000)
   }));
 
+const runLoopSummary = (result: Awaited<ReturnType<typeof runAutopilotLoop>>): JsonObject => ({
+  ...runSummary(result.run),
+  advanced: result.advanced,
+  stop_kind: result.stopKind,
+  stop_reason: result.stopReason,
+  cycles: result.cycles as unknown as JsonObject[],
+  max_cycles: result.maxCycles,
+  max_steps_per_cycle: result.maxStepsPerCycle,
+  provider_response_count: result.providerResponses.length,
+  provider_responses: agentResponsesSummary(result.providerResponses)
+});
+
 const toJsonObject = (value: unknown): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject;
 
@@ -237,6 +249,18 @@ const createPlanTool = (): McpTool => ({
           items: {
             type: "string"
           }
+        },
+        auto_loop: {
+          type: "boolean",
+          description: "When true, create the run and immediately advance it through the headless loop until a real stop condition."
+        },
+        max_cycles: {
+          type: "number",
+          description: "Optional positive integer for auto_loop. Defaults to 8."
+        },
+        max_steps_per_cycle: {
+          type: "number",
+          description: "Optional positive integer for auto_loop. Defaults to 10."
         }
       },
       required: ["goal", "repo_path"]
@@ -251,6 +275,22 @@ const createPlanTool = (): McpTool => ({
         roleOverrides: roleOverrideFromOrchestrator(optionalString(args, "orchestrator")),
         constraints: optionalStringList(args, "constraints")
       });
+
+      if (optionalBoolean(args, "auto_loop") === true) {
+        const maxCycles = optionalPositiveInteger(args, "max_cycles");
+        const maxStepsPerCycle = optionalPositiveInteger(args, "max_steps_per_cycle");
+        const result = await runAutopilotLoop({
+          repoPath: run.repoPath,
+          runId: run.runId,
+          ...(maxCycles === undefined ? {} : { maxCycles }),
+          ...(maxStepsPerCycle === undefined ? {} : { maxStepsPerCycle })
+        });
+
+        return {
+          ...runLoopSummary(result),
+          summary: "TheHood created the plan run and advanced it through the headless loop."
+        };
+      }
 
       return {
         ...runSummary(run)
@@ -288,6 +328,18 @@ const createOrchestrateTool = (): McpTool => ({
           items: {
             type: "string"
           }
+        },
+        auto_loop: {
+          type: "boolean",
+          description: "When true, create the run and immediately advance it through the headless loop until a real stop condition."
+        },
+        max_cycles: {
+          type: "number",
+          description: "Optional positive integer for auto_loop. Defaults to 8."
+        },
+        max_steps_per_cycle: {
+          type: "number",
+          description: "Optional positive integer for auto_loop. Defaults to 10."
         }
       },
       required: ["goal", "repo_path"]
@@ -302,6 +354,22 @@ const createOrchestrateTool = (): McpTool => ({
         roleOverrides: optionalRoleMapping(args),
         constraints: optionalStringList(args, "constraints")
       });
+
+      if (optionalBoolean(args, "auto_loop") === true) {
+        const maxCycles = optionalPositiveInteger(args, "max_cycles");
+        const maxStepsPerCycle = optionalPositiveInteger(args, "max_steps_per_cycle");
+        const result = await runAutopilotLoop({
+          repoPath: run.repoPath,
+          runId: run.runId,
+          ...(maxCycles === undefined ? {} : { maxCycles }),
+          ...(maxStepsPerCycle === undefined ? {} : { maxStepsPerCycle })
+        });
+
+        return {
+          ...runLoopSummary(result),
+          summary: "TheHood created the run and advanced it through the headless loop."
+        };
+      }
 
       return {
         ...runSummary(run),
@@ -757,15 +825,7 @@ const createLoopTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(result.run),
-        advanced: result.advanced,
-        stop_kind: result.stopKind,
-        stop_reason: result.stopReason,
-        cycles: result.cycles as unknown as JsonObject[],
-        max_cycles: result.maxCycles,
-        max_steps_per_cycle: result.maxStepsPerCycle,
-        provider_response_count: result.providerResponses.length,
-        provider_responses: agentResponsesSummary(result.providerResponses)
+        ...runLoopSummary(result)
       };
     })
 });

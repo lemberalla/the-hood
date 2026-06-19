@@ -22,7 +22,9 @@ thehood roles
 thehood roles set orchestrator codex-cli:default
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood run "Implement the requested change" --repo .
+thehood run "Implement the requested change" --repo . --loop
 thehood plan "Design the feature" --repo .
+thehood plan "Design the feature" --repo . --loop
 thehood status
 thehood status <run-id>
 thehood logs <run-id>
@@ -256,6 +258,8 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 `thehood diff <run-id>` reads the latest attached `diff` artifact for a run. This is mainly useful for reviewing isolated worker patches before approval.
 
 `thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.
+
+`thehood plan ... --loop` and `thehood run ... --loop` create the run and immediately pass it to the same headless loop runner. The default without `--loop` remains create-only, so callers can still inspect or approve the starting boundary before provider invocation.
 
 `thehood continue <run-id>` advances the runtime loop until it reaches a terminal state, a gate, or its internal step cap. When no manual approval gate is active, continuing is the normal autopilot-aware path: runtime policy may auto-approve bounded provider invocation and non-secret transfer-manifest gates and records those decisions as `approval_auto_approved` events. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, QA, optional critic, revision packet repair when needed, and verifier phases without external model calls.
 

@@ -2048,6 +2048,31 @@ assert.equal(autopilotLoopResult.cycles.length, 1);
 const completedLoopText = await runCli(["loop", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath]);
 assert.ok(completedLoopText.stdout.includes("stopKind: terminal"));
 assert.ok(completedLoopText.stdout.includes("cycle log:"));
+const autopilotOneShotLoop = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "exercise one-shot autopilot loop",
+      "--repo",
+      autopilotLoopRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--qa",
+      "stub:qa",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--loop",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(autopilotOneShotLoop.run.state, "completed");
+assert.equal(autopilotOneShotLoop.stopKind, "terminal");
+assert.equal(autopilotOneShotLoop.providerResponses.length, 4);
 
 const qaRevisionRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-qa-revision-smoke-"));
 await runCli(["init", "--repo", qaRevisionRepoPath]);

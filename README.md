@@ -95,6 +95,7 @@ node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
+node dist/cli/main.js run "Exercise the full loop" --repo . --loop
 node dist/cli/main.js status --repo .
 node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
