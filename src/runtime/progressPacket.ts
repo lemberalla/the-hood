@@ -1,5 +1,6 @@
 import { writeRunArtifact } from "./artifacts.js";
 import { newId, nowIso } from "./ids.js";
+import { deriveReviewLanes } from "./reviewLanes.js";
 import { loadRun, saveRun } from "./store.js";
 import {
   runtimeRoles,
@@ -34,6 +35,7 @@ export const defaultProgressPacketLimits: ProgressPacketLimits = {
   maxToolEvents: 40,
   maxRunEvents: 60,
   maxOpenQuestions: 20,
+  maxReviewLanes: 12,
   maxStringLength: 1000
 };
 
@@ -50,6 +52,9 @@ const ontologyTerms = [
   "Commit",
   "Validation",
   "VerifierVerdict",
+  "ReviewLane",
+  "ReviewGate",
+  "QA",
   "Reconciliation",
   "Decision"
 ];
@@ -529,6 +534,16 @@ export const buildProgressPacket = (
     state,
     (question) => question
   );
+  const reviewLanes = boundedSection(
+    "reviewLanes",
+    deriveReviewLanes(run),
+    state.limits.maxReviewLanes,
+    state,
+    (lane) => ({
+      ...lane,
+      summary: truncateText(lane.summary, state)
+    })
+  );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
@@ -548,6 +563,7 @@ export const buildProgressPacket = (
     ...toolEvents.items.map((event) => event.source),
     ...runEvents.items.map((event) => event.source),
     ...providerResponses.items.flatMap((response) => response.sourceRefs),
+    ...reviewLanes.items.flatMap((lane) => lane.sourceRefs),
     ...questions.items.flatMap((question) => question.sourceRefs)
   ]);
 
@@ -577,6 +593,7 @@ export const buildProgressPacket = (
     },
     roleMapping: cloneRoleMapping(run.roleMapping),
     latest,
+    reviewLanes,
     evidence: {
       artifacts,
       providerResponses,
@@ -596,6 +613,7 @@ export const buildProgressPacket = (
         "evidence.git",
         "evidence.validation",
         "evidence.verifierVerdicts",
+        "reviewLanes",
         "openQuestions"
       ],
       notes: [

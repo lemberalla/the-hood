@@ -19,6 +19,7 @@ import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
+import { deriveReviewLanes } from "./reviewLanes.js";
 import {
   analyzeRepoContextRequest,
   captureRepoContext,
@@ -554,7 +555,8 @@ const writeFinalReport = async (
           id: event.id,
           decision: event.decision,
           reason: event.reason
-        }))
+        })),
+        reviewLanes: deriveReviewLanes(latest)
       },
       null,
       2

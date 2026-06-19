@@ -42,6 +42,7 @@ Current implementation:
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.
+- Completed runs and progress packets include derived review lane metadata for verifier, QA/validation, and critic evidence when present. These lanes summarize existing runtime evidence; they do not schedule new work or replace verifier approval.
 - Runs fail closed before the next provider call once recorded provider responses reach `maxIterations`.
 
 ### Verifier
@@ -128,3 +129,4 @@ evidence:
 - Test files are silently modified.
 - Final report says "tests passed" without command names and exit codes.
 - Runtime applies an isolated patch before explicit approval.
+- A same-run summon labeled `qa`, `review`, or `critique` is treated as satisfying a required verifier or QA gate.

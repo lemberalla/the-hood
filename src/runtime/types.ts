@@ -210,6 +210,28 @@ export interface ProgressPacketSourceRef {
   eventType?: string;
 }
 
+export type ReviewLaneKind = "reviewer" | "tester" | "qa" | "critic";
+export type ReviewLaneState = "pending" | "satisfied" | "needs_revision" | "blocked" | "failed";
+export type ReviewLaneSourceKind =
+  | "required_gate"
+  | "verifier_response"
+  | "critic_response"
+  | "validation_evidence";
+
+export interface ReviewLane {
+  id: string;
+  label: string;
+  kind: ReviewLaneKind;
+  state: ReviewLaneState;
+  required: boolean;
+  sourceKind: ReviewLaneSourceKind;
+  summary: string;
+  sourceRefs: ProgressPacketSourceRef[];
+  artifactRefs: string[];
+  eventRefs: string[];
+  role?: RuntimeRole;
+}
+
 export interface ProgressPacketLimits {
   maxArtifacts: number;
   maxProviderResponses: number;
@@ -217,6 +239,7 @@ export interface ProgressPacketLimits {
   maxToolEvents: number;
   maxRunEvents: number;
   maxOpenQuestions: number;
+  maxReviewLanes: number;
   maxStringLength: number;
 }
 
@@ -356,6 +379,7 @@ export interface ProgressPacket {
   run: ProgressPacketRunSnapshot;
   roleMapping: RoleMap;
   latest: ProgressPacketLatestState;
+  reviewLanes: ProgressPacketBoundedSection<ReviewLane>;
   evidence: ProgressPacketEvidence;
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;

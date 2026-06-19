@@ -1210,6 +1210,18 @@ assert.equal(finalReport.kind, "final_report");
 assert.equal(finalReport.finalState, "completed");
 assert.equal(finalReport.completedBy.role, "verifier");
 assert.equal(finalReport.stopReason, "Verifier approved runtime evidence.");
+assert.ok(Array.isArray(finalReport.reviewLanes), "final report should expose review lanes");
+const finalReportVerifierLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-verifier");
+assert.ok(finalReportVerifierLane, "final report should expose verifier review lane");
+assert.equal(finalReportVerifierLane.kind, "reviewer");
+assert.equal(finalReportVerifierLane.role, "verifier");
+assert.equal(finalReportVerifierLane.required, true);
+assert.equal(finalReportVerifierLane.state, "satisfied");
+const finalReportQaLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-qa");
+assert.ok(finalReportQaLane, "final report should expose QA validation lane");
+assert.equal(finalReportQaLane.kind, "qa");
+assert.equal(finalReportQaLane.required, true);
+assert.equal(finalReportQaLane.state, "satisfied");
 const validationToolEvent = loopResult.run.toolEvents.find((event) => event.tool === "validation_typecheck");
 assert.ok(validationToolEvent, "verification should capture the selected validation command");
 assert.equal(validationToolEvent.command, "npm");
@@ -1223,6 +1235,25 @@ const validationSummary = JSON.parse(await fs.readFile(validationSummaryArtifact
 assert.equal(validationSummary.executedCommands.length, 1);
 assert.equal(validationSummary.executedCommands[0].script, "typecheck");
 assert.equal(validationSummary.failedCommandCount, 0);
+const progressPacketArtifact = loopResult.run.artifacts.find(
+  (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
+);
+assert.ok(progressPacketArtifact, "verified completed run should attach a progress packet");
+const progressPacket = JSON.parse(await fs.readFile(progressPacketArtifact.ref, "utf8"));
+assert.equal(progressPacket.kind, "progress_packet");
+assert.ok(Array.isArray(progressPacket.reviewLanes.items), "progress packet should expose review lanes");
+assert.ok(
+  progressPacket.reviewLanes.items.some(
+    (lane) => lane.id === "review-lane-verifier" && lane.required === true && lane.state === "satisfied"
+  ),
+  "progress packet should expose satisfied verifier lane"
+);
+assert.ok(
+  progressPacket.reviewLanes.items.some(
+    (lane) => lane.id === "review-lane-qa" && lane.required === true && lane.state === "satisfied"
+  ),
+  "progress packet should expose satisfied QA lane"
+);
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
 assert.equal(directiveArtifacts.length, 3);
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));

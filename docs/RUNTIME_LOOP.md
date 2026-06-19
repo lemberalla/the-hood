@@ -25,6 +25,8 @@ The runtime also records typed `handoffs` on the run record whenever work crosse
 
 Same-run summons are read-only sidecar calls attached to an existing run. A summon carries an explicit brief, kind such as `qa` or `critique`, optional one-call provider assignment, constraints, and artifact refs. The runtime records the handoff and provider artifacts, but the summoned agent does not advance the main state machine or gain edit authority. Model-backed summon providers still pass through provider-invocation approval; autopilot can auto-approve that bounded gate when policy allows it.
 
+Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, QA/validation, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, and critic responses. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only evidence, but a summon does not satisfy or replace a required verifier or QA lane.
+
 ## State Machine
 
 ```text
@@ -113,6 +115,7 @@ The runtime captures evidence directly:
 - protected path classification
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
+- derived review lane metadata for verifier, QA/validation, and critic evidence
 - external transfer manifest artifacts before approved provider transfers
 - typed handoff records for role delegation, approval mediation, and completion
 
