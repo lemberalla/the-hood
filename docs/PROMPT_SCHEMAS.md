@@ -315,6 +315,25 @@ critique_result:
   recommended_next_action: string
 ```
 
+## Critic Trigger Artifact
+
+```yaml
+critic_trigger:
+  schemaVersion: 1
+  kind: critic_trigger
+  runId: string
+  called: true
+  reasonCode: qa_failed | qa_inconclusive | verifier_failed | verifier_inconclusive | validation_mismatch
+  reason: string
+  sourceRoles:
+    - qa | verifier
+  evidenceRefs:
+    - string
+  criticResponseRef: string
+```
+
+This artifact is written by the runtime. Providers may inspect it as context, but they do not decide whether it exists.
+
 ## Reconciliation Output
 
 ```yaml

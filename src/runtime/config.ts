@@ -3,7 +3,7 @@ import path from "node:path";
 import { createDefaultConfig } from "./defaults.js";
 import { InputError } from "./errors.js";
 import { getProjectPaths } from "./paths.js";
-import type { RoleMap, TheHoodConfig } from "./types.js";
+import type { ProviderConfig, RoleMap, TheHoodConfig } from "./types.js";
 
 const readJsonFile = async <T>(filePath: string): Promise<T> => {
   const raw = await fs.readFile(filePath, "utf8");
@@ -20,6 +20,38 @@ const mergeRoles = (base: RoleMap, override: RoleMap | undefined): RoleMap => ({
   ...base,
   ...(override ?? {})
 });
+
+const unique = <T>(values: T[]): T[] => [...new Set(values)];
+
+const mergeProvider = (
+  base: ProviderConfig | undefined,
+  override: ProviderConfig
+): ProviderConfig =>
+  base
+    ? {
+        ...base,
+        ...override,
+        models: unique([...base.models, ...override.models]),
+        accessModes: unique([...(base.accessModes ?? []), ...(override.accessModes ?? [])])
+      }
+    : override;
+
+const mergeProviders = (
+  base: TheHoodConfig["providers"],
+  override: TheHoodConfig["providers"] | undefined
+): TheHoodConfig["providers"] => {
+  if (!override) {
+    return base;
+  }
+
+  const merged = { ...base };
+
+  for (const [providerId, provider] of Object.entries(override)) {
+    merged[providerId] = mergeProvider(base[providerId], provider);
+  }
+
+  return merged;
+};
 
 const mergeConfig = (base: TheHoodConfig, override: Partial<TheHoodConfig>): TheHoodConfig => ({
   version: 1,
@@ -42,10 +74,7 @@ const mergeConfig = (base: TheHoodConfig, override: Partial<TheHoodConfig>): The
         base.approvalPolicy.externalTransfers.rules
     }
   },
-  providers: {
-    ...base.providers,
-    ...(override.providers ?? {})
-  },
+  providers: mergeProviders(base.providers, override.providers),
   roles: mergeRoles(base.roles, override.roles)
 });
 

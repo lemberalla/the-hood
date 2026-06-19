@@ -16,6 +16,7 @@ import {
 } from "./externalTransfer.js";
 import { createRunHandoff } from "./handoffs.js";
 import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
+import { decideCriticTrigger, type CriticTriggerDecision } from "./criticPolicy.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
@@ -543,6 +544,59 @@ const artifactKindCounts = (artifacts: RunArtifact[]): JsonObject => {
   return counts;
 };
 
+const latestProviderResponseArtifactRef = (run: RunRecord, role: RuntimeRole): string | undefined => {
+  const event = run.events
+    .filter((candidate) => candidate.type === "agent_response" && candidate.data?.role === role)
+    .at(-1);
+  const artifactRef = event?.data?.artifactRef;
+
+  return typeof artifactRef === "string" ? artifactRef : undefined;
+};
+
+const latestCriticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "critic_trigger").at(-1);
+
+const writeCriticTriggerArtifact = async (
+  run: RunRecord,
+  decision: CriticTriggerDecision,
+  criticResponseRef: string | undefined
+): Promise<RunRecord> => {
+  const artifact = await writeRunArtifact({
+    repoPath: run.repoPath,
+    runId: run.runId,
+    kind: "critic_trigger",
+    name: `critic-trigger-${newId("critic-trigger")}.json`,
+    content: `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        kind: "critic_trigger",
+        runId: run.runId,
+        called: true,
+        reasonCode: decision.reasonCode,
+        reason: decision.reason,
+        sourceRoles: decision.sourceRoles,
+        evidenceRefs: decision.evidenceRefs,
+        ...(criticResponseRef ? { criticResponseRef } : {})
+      },
+      null,
+      2
+    )}\n`,
+    summary: `Critic trigger: ${decision.reasonCode ?? "unknown"}`
+  });
+
+  return attachRunArtifact(
+    run,
+    artifact,
+    createEvent("critic_trigger_written", decision.reason ?? "Runtime called critic from policy.", {
+      artifactRef: artifact.ref,
+      ...(decision.reasonCode ? { reasonCode: decision.reasonCode } : {}),
+      sourceRoles: decision.sourceRoles,
+      evidenceRefs: decision.evidenceRefs,
+      ...(criticResponseRef ? { criticResponseRef } : {})
+    })
+  );
+};
+
 const writeFinalReport = async (
   run: RunRecord,
   input: {
@@ -595,6 +649,9 @@ const writeFinalReport = async (
           decision: event.decision,
           reason: event.reason
         })),
+        ...(latestCriticTriggerArtifact(latest)
+          ? { criticTrigger: latestCriticTriggerArtifact(latest) }
+          : {}),
         reviewLanes: deriveReviewLanes(latest)
       },
       null,
@@ -951,6 +1008,77 @@ const stopForProviderStatus = async (
   return {
     run: failed,
     stopReason
+  };
+};
+
+const runCriticForTrigger = async (
+  run: RunRecord,
+  decision: CriticTriggerDecision
+): Promise<{ run: RunRecord; response?: AgentResponse; advanced: boolean; stopReason?: string } | undefined> => {
+  if (!decision.callCritic || !decision.reasonCode || !decision.reason) {
+    return undefined;
+  }
+
+  const assignment = run.roleMapping.critic;
+  if (!assignment || hasProviderResponded(run, "critic", assignment)) {
+    return undefined;
+  }
+
+  let criticRun = run;
+  const invocationGate = await stopForProviderInvocationApproval(criticRun, "critic", assignment);
+
+  if (invocationGate) {
+    criticRun = invocationGate.run;
+  }
+
+  if (invocationGate?.gated && invocationGate.response && invocationGate.stopReason) {
+    return {
+      run: invocationGate.run,
+      response: invocationGate.response,
+      advanced: true,
+      stopReason: invocationGate.stopReason
+    };
+  }
+
+  const result = await runAgent(criticRun, "critic", {
+    phase: "critique",
+    criticTrigger: {
+      reasonCode: decision.reasonCode,
+      reason: decision.reason,
+      sourceRoles: decision.sourceRoles,
+      evidenceRefs: decision.evidenceRefs
+    }
+  });
+  const criticResponseRef = latestProviderResponseArtifactRef(result.run, "critic");
+  const runWithTrigger = await writeCriticTriggerArtifact(result.run, decision, criticResponseRef);
+  const stopped = await stopForProviderStatus(runWithTrigger, "critic", result.response);
+
+  if (stopped) {
+    return {
+      run: stopped.run,
+      response: result.response,
+      advanced: true,
+      stopReason: stopped.stopReason
+    };
+  }
+
+  const runWithHandoff = await updateRun(
+    runWithTrigger,
+    { state: "verifying" },
+    [createEvent("critic_completed", "Critic reviewed runtime-triggered risk evidence.")],
+    [agentHandoff(runWithTrigger, {
+      reason: decision.reason,
+      stateAfter: "verifying",
+      toRole: "critic",
+      ...(decision.sourceRoles[0] ? { fromRole: decision.sourceRoles[0] } : {}),
+      artifactRefs: criticResponseRef ? [criticResponseRef] : []
+    })]
+  );
+
+  return {
+    run: runWithHandoff,
+    response: result.response,
+    advanced: true
   };
 };
 
@@ -1531,6 +1659,19 @@ const advanceOneStep = async (
           toRole: "verifier"
         })]
       );
+      const criticDecision = decideCriticTrigger({
+        qaResponse: qaResult.response,
+        validationFailureCount: validation.failedCommands.length,
+        evidenceRefs: [
+          validation.artifact.ref,
+          ...[latestProviderResponseArtifactRef(qaCompleted, "qa")].filter((ref): ref is string => Boolean(ref))
+        ]
+      });
+      const critic = await runCriticForTrigger(qaCompleted, criticDecision);
+
+      if (critic) {
+        return critic;
+      }
 
       return {
         run: qaCompleted,
@@ -1582,16 +1723,27 @@ const advanceOneStep = async (
       };
     }
 
+    const criticDecision = decideCriticTrigger({
+      verifierResponse: result.response,
+      validationFailureCount: validation.failedCommands.length,
+      evidenceRefs: [
+        validation.artifact.ref,
+        ...[latestProviderResponseArtifactRef(result.run, "verifier")].filter((ref): ref is string => Boolean(ref))
+      ]
+    });
+    const critic = await runCriticForTrigger(result.run, criticDecision);
+    const runForGate = critic?.run ?? result.run;
+    const gateResponse = critic?.response ?? result.response;
     const approvalReason = `Verifier returned ${verdict ?? "no verdict"}.`;
     const gated = await updateRun(
-      result.run,
+      runForGate,
       {
         state: "awaiting_approval",
         approvalRequired: true,
         approvalReason
       },
       [createEvent("approval_required", approvalReason)],
-      [approvalGateHandoff(result.run, {
+      [approvalGateHandoff(runForGate, {
         reason: approvalReason,
         role: "verifier",
         gate: "verifier_verdict"
@@ -1600,7 +1752,7 @@ const advanceOneStep = async (
 
     return {
       run: gated,
-      response: result.response,
+      response: gateResponse,
       advanced: true,
       stopReason: approvalReason
     };

@@ -62,6 +62,8 @@ The runtime writes each directive as a `directive` artifact before provider exec
 
 `AgentResponse` JSON is the mechanical envelope for runtime control. Role payloads should keep small fields such as `action`, `reason`, `status`, `verdict`, refs, and `thehoodDirectiveAck` as JSON. Human-facing plans, reports, reviews, critique, rationale, acceptance criteria, and other long narrative content should be returned as GitHub-flavored Markdown in `data.<required_data_key>.markdown`. Adapters should avoid asking providers to express long plans as nested JSON arrays or objects.
 
+When the runtime supplies `context.criticTrigger` to a critic, the provider should treat it as the reason for an advisory review only. The adapter must not turn critic output into validation success, verifier approval, or edit authority.
+
 ## Local Command Runner
 
 The local command runner is shared by CLI-backed adapters.

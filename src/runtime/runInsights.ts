@@ -52,9 +52,19 @@ export interface FinalReportInsight {
   stopReason?: string;
 }
 
+export interface CriticTriggerInsight {
+  artifact: RunArtifactSummary;
+  reasonCode?: string;
+  reason?: string;
+  sourceRoles: string[];
+  evidenceRefs: string[];
+  criticResponseRef?: string;
+}
+
 export interface RunInsights {
   latestAgentResponse?: LatestAgentResponseInsight;
   finalReport?: FinalReportInsight;
+  latestCriticTrigger?: CriticTriggerInsight;
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
   latestRepoContext?: RunArtifactSummary;
@@ -74,6 +84,7 @@ const primaryOutputKeys = [
   "decision",
   "verificationResult",
   "implementationResult",
+  "qaResult",
   "critiqueResult",
   "researchResult"
 ];
@@ -189,6 +200,9 @@ const finalReportArtifact = (run: RunRecord): RunArtifact | undefined => {
     .at(-1);
 };
 
+const criticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "critic_trigger").at(-1);
+
 const parseFinalReport = (
   artifact: RunArtifact,
   payload: JsonObject
@@ -196,6 +210,21 @@ const parseFinalReport = (
   artifact: summarizeArtifact(artifact),
   ...(isJsonObject(payload.completedBy) ? { completedBy: payload.completedBy } : {}),
   ...(typeof payload.stopReason === "string" ? { stopReason: payload.stopReason } : {})
+});
+
+const stringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
+const parseCriticTrigger = (
+  artifact: RunArtifact,
+  payload: JsonObject
+): CriticTriggerInsight => ({
+  artifact: summarizeArtifact(artifact),
+  ...(typeof payload.reasonCode === "string" ? { reasonCode: payload.reasonCode } : {}),
+  ...(typeof payload.reason === "string" ? { reason: payload.reason } : {}),
+  sourceRoles: stringArray(payload.sourceRoles),
+  evidenceRefs: stringArray(payload.evidenceRefs),
+  ...(typeof payload.criticResponseRef === "string" ? { criticResponseRef: payload.criticResponseRef } : {})
 });
 
 export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
@@ -208,6 +237,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const finalReport = finalReportArtifact(run);
   const finalReportPayload = finalReport
     ? await readArtifactJson(run, finalReport, issues)
+    : undefined;
+  const criticTrigger = criticTriggerArtifact(run);
+  const criticTriggerPayload = criticTrigger
+    ? await readArtifactJson(run, criticTrigger, issues)
     : undefined;
   const latestAgentResponse = latestAgent && latestAgentPayload
     ? parseAgentResponse(latestAgent, latestAgentPayload, issues)
@@ -255,6 +288,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
 
   if (finalReport && finalReportPayload) {
     insights.finalReport = parseFinalReport(finalReport, finalReportPayload);
+  }
+
+  if (criticTrigger && criticTriggerPayload) {
+    insights.latestCriticTrigger = parseCriticTrigger(criticTrigger, criticTriggerPayload);
   }
 
   return insights;

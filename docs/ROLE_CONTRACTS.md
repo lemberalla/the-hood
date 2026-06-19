@@ -53,7 +53,7 @@ Review ownership is derived by the runtime from canonical run evidence. A lane r
 - Verifier ownership is satisfied only by a main verifier response under the runtime loop.
 - Runtime QA/validation ownership is satisfied only by runtime-captured validation evidence and command metadata.
 - QA tester ownership is advisory model evidence and cannot satisfy runtime validation.
-- Critic ownership is advisory unless the runtime explicitly enters a critic-controlled path.
+- Critic ownership is advisory. The runtime may call the critic from a `critic_trigger` policy decision, but critic output cannot satisfy validation, verifier, or completion gates.
 - Same-run summons are sidecar evidence and remain read-only.
 
 ## Orchestrator
@@ -205,6 +205,8 @@ Outputs:
 
 The critic challenges the plan or patch.
 
+The runtime may invoke the critic automatically when QA, verifier, or deterministic validation evidence indicates risk. That invocation is recorded as a `critic_trigger` artifact with a reason code and evidence refs.
+
 Best used for:
 
 - high-risk tasks
@@ -220,6 +222,8 @@ Outputs:
 - alternate designs
 - blocking concerns
 - non-blocking concerns
+
+The critic must not edit files, apply patches, mark tests as passed, or approve completion.
 
 ## Integrator
 

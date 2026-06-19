@@ -149,6 +149,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
+assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -167,6 +168,21 @@ assert.equal(defaultQaHealth.assignment.provider, "codex-cli");
 assert.equal(defaultQaHealth.assignment.model, "spark");
 assert.equal(defaultQaHealth.providerImplemented, true);
 assert.equal(defaultQaHealth.modelConfigured, true);
+const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
+const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));
+delete staleConfig.roles.qa;
+staleConfig.providers["codex-cli"].models = ["default"];
+staleConfig.providers.stub.models = ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"];
+await fs.writeFile(staleConfigPath, `${JSON.stringify(staleConfig, null, 2)}\n`, "utf8");
+const staleConfigDoctor = JSON.parse((await runCli(["doctor", "--repo", repoPath, "--json"])).stdout);
+const staleCodexProvider = staleConfigDoctor.providers.find((provider) => provider.id === "codex-cli");
+const staleStubProvider = staleConfigDoctor.providers.find((provider) => provider.id === "stub");
+const staleQaHealth = staleConfigDoctor.roles.find((role) => role.role === "qa");
+assert.ok(staleCodexProvider.models.includes("spark"), "stale repo config should not hide built-in codex spark model");
+assert.ok(staleStubProvider.models.includes("qa"), "stale repo config should not hide built-in stub qa model");
+assert.equal(staleQaHealth.assignment.provider, "codex-cli");
+assert.equal(staleQaHealth.assignment.model, "spark");
+assert.equal(staleQaHealth.modelConfigured, true);
 const unconfirmedDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
   env: {
     THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
@@ -1656,6 +1672,36 @@ assert.equal(
   failingValidationContinue.providerResponses.at(-1).data.verificationResult.summary,
   "Runtime validation commands failed; user review is required."
 );
+assert.ok(
+  failingValidationContinue.providerResponses.some((response) => response.data.critiqueResult?.verdict === "acceptable"),
+  "failing validation should trigger a critic response before verifier gate"
+);
+const failingCriticTriggerArtifact = failingValidationContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "critic_trigger"
+);
+assert.ok(failingCriticTriggerArtifact, "failing validation should attach a critic trigger artifact");
+const failingCriticTrigger = JSON.parse(await fs.readFile(failingCriticTriggerArtifact.ref, "utf8"));
+assert.equal(failingCriticTrigger.reasonCode, "validation_mismatch");
+assert.equal(failingCriticTrigger.called, true);
+const failingValidationSummaryArtifact = failingValidationContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "metadata" && artifact.summary.includes("Validation summary")
+);
+assert.ok(failingValidationSummaryArtifact);
+assert.ok(failingCriticTrigger.evidenceRefs.includes(failingValidationSummaryArtifact.ref));
+assert.equal(typeof failingCriticTrigger.criticResponseRef, "string");
+const failingValidationStatus = JSON.parse(
+  (await runCli(["status", failingValidationRun.runId, "--repo", failingValidationRepoPath, "--json"])).stdout
+);
+assert.equal(failingValidationStatus.insights.latestCriticTrigger.reasonCode, "validation_mismatch");
+assert.ok(
+  failingValidationStatus.insights.reviewLanes.some(
+    (lane) => lane.id === "review-lane-critic" && lane.sourceKind === "critic_response" && lane.canSatisfyRequired === false
+  ),
+  "critic trigger should expose advisory critic lane"
+);
+const failingValidationStatusText = await runCli(["status", failingValidationRun.runId, "--repo", failingValidationRepoPath]);
+assert.ok(failingValidationStatusText.stdout.includes("critic trigger:"));
+assert.ok(failingValidationStatusText.stdout.includes("reasonCode: validation_mismatch"));
 assert.ok(
   !failingValidationContinue.run.artifacts.some(
     (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")

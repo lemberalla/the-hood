@@ -163,6 +163,23 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
   );
 };
 
+const formatCriticTriggerLines = (insights: RunInsights): string[] => {
+  const trigger = insights.latestCriticTrigger;
+
+  if (!trigger) {
+    return [];
+  }
+
+  return [
+    "critic trigger:",
+    ...(trigger.reasonCode ? [`  reasonCode: ${trigger.reasonCode}`] : []),
+    ...(trigger.reason ? [`  reason: ${trigger.reason}`] : []),
+    ...(trigger.sourceRoles.length > 0 ? [`  sourceRoles: ${trigger.sourceRoles.join(", ")}`] : []),
+    `  artifact: ${trigger.artifact.ref}`,
+    ...(trigger.criticResponseRef ? [`  criticResponse: ${trigger.criticResponseRef}`] : [])
+  ];
+};
+
 const formatLaneState = (state: ReviewLaneState): string =>
   state.replace(/_/g, " ");
 
@@ -264,6 +281,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
+  const criticTrigger = formatCriticTriggerLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
   const loopResponsibilities = formatLoopResponsibilityLines(insights);
   const operatorNextActions = formatOperatorNextActionLines(insights);
@@ -295,6 +313,12 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           "",
           "canonical memory refs:",
           ...memoryRefs
+        ]
+      : []),
+    ...(criticTrigger.length > 0
+      ? [
+          "",
+          ...criticTrigger
         ]
       : []),
     ...(reviewLanes.length > 0

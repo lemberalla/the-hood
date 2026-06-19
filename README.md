@@ -40,6 +40,8 @@ It supports:
 - runtime-enforced max iteration limits across resumed runs
 - runtime-captured package validation command evidence during verifier review
 - read-only model-assisted QA tester lane for missed cases and validation suggestions
+- runtime-owned critic trigger artifacts when QA, verifier, or validation evidence indicates risk
+- provider config merging that preserves newly added built-in models in stale repo-local configs
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances

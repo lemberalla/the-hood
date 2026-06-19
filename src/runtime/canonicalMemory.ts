@@ -10,6 +10,7 @@ export interface CanonicalMemoryArtifactRefs {
   latestReconciliation?: CanonicalMemoryArtifactRef;
   latestRepoContext?: CanonicalMemoryArtifactRef;
   latestFinalReport?: CanonicalMemoryArtifactRef;
+  latestCriticTrigger?: CanonicalMemoryArtifactRef;
   latestTransferManifest?: CanonicalMemoryArtifactRef;
 }
 
@@ -53,6 +54,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
   const latestProgressPacket = latestArtifact(run, (artifact) => artifact.kind === "progress");
   const latestReconciliation = latestArtifact(run, (artifact) => artifact.kind === "reconciliation");
   const latestRepoContext = latestArtifact(run, (artifact) => artifact.kind === "context");
+  const latestCriticTrigger = latestArtifact(run, (artifact) => artifact.kind === "critic_trigger");
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
   const finalReport = latestFinalReport(run);
 
@@ -63,6 +65,7 @@ export const latestCanonicalArtifactRefs = (run: RunRecord): CanonicalMemoryArti
     ...(latestReconciliation ? { latestReconciliation } : {}),
     ...(latestRepoContext ? { latestRepoContext } : {}),
     ...(finalReport ? { latestFinalReport: finalReport } : {}),
+    ...(latestCriticTrigger ? { latestCriticTrigger } : {}),
     ...(latestTransferManifest ? { latestTransferManifest } : {})
   };
 };

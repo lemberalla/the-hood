@@ -23,6 +23,7 @@ export const runtimeCapabilities = [
   "max_iteration_enforcement",
   "validation_command_capture",
   "model_assisted_qa_tester",
+  "critic_trigger_artifacts",
   "branded_tui_shell",
   "approval_inbox_tui",
   "operator_run_monitor",

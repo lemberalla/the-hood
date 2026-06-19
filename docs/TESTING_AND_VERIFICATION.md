@@ -42,6 +42,7 @@ Current implementation:
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.
+- QA, verifier, or validation risk can cause the runtime to call a read-only critic and attach a `critic_trigger` artifact before continuing to verifier or an approval gate.
 - Completed runs and progress packets include derived review lane metadata for verifier, runtime QA/validation, QA tester, and critic evidence when present. They also include loop responsibility schedules that summarize planner, implementer, verifier, runtime QA, model-assisted QA tester, critic, reconciliation, integration, approval, and completion ownership from existing evidence. These lanes and schedules summarize existing runtime evidence; they do not schedule new work or replace verifier approval.
 - Runs fail closed before the next provider call once recorded provider responses reach `maxIterations`.
 
@@ -148,3 +149,4 @@ evidence:
 - Runtime applies an isolated patch before explicit approval.
 - A same-run summon labeled `qa`, `review`, or `critique` is treated as satisfying a required verifier or QA gate.
 - A model QA response is treated as proof that validation commands passed.
+- A critic response is treated as proof that implementation is accepted or deterministic validation passed.

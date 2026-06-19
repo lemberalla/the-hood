@@ -63,6 +63,7 @@ const ontologyTerms = [
   "ReviewGate",
   "SidecarEvidence",
   "QA",
+  "CriticTrigger",
   "LoopResponsibility",
   "LoopResponsibilitySchedule",
   "OperatorNextAction",
@@ -595,12 +596,14 @@ export const buildProgressPacket = (
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
+  const latestCriticTrigger = latestArtifact(artifacts.items, (artifact) => artifact.kind === "critic_trigger");
   const latestFinalReport = finalReportArtifact(artifacts.items);
   const latestRepoContext = latestArtifact(artifacts.items, (artifact) => artifact.kind === "context");
   const latest = {
     ...(latestPlan ? { plan: latestPlan } : {}),
     ...(latestProviderResponse ? { providerResponse: latestProviderResponse } : {}),
     ...(latestVerifierResponse ? { verifierResponse: latestVerifierResponse } : {}),
+    ...(latestCriticTrigger ? { criticTrigger: latestCriticTrigger } : {}),
     ...(latestFinalReport ? { finalReport: latestFinalReport } : {}),
     ...(latestRepoContext ? { repoContext: latestRepoContext } : {})
   };
