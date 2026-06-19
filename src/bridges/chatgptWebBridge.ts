@@ -18,16 +18,20 @@ interface BridgeOptions {
   model: string;
   schemaPath: string;
   cdpUrl: string;
+  freshUrl: string;
   timeoutMs: number;
   commandTimeoutMs: number;
   promptSelector: string;
   sendSelector: string;
   responseSelector: string;
+  newChatSelector: string;
   reuseChat: boolean;
+  keepCreatedTarget: boolean;
   allowUnverifiedModel: boolean;
 }
 
 interface ChromeTarget {
+  id?: string;
   url?: string;
   title?: string;
   webSocketDebuggerUrl?: string;
@@ -46,10 +50,17 @@ interface ResponseDiagnostics {
   elapsedMs: number;
 }
 
+interface ExpectedDirectiveAck {
+  runId: string;
+  nonce: string;
+  responseField: string;
+}
+
 const defaultOptions: BridgeOptions = {
   model: "chatgpt-pro",
   schemaPath: "",
   cdpUrl: process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222",
+  freshUrl: process.env.THEHOOD_CHATGPT_WEB_FRESH_URL ?? "https://chatgpt.com/",
   timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 300_000),
   commandTimeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_CDP_COMMAND_TIMEOUT_MS ?? 15_000),
   promptSelector:
@@ -59,7 +70,11 @@ const defaultOptions: BridgeOptions = {
     "button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']",
   responseSelector:
     process.env.THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR ?? "[data-message-author-role='assistant']",
+  newChatSelector:
+    process.env.THEHOOD_CHATGPT_WEB_NEW_CHAT_SELECTOR ??
+    "a[href='/'],a[href='/?model=auto'],button[aria-label*='New chat'],a[aria-label*='New chat'],[data-testid='create-new-chat-button']",
   reuseChat: process.env.THEHOOD_CHATGPT_WEB_REUSE_CHAT === "1",
+  keepCreatedTarget: process.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET === "1",
   allowUnverifiedModel:
     process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
     process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1"
@@ -111,6 +126,9 @@ const parseArgs = (argv: string[]): BridgeOptions => {
       case "--cdp-url":
         options.cdpUrl = next;
         break;
+      case "--fresh-url":
+        options.freshUrl = next;
+        break;
       case "--timeout-ms":
         options.timeoutMs = Number(next);
         break;
@@ -125,6 +143,9 @@ const parseArgs = (argv: string[]): BridgeOptions => {
         break;
       case "--response-selector":
         options.responseSelector = next;
+        break;
+      case "--new-chat-selector":
+        options.newChatSelector = next;
         break;
       default:
         throw new Error(`Unknown option: ${arg}`);
@@ -166,46 +187,110 @@ const readRequiredDataKey = async (schemaPath: string): Promise<string> => {
   return key;
 };
 
-const payloadForKey = (requiredDataKey: string, summary: string): JsonObject => {
+const isJsonObject = (value: unknown): value is JsonObject =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const extractExpectedDirectiveAck = (prompt: string): ExpectedDirectiveAck | undefined => {
+  const marker = "Runtime directive:";
+  const markerIndex = prompt.lastIndexOf(marker);
+  if (markerIndex === -1) {
+    return undefined;
+  }
+
+  const rawDirective = prompt.slice(markerIndex + marker.length).trim();
+  if (!rawDirective) {
+    return undefined;
+  }
+
+  try {
+    const directive = JSON.parse(rawDirective) as { directiveAck?: unknown; variables?: { directiveAck?: unknown } };
+    const ack = isJsonObject(directive.directiveAck)
+      ? directive.directiveAck
+      : isJsonObject(directive.variables?.directiveAck)
+        ? directive.variables.directiveAck
+        : undefined;
+    if (
+      typeof ack?.runId === "string" &&
+      typeof ack.nonce === "string" &&
+      typeof ack.responseField === "string"
+    ) {
+      return {
+        runId: ack.runId,
+        nonce: ack.nonce,
+        responseField: ack.responseField
+      };
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const withDirectiveAck = (payload: JsonObject, expectedAck: ExpectedDirectiveAck | undefined): JsonObject => {
+  if (!expectedAck) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    [expectedAck.responseField]: {
+      runId: expectedAck.runId,
+      nonce: expectedAck.nonce,
+      responseField: expectedAck.responseField
+    }
+  };
+};
+
+const payloadForKey = (
+  requiredDataKey: string,
+  summary: string,
+  expectedAck: ExpectedDirectiveAck | undefined
+): JsonObject => {
   switch (requiredDataKey) {
     case "decision":
-      return {
+      return withDirectiveAck({
         action: "request_approval",
         reason: summary
-      };
+      }, expectedAck);
     case "implementationResult":
-      return {
+      return withDirectiveAck({
         status: "blocked",
         changedFiles: [],
         commandsRun: [],
         unresolvedRisks: [summary]
-      };
+      }, expectedAck);
     case "verificationResult":
-      return {
+      return withDirectiveAck({
         verdict: "ask_user",
         summary,
         failedCriteria: ["chatgpt_web_bridge"],
         risks: [summary],
         nextAction: "user"
-      };
+      }, expectedAck);
     case "critiqueResult":
-      return {
+      return withDirectiveAck({
         verdict: "unclear",
         blockingConcerns: [summary],
         nonBlockingConcerns: []
-      };
+      }, expectedAck);
     default:
-      return {
+      return withDirectiveAck({
         summary
-      };
+      }, expectedAck);
   }
 };
 
-const fallback = (requiredDataKey: string, summary: string, status: AgentResponse["status"] = "blocked"): AgentResponse => ({
+const fallback = (
+  requiredDataKey: string,
+  summary: string,
+  status: AgentResponse["status"] = "blocked",
+  expectedAck?: ExpectedDirectiveAck
+): AgentResponse => ({
   status,
   summary,
   data: {
-    [requiredDataKey]: payloadForKey(requiredDataKey, summary)
+    [requiredDataKey]: payloadForKey(requiredDataKey, summary, expectedAck)
   }
 });
 
@@ -396,6 +481,32 @@ const hasRequiredDataKey = (response: AgentResponse, requiredDataKey: string | u
   return payload !== null && typeof payload === "object" && !Array.isArray(payload);
 };
 
+const directiveAckError = (
+  response: AgentResponse,
+  requiredDataKey: string | undefined,
+  expectedAck: ExpectedDirectiveAck | undefined
+): string | undefined => {
+  if (!expectedAck || !requiredDataKey) {
+    return undefined;
+  }
+
+  const payload = response.data[requiredDataKey];
+  if (!isJsonObject(payload)) {
+    return undefined;
+  }
+
+  const ack = payload[expectedAck.responseField];
+  if (!isJsonObject(ack)) {
+    return `AgentResponse data.${requiredDataKey}.${expectedAck.responseField} is missing.`;
+  }
+
+  if (ack.runId !== expectedAck.runId || ack.nonce !== expectedAck.nonce) {
+    return `AgentResponse acknowledged a stale directive for run ${String(ack.runId)}.`;
+  }
+
+  return undefined;
+};
+
 const unwrapAgentResponse = (value: unknown, requiredDataKey?: string): unknown => {
   if (isAgentResponse(value)) {
     return value;
@@ -422,17 +533,25 @@ const unwrapAgentResponse = (value: unknown, requiredDataKey?: string): unknown 
   return value;
 };
 
-const parseAgentResponse = (text: string, requiredDataKey?: string): AgentResponse | undefined => {
+const parseAgentResponse = (text: string, requiredDataKey?: string): AgentResponse | undefined =>
+  parseAgentResponseCandidate(text, requiredDataKey).response;
+
+const parseAgentResponseCandidate = (
+  text: string,
+  requiredDataKey?: string,
+  expectedAck?: ExpectedDirectiveAck
+): { response?: AgentResponse; ackError?: string } => {
   for (const candidate of jsonCandidateStrings(text)) {
     const parsed = tryParseJson(candidate);
     const unwrapped = unwrapAgentResponse(parsed, requiredDataKey);
 
     if (isAgentResponse(unwrapped) && hasRequiredDataKey(unwrapped, requiredDataKey)) {
-      return unwrapped;
+      const ackError = directiveAckError(unwrapped, requiredDataKey, expectedAck);
+      return ackError ? { ackError } : { response: unwrapped };
     }
   }
 
-  return undefined;
+  return {};
 };
 
 const listTargets = async (cdpUrl: string): Promise<ChromeTarget[]> => {
@@ -460,6 +579,31 @@ const findChatGptTarget = async (cdpUrl: string): Promise<ChromeTarget> => {
   }
 
   return target;
+};
+
+const createChatGptTarget = async (cdpUrl: string, freshUrl: string): Promise<ChromeTarget> => {
+  const response = await fetch(new URL(`/json/new?${encodeURIComponent(freshUrl)}`, cdpUrl), {
+    method: "PUT"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Chrome DevTools could not create a fresh ChatGPT target: ${response.status}.`);
+  }
+
+  const target = await response.json() as ChromeTarget;
+  if (!target.webSocketDebuggerUrl) {
+    throw new Error("Chrome DevTools created a target without a websocket URL.");
+  }
+
+  return target;
+};
+
+const closeChromeTarget = async (cdpUrl: string, target: ChromeTarget | undefined): Promise<void> => {
+  if (!target?.id) {
+    return;
+  }
+
+  await fetch(new URL(`/json/close/${encodeURIComponent(target.id)}`, cdpUrl)).catch(() => undefined);
 };
 
 const connectCdp = async (webSocketUrl: string, commandTimeoutMs: number): Promise<CdpClient> => {
@@ -680,6 +824,25 @@ const sendPromptExpression = (prompt: string, promptSelector: string, sendSelect
 })()
 `;
 
+const clickNewChatExpression = (newChatSelector: string): string => `
+(() => {
+  const selectors = ${JSON.stringify(newChatSelector)}.split(',').map((selector) => selector.trim()).filter(Boolean);
+  const selected = selectors
+    .map((selector) => document.querySelector(selector))
+    .find(Boolean);
+
+  const textMatch = selected || Array.from(document.querySelectorAll('a,button'))
+    .find((node) => /new chat/i.test(node.getAttribute('aria-label') || node.textContent || ''));
+
+  if (!textMatch) {
+    return false;
+  }
+
+  textMatch.click();
+  return true;
+})()
+`;
+
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -705,11 +868,81 @@ const waitForPromptEditor = async (
   return false;
 };
 
+const assistantCount = async (client: CdpClient, responseSelector: string): Promise<number> =>
+  (await client.evaluate<string[]>(assistantSnapshotExpression(responseSelector))).length;
+
+const waitForEmptyAssistantHistory = async (
+  client: CdpClient,
+  responseSelector: string,
+  timeoutMs: number
+): Promise<boolean> => {
+  const deadline = Date.now() + timeoutMs;
+  let emptySince: number | undefined;
+
+  while (Date.now() < deadline) {
+    try {
+      if (await assistantCount(client, responseSelector) === 0) {
+        emptySince ??= Date.now();
+        if (Date.now() - emptySince >= 1_000) {
+          return true;
+        }
+      } else {
+        emptySince = undefined;
+      }
+    } catch {
+      // Navigation can briefly invalidate the execution context.
+      emptySince = undefined;
+    }
+
+    await sleep(500);
+  }
+
+  return false;
+};
+
+const ensureFreshComposer = async (
+  client: CdpClient,
+  promptSelector: string,
+  responseSelector: string,
+  newChatSelector: string,
+  timeoutMs: number
+): Promise<{ ok: true } | { ok: false; reason: string }> => {
+  if (!await waitForPromptEditor(client, promptSelector, Math.min(timeoutMs, 30_000))) {
+    return { ok: false, reason: "ChatGPT Web bridge could not open a fresh ChatGPT composer." };
+  }
+
+  if (await waitForEmptyAssistantHistory(client, responseSelector, 2_000)) {
+    return { ok: true };
+  }
+
+  const clicked = await client.evaluate<boolean>(clickNewChatExpression(newChatSelector)).catch(() => false);
+  if (!clicked) {
+    return {
+      ok: false,
+      reason: "ChatGPT Web bridge found existing assistant messages and could not locate a New Chat control."
+    };
+  }
+
+  if (!await waitForPromptEditor(client, promptSelector, Math.min(timeoutMs, 30_000))) {
+    return { ok: false, reason: "ChatGPT Web bridge clicked New Chat but the composer did not become ready." };
+  }
+
+  if (!await waitForEmptyAssistantHistory(client, responseSelector, 10_000)) {
+    return {
+      ok: false,
+      reason: "ChatGPT Web bridge could not verify an empty composer after opening New Chat."
+    };
+  }
+
+  return { ok: true };
+};
+
 const waitForAgentResponse = async (
   client: CdpClient,
   responseSelector: string,
   previousResponses: string[],
   requiredDataKey: string,
+  expectedAck: ExpectedDirectiveAck | undefined,
   timeoutMs: number
 ): Promise<{ response?: AgentResponse; browserError?: string; bridgeError?: string; diagnostics: ResponseDiagnostics }> => {
   const startedAt = Date.now();
@@ -745,10 +978,16 @@ const waitForAgentResponse = async (
     };
 
     for (const candidate of candidates) {
-      const response = parseAgentResponse(candidate, requiredDataKey);
+      const { response, ackError } = parseAgentResponseCandidate(candidate, requiredDataKey, expectedAck);
       if (response) {
         return {
           response,
+          diagnostics
+        };
+      }
+      if (ackError) {
+        return {
+          bridgeError: `ChatGPT returned stale or unacknowledged AgentResponse JSON: ${ackError}`,
           diagnostics
         };
       }
@@ -786,27 +1025,46 @@ const run = async (): Promise<AgentResponse> => {
   const options = parseArgs(process.argv.slice(2));
   const requiredDataKey = await readRequiredDataKey(options.schemaPath);
   const prompt = await readStdin();
+  const expectedAck = extractExpectedDirectiveAck(prompt);
 
   if (!options.allowUnverifiedModel) {
     return fallback(
       requiredDataKey,
-      `ChatGPT Web bridge requires explicit model confirmation for ${options.model}. Set THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1 or pass --allow-unverified-model after selecting the model in ChatGPT.`
+      `ChatGPT Web bridge requires explicit model confirmation for ${options.model}. Set THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1 or pass --allow-unverified-model after selecting the model in ChatGPT.`,
+      "blocked",
+      expectedAck
     );
   }
 
   if (typeof WebSocket === "undefined") {
-    return fallback(requiredDataKey, "This Node.js runtime does not provide WebSocket support.", "failed");
+    return fallback(requiredDataKey, "This Node.js runtime does not provide WebSocket support.", "failed", expectedAck);
   }
 
-  const target = await findChatGptTarget(options.cdpUrl);
-  const client = await connectCdp(target.webSocketDebuggerUrl ?? "", options.commandTimeoutMs);
+  let target: ChromeTarget;
+  let client: CdpClient;
+  try {
+    target = options.reuseChat
+      ? await findChatGptTarget(options.cdpUrl)
+      : await createChatGptTarget(options.cdpUrl, options.freshUrl);
+    client = await connectCdp(target.webSocketDebuggerUrl ?? "", options.commandTimeoutMs);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return fallback(requiredDataKey, `ChatGPT Web bridge failed fast: ${message}`, "failed", expectedAck);
+  }
 
   try {
     if (!options.reuseChat) {
-      await client.navigate("https://chatgpt.com/");
+      await client.navigate(options.freshUrl);
 
-      if (!await waitForPromptEditor(client, options.promptSelector, Math.min(options.timeoutMs, 30_000))) {
-        return fallback(requiredDataKey, "ChatGPT Web bridge could not open a fresh ChatGPT composer.");
+      const freshness = await ensureFreshComposer(
+        client,
+        options.promptSelector,
+        options.responseSelector,
+        options.newChatSelector,
+        options.timeoutMs
+      );
+      if (!freshness.ok) {
+        return fallback(requiredDataKey, freshness.reason, "blocked", expectedAck);
       }
     }
 
@@ -816,7 +1074,12 @@ const run = async (): Promise<AgentResponse> => {
     );
 
     if (!sent.ok) {
-      return fallback(requiredDataKey, `ChatGPT Web bridge could not send prompt: ${sent.error ?? "unknown error"}`);
+      return fallback(
+        requiredDataKey,
+        `ChatGPT Web bridge could not send prompt: ${sent.error ?? "unknown error"}`,
+        "blocked",
+        expectedAck
+      );
     }
 
     const result = await waitForAgentResponse(
@@ -824,6 +1087,7 @@ const run = async (): Promise<AgentResponse> => {
       options.responseSelector,
       before,
       requiredDataKey,
+      expectedAck,
       options.timeoutMs
     );
 
@@ -832,11 +1096,11 @@ const run = async (): Promise<AgentResponse> => {
     }
 
     if (result.browserError) {
-      return fallback(requiredDataKey, `ChatGPT reported: ${result.browserError}.`);
+      return fallback(requiredDataKey, `ChatGPT reported: ${result.browserError}.`, "blocked", expectedAck);
     }
 
     if (result.bridgeError) {
-      return fallback(requiredDataKey, `ChatGPT Web bridge failed fast: ${result.bridgeError}.`, "failed");
+      return fallback(requiredDataKey, `ChatGPT Web bridge failed fast: ${result.bridgeError}.`, "failed", expectedAck);
     }
 
     return fallback(
@@ -846,10 +1110,15 @@ const run = async (): Promise<AgentResponse> => {
         `Observed ${result.diagnostics.assistantCount} assistant message(s),`,
         `${result.diagnostics.candidateCount} changed/new candidate(s),`,
         `latest visible response length ${result.diagnostics.latestLength}.`
-      ].join(" ")
+      ].join(" "),
+      "blocked",
+      expectedAck
     );
   } finally {
     client.close();
+    if (!options.reuseChat && !options.keepCreatedTarget) {
+      await closeChromeTarget(options.cdpUrl, target);
+    }
   }
 };
 

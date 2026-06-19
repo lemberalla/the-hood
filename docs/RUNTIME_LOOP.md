@@ -21,6 +21,8 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
 
+Provider directives include a `directiveAck` marker. Browser-backed adapters must require the current marker in the provider response before accepting schema-valid JSON, which prevents stale ChatGPT Web project or conversation context from being mistaken for the current run.
+
 The runtime also records typed `handoffs` on the run record whenever work crosses a meaningful boundary between roles, an approval gate mediates the next transition, or a run completes. Display labels such as `Agent 1 / Orchestrator`, `Agent 2 / Implementer`, and `Agent 3 / Verifier` are derived from runtime roles and assignments. They are inspectable lane labels, not new permissions or authority.
 
 Same-run summons are read-only sidecar calls attached to an existing run. A summon carries an explicit brief, kind such as `qa` or `critique`, optional one-call provider assignment, constraints, and artifact refs. The runtime records the handoff and provider artifacts, but the summoned agent does not advance the main state machine or gain edit authority. Model-backed summon providers still pass through provider-invocation approval; autopilot can auto-approve that bounded gate when policy allows it.

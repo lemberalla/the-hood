@@ -84,7 +84,7 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `max_iteration_enforcement`, `validation_command_capture`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `branded_tui_shell`, `operator_next_actions`, `autopilot_approval_policy`, `run_status_insights`, and `same_run_agent_summons`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `max_iteration_enforcement`, `validation_command_capture`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `branded_tui_shell`, `operator_next_actions`, `autopilot_approval_policy`, `run_status_insights`, and `same_run_agent_summons`, the chat is still connected to an older MCP server process.
 
 First verification sequence from a Codex chat:
 
@@ -158,14 +158,17 @@ Optional bridge settings:
 
 ```bash
 export THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222
+export THEHOOD_CHATGPT_WEB_FRESH_URL=https://chatgpt.com/
 export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000
 export THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR="#prompt-textarea,[contenteditable='true'],textarea"
 export THEHOOD_CHATGPT_WEB_SEND_SELECTOR="button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']"
 export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assistant']"
+export THEHOOD_CHATGPT_WEB_NEW_CHAT_SELECTOR="a[href='/'],button[aria-label*='New chat']"
 # export THEHOOD_CHATGPT_WEB_REUSE_CHAT=1
+# export THEHOOD_CHATGPT_WEB_KEEP_TARGET=1
 ```
 
-By default, the bridge opens a fresh ChatGPT composer for each request so prior conversation state or delivery errors do not affect the run. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation.
+By default, the bridge creates a dedicated ChatGPT target for each request, verifies that the composer has no prior assistant messages, and closes that target after the response. It also requires the visible response to echo the current `directiveAck` inside the role payload. If ChatGPT restores an old conversation, or if the model returns schema-valid JSON from stale project context, the bridge fails closed instead of handing that answer to the runtime. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation.
 
 Example persistent role assignment:
 

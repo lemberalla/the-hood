@@ -135,10 +135,12 @@ assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_approval
 assert.ok(doctorResult.runtime.capabilities.includes("targeted_repo_context_followups"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorResult.runtime.capabilities.includes("canonical_memory_rehydration"));
+assert.ok(doctorResult.runtime.capabilities.includes("provider_directive_ack"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
+assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_session_isolation"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
@@ -1548,6 +1550,12 @@ assert.ok(
 const { createFallbackAgentResponse, parseLocalAgentOutput } = await import(
   pathToFileURL(path.join(root, "dist", "providers", "localCommand.js")).href
 );
+const { buildAgentResponseSchema } = await import(
+  pathToFileURL(path.join(root, "dist", "providers", "responseSchema.js")).href
+);
+const { validateAgentResponse } = await import(
+  pathToFileURL(path.join(root, "dist", "runtime", "responseContracts.js")).href
+);
 const { buildCodexCliArgs } = await import(pathToFileURL(path.join(root, "dist", "providers", "codexCli.js")).href);
 const { buildClaudeCodeArgs } = await import(
   pathToFileURL(path.join(root, "dist", "providers", "claudeCode.js")).href
@@ -1562,6 +1570,11 @@ const fakeVerifierRequest = {
     repoPath: loopRepoPath
   },
   directive: {
+    directiveAck: {
+      runId: "fake-run",
+      nonce: "fake-directive-nonce",
+      responseField: "thehoodDirectiveAck"
+    },
     toolPermissions: {
       read: true,
       edit: false,
@@ -1594,6 +1607,34 @@ const fallbackProviderOutput = createFallbackAgentResponse(fakeVerifierRequest, 
   summary: "not-json"
 });
 assert.equal(fallbackProviderOutput.data.verificationResult.verdict, "ask_user");
+assert.deepEqual(fallbackProviderOutput.data.verificationResult.thehoodDirectiveAck, {
+  runId: "fake-run",
+  nonce: "fake-directive-nonce",
+  responseField: "thehoodDirectiveAck"
+});
+const fakeVerifierSchema = buildAgentResponseSchema(fakeVerifierRequest);
+assert.ok(
+  fakeVerifierSchema.properties.data.properties.verificationResult.required.includes("thehoodDirectiveAck"),
+  "provider response schema should require directive ack inside role payload"
+);
+assert.throws(
+  () => validateAgentResponse("verifier", fakeVerifierRequest.directive, {
+    status: "ok",
+    summary: "stale ack",
+    data: {
+      verificationResult: {
+        verdict: "approve",
+        summary: "wrong run",
+        thehoodDirectiveAck: {
+          runId: "other-run",
+          nonce: "fake-directive-nonce",
+          responseField: "thehoodDirectiveAck"
+        }
+      }
+    }
+  }),
+  /does not match the current directive/
+);
 const schemaContext = {
   schema: {
     type: "object"

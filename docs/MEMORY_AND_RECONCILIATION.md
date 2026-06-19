@@ -203,7 +203,7 @@ Guardrail: retrieved memories must include provenance, source type, and validity
 
 Risk: old browser context influences a new answer.
 
-Guardrail: directives instruct browser-backed providers to ignore prior conversation and use only TheHood canonical state.
+Guardrail: directives instruct browser-backed providers to ignore prior conversation and use only TheHood canonical state. ChatGPT Web bridge responses must echo the current directive acknowledgement before the runtime accepts schema-valid JSON.
 
 ### Schema Drift
 

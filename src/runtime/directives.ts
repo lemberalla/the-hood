@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { buildCanonicalMemory } from "./canonicalMemory.js";
+import { newId } from "./ids.js";
 import { defaultRolePermissions } from "./permissions.js";
 import { formatRoleAssignment } from "./role-assignment.js";
 import type { AgentDirective, AgentOutputContract } from "../providers/types.js";
@@ -65,6 +66,7 @@ const roleInstructions: Record<RuntimeRole, string[]> = {
     "Delegate the smallest useful task to one role at a time.",
     "Ask for approval when policy, uncertainty, or protected paths require it.",
     "When approvalPolicy.mode is autopilot, do not ask the user to approve bounded gates the runtime can enforce.",
+    "Echo directiveAck exactly in data.decision.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   planner: [
@@ -72,42 +74,49 @@ const roleInstructions: Record<RuntimeRole, string[]> = {
     "Separate facts from assumptions.",
     "Prefer minimal, reversible steps.",
     "When approvalPolicy.mode is autopilot, plan around runtime-enforced gates instead of asking for user approval.",
+    "Echo directiveAck exactly in data.decision.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   researcher: [
     "Do not edit files.",
     "Prefer primary sources and direct repository evidence.",
     "Record uncertainty explicitly.",
+    "Echo directiveAck exactly in data.researchResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   implementer: [
     "Change only files needed for the assigned task.",
     "Do not change tests, fixtures, snapshots, or evals unless explicitly approved.",
     "Do not claim final acceptance; verification is separate.",
+    "Echo directiveAck exactly in data.implementationResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   verifier: [
     "Do not edit files.",
     "Treat runtime-captured commands, diffs, and logs as stronger evidence than model summaries.",
     "Fail closed when evidence is missing or protected files changed without approval.",
+    "Echo directiveAck exactly in data.verificationResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   critic: [
     "Do not edit files.",
     "Focus on concrete risks, missing cases, and unsafe assumptions.",
     "Separate blocking concerns from non-blocking improvements.",
+    "Echo directiveAck exactly in data.critiqueResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   integrator: [
     "Apply only approved changes.",
     "Do not expand scope.",
     "Preserve unrelated user work.",
+    "Echo directiveAck exactly in data.integrationResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   citation: [
     "Do not edit files.",
     "Verify that cited evidence supports the claim.",
     "Flag missing or weak attribution.",
+    "Echo directiveAck exactly in data.citationResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ]
 };
@@ -143,6 +152,11 @@ export const buildAgentDirective = async (
     name: outputContract.name,
     requiredDataKey: outputContract.requiredDataKey
   };
+  const directiveAck = {
+    runId: run.runId,
+    nonce: newId("directive_ack"),
+    responseField: "thehoodDirectiveAck" as const
+  };
 
   return {
     role,
@@ -153,7 +167,9 @@ export const buildAgentDirective = async (
     ],
     toolPermissions,
     outputContract,
+    directiveAck,
     variables: {
+      directiveAck,
       run: {
         runId: run.runId,
         userGoal: run.userGoal,

@@ -6,8 +6,43 @@ const basePayloadSchema = (): JsonObject => ({
   additionalProperties: true
 });
 
+const withDirectiveAckSchema = (request: AgentRequest, schema: JsonObject): JsonObject => {
+  const required = Array.isArray(schema.required) ? schema.required.filter((value) => typeof value === "string") : [];
+  const properties = schema.properties !== null && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+    ? schema.properties
+    : {};
+
+  return {
+    ...schema,
+    required: [...new Set([...required, request.directive.directiveAck.responseField])],
+    properties: {
+      ...properties,
+      [request.directive.directiveAck.responseField]: {
+        type: "object",
+        additionalProperties: false,
+        required: ["runId", "nonce", "responseField"],
+        properties: {
+          runId: {
+            type: "string",
+            const: request.directive.directiveAck.runId
+          },
+          nonce: {
+            type: "string",
+            const: request.directive.directiveAck.nonce
+          },
+          responseField: {
+            type: "string",
+            const: request.directive.directiveAck.responseField
+          }
+        }
+      }
+    }
+  };
+};
+
 const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
-  switch (request.role) {
+  const schema = (() => {
+    switch (request.role) {
     case "orchestrator":
     case "planner":
       return {
@@ -61,7 +96,10 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
       };
     default:
       return basePayloadSchema();
-  }
+    }
+  })();
+
+  return withDirectiveAckSchema(request, schema);
 };
 
 export const buildAgentResponseSchema = (request: AgentRequest): JsonObject => {

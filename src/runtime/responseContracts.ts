@@ -59,6 +59,27 @@ const validateRolePayload = (role: RuntimeRole, payload: JsonObject, contractNam
   }
 };
 
+const validateDirectiveAck = (
+  directive: AgentDirective,
+  payload: JsonObject,
+  contractName: string
+): void => {
+  const { responseField, runId, nonce } = directive.directiveAck;
+  const ack = payload[responseField];
+
+  if (ack === undefined) {
+    return;
+  }
+
+  if (!isObject(ack)) {
+    throw new SchemaValidationError(`${contractName}.${responseField} must be an object when present.`);
+  }
+
+  if (ack.runId !== runId || ack.nonce !== nonce) {
+    throw new SchemaValidationError(`${contractName}.${responseField} does not match the current directive.`);
+  }
+};
+
 export const validateAgentResponse = (
   role: RuntimeRole,
   directive: AgentDirective,
@@ -84,4 +105,5 @@ export const validateAgentResponse = (
   }
 
   validateRolePayload(role, payload, name);
+  validateDirectiveAck(directive, payload, name);
 };

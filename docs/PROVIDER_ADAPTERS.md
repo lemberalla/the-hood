@@ -124,6 +124,8 @@ Included bridge:
 - Source: `src/bridges/chatgptWebBridge.ts`
 - Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
+- Creates a dedicated ChatGPT target by default, verifies that the composer is empty before sending the prompt, and closes the created target unless `THEHOOD_CHATGPT_WEB_KEEP_TARGET=1` is set.
+- Requires ChatGPT responses to echo the current directive acknowledgement in the role payload, so schema-valid answers from stale browser/project context fail closed.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
 
 Rules:
@@ -134,6 +136,7 @@ Rules:
 - Do not rely on hidden chain-of-thought.
 - Prefer structured visible outputs.
 - Fail closed when the requested model cannot be confirmed.
+- Fail closed when a fresh composer cannot be verified or when the response does not acknowledge the current directive.
 - The bridge must not log cookies, local storage, tokens, or private browser profile data.
 
 Best roles:

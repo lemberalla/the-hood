@@ -304,6 +304,12 @@ const roleFallbackPayload = (
   }
 };
 
+const directiveAckJson = (request: Pick<AgentRequest, "directive">): JsonObject => ({
+  runId: request.directive.directiveAck.runId,
+  nonce: request.directive.directiveAck.nonce,
+  responseField: request.directive.directiveAck.responseField
+});
+
 export const createFallbackAgentResponse = (
   request: Pick<AgentRequest, "role" | "directive">,
   input: FallbackResponseInput
@@ -320,7 +326,10 @@ export const createFallbackAgentResponse = (
     status: input.status,
     summary: input.summary,
     data: {
-      [requiredDataKey]: payload as JsonValue
+      [requiredDataKey]: {
+        ...payload,
+        thehoodDirectiveAck: directiveAckJson(request)
+      }
     }
   };
 };
@@ -333,7 +342,8 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
     summary: "short human-readable summary",
     data: {
       [requiredDataKey]: {
-        "...": "role-specific object matching the directive output contract"
+        "...": "role-specific object matching the directive output contract",
+        thehoodDirectiveAck: directiveAckJson(request)
       }
     }
   };
@@ -347,6 +357,7 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
     "The JSON object must satisfy this exact JSON Schema:",
     JSON.stringify(schema, null, 2),
     `The role payload is data.${requiredDataKey}. Use the schema property names literally.`,
+    `Echo directiveAck exactly as data.${requiredDataKey}.thehoodDirectiveAck so TheHood can reject stale provider-session responses.`,
     "Do not replace required schema fields with synonyms such as nextAction, next_action, rationale, or verdictSummary.",
     "Runtime directive:",
     JSON.stringify(request.directive, null, 2)

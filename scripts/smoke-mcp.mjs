@@ -230,10 +230,12 @@ assert.ok(doctorContent.runtime.capabilities.includes("targeted_repo_context_fol
 assert.ok(doctorContent.runtime.capabilities.includes("planner_reconciliation"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
 assert.ok(doctorContent.runtime.capabilities.includes("canonical_memory_rehydration"));
+assert.ok(doctorContent.runtime.capabilities.includes("provider_directive_ack"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
+assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_session_isolation"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));

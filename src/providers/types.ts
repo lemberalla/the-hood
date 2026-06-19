@@ -7,12 +7,19 @@ export interface AgentOutputContract {
   requiredDataKey: string;
 }
 
+export interface AgentDirectiveAck {
+  runId: string;
+  nonce: string;
+  responseField: "thehoodDirectiveAck";
+}
+
 export interface AgentDirective {
   role: RuntimeRole;
   objective: string;
   instructions: string[];
   toolPermissions: RolePermissionProfile;
   outputContract: AgentOutputContract;
+  directiveAck: AgentDirectiveAck;
   variables: JsonObject;
 }
 
