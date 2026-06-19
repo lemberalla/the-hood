@@ -497,6 +497,12 @@ const assignRolesPath = await runMcp([
 
 assert.equal(assignRolesPath[1].result.structuredContent.roles.planner, "stub:planner");
 assert.equal(assignRolesPath[1].result.structuredContent.roles.researcher, "stub:researcher");
+const assignedPlannerRoster = assignRolesPath[1].result.structuredContent.roster.find(
+  (item) => item.role === "planner"
+);
+assert.equal(assignedPlannerRoster.assignmentLabel, "stub:planner");
+assert.equal(assignedPlannerRoster.assignmentSource, "repo_config");
+assert.equal(assignedPlannerRoster.readOnly, true);
 
 const consultPath = await runMcp([
   ...baseMessages,

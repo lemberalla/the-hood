@@ -18,6 +18,7 @@ import {
 import { approvalMessageHint } from "../runtime/approvalInbox.js";
 import { deriveOperatorNextActions } from "../runtime/operatorNextActions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
+import { buildRoleRoster } from "../runtime/roleRoster.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { summonAgent } from "../runtime/summons.js";
 import type { AgentResponse } from "../providers/types.js";
@@ -343,6 +344,7 @@ const createRolesTool = (): McpTool => ({
 
       return {
         roles: roleSummary(config.roles),
+        roster: toJsonObject(buildRoleRoster(config, health)),
         health: toJsonObject(health)
       };
     })
@@ -385,10 +387,12 @@ const createAssignRolesTool = (): McpTool => ({
 
       assertRoleInvariants(updated.roles);
       await writeConfig(repoPath, updated);
+      const health = await inspectRuntimeHealth(updated);
 
       return {
         roles: roleSummary(updated.roles),
-        health: toJsonObject(await inspectRuntimeHealth(updated))
+        roster: toJsonObject(buildRoleRoster(updated, health)),
+        health: toJsonObject(health)
       };
     })
 });

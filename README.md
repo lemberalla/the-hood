@@ -23,6 +23,7 @@ It supports:
 - Codex-first default role mapping for orchestrator, implementer, QA, verifier, and critic
 - provider and role inspection
 - provider and role health inspection
+- agent roster inspection showing role ownership, readiness, and read/edit authority
 - Codex-facing MCP tools for role assignment and guest-agent consultation
 - role mapping updates
 - run creation for `plan` and `implement`
@@ -83,6 +84,7 @@ npm run smoke:runtime
 npm run smoke:mcp
 node dist/cli/main.js init --repo .
 node dist/cli/main.js doctor --repo .
+node dist/cli/main.js roster --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js status --repo .

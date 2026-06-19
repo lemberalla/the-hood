@@ -13,6 +13,7 @@ thehood config edit
 thehood models
 thehood providers
 thehood doctor
+thehood roster
 thehood roles
 thehood roles set orchestrator codex-cli:default
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
@@ -59,6 +60,8 @@ thehood ui approvals
 ## Role Selection
 
 Role mapping can be set globally, per repo, or per run.
+
+`thehood roster --repo .` prints the full agent roster: display lane labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer`, provider:model owner, whether the assignment is the product default or repo config, readiness issues from `doctor`, role purpose, and read/edit/shell/network authority. `--json` returns the same roster as structured data so Codex, MCP clients, and future app surfaces can render the same source of truth.
 
 Codex is the product default:
 

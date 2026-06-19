@@ -92,21 +92,23 @@ Use `thehood_doctor` as the in-chat stale-server check. Current builds report `r
 First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
-2. Call `thehood_plan` for a harmless read-only goal.
-3. Call `thehood_continue` for that run and confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default.
-4. Approve the provider invocation only when the user accepts calling the configured provider for the repo, then continue the run and confirm it returns schema-valid JSON.
-5. If a ChatGPT Web or API provider is configured and delegates repo inspection, confirm the runtime creates a bounded `context` artifact and then stops for explicit approval before sending that context back to the provider.
-6. Approve the context transfer only when the user accepts sending bounded repo evidence, then continue the run.
-7. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
+2. Call `thehood_roles` or `thehood roster --repo .` and confirm the agent roster shows the intended orchestrator, implementer, QA, verifier, and critic owners.
+3. Call `thehood_plan` for a harmless read-only goal.
+4. Call `thehood_continue` for that run and confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default.
+5. Approve the provider invocation only when the user accepts calling the configured provider for the repo, then continue the run and confirm it returns schema-valid JSON.
+6. If a ChatGPT Web or API provider is configured and delegates repo inspection, confirm the runtime creates a bounded `context` artifact and then stops for explicit approval before sending that context back to the provider.
+7. Approve the context transfer only when the user accepts sending bounded repo evidence, then continue the run.
+8. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
 
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:
 
 1. Ask Codex to call `thehood_doctor` for the repo.
-2. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles and approve the provider-invocation gate before any model-backed provider is called.
-3. Use `thehood_orchestrate` for implementation work.
-4. Use `thehood_continue` only after approving the run boundary.
+2. Ask Codex to call `thehood_roles` and inspect the roster before changing any role owner.
+3. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles and approve the provider-invocation gate before any model-backed provider is called.
+4. Use `thehood_orchestrate` for implementation work.
+5. Use `thehood_continue` only after approving the run boundary.
 
 Example guest critic:
 

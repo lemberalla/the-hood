@@ -11,7 +11,9 @@ import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
 import { listProviders } from "../runtime/providers.js";
+import { assertRoleInvariants } from "../runtime/permissions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
+import { buildRoleRoster } from "../runtime/roleRoster.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { runMonitorFromRuns } from "../runtime/runMonitor.js";
@@ -56,6 +58,7 @@ import {
   formatFanoutAgentsResult,
   formatProviders,
   formatReconcileRunResult,
+  formatRoleRoster,
   formatRoles,
   formatRunEvents,
   formatRunList,
@@ -74,6 +77,7 @@ Usage:
   thehood providers [--repo <path>] [--json]
   thehood doctor [--repo <path>] [--json]
   thehood models [--repo <path>] [--json]
+  thehood roster [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
   thehood plan <goal> [--repo <path>] [--json]
@@ -405,12 +409,24 @@ const handleRoles = async (
       }
     };
 
+    assertRoleInvariants(updated.roles);
     await writeConfig(repoPath, updated);
     process.stdout.write(`${role}: ${assignment.provider}:${assignment.model}\n`);
     return;
   }
 
   shouldPrintJson(options) ? printJson(config.roles) : process.stdout.write(`${formatRoles(config.roles)}\n`);
+};
+
+const handleRoster = async (options: Record<string, CliOptionValue>): Promise<void> => {
+  const repoPath = repoFromOptions(options);
+  const config = await loadConfig(repoPath);
+  const health = await inspectRuntimeHealth(config);
+  const roster = buildRoleRoster(config, health);
+
+  shouldPrintJson(options)
+    ? printJson({ repoPath, roster })
+    : process.stdout.write(`${formatRoleRoster(roster, repoPath)}\n`);
 };
 
 const handleCreateRun = async (
@@ -800,6 +816,7 @@ const handleUi = async (
 
   const config = await loadConfig(repoPath);
   const health = await inspectRuntimeHealth(config);
+  const roleRoster = buildRoleRoster(config, health);
   const browser = await inspectBrowser(browserOptionsFromCli(options));
   const runs = await listRuns(repoPath);
   const approvalInbox = approvalInboxViewFromRuns(runs);
@@ -807,6 +824,7 @@ const handleUi = async (
   const dashboard = {
     repoPath,
     health,
+    roleRoster,
     browser,
     approvalPolicy: config.approvalPolicy,
     runMonitor,
@@ -845,6 +863,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "doctor":
       await handleDoctor(parsed.options);
+      return;
+    case "roster":
+      await handleRoster(parsed.options);
       return;
     case "roles":
       await handleRoles(args, parsed.options);

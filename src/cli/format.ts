@@ -11,6 +11,7 @@ import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
+import type { RoleRosterItem } from "../runtime/roleRoster.js";
 import type { RunInsights } from "../runtime/runInsights.js";
 import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
 import type {
@@ -33,6 +34,48 @@ export const formatRoles = (roles: RoleMap): string =>
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([role, assignment]) => `${role}: ${formatRoleAssignment(assignment)}`)
     .join("\n");
+
+const rosterSourceLabel = (source: RoleRosterItem["assignmentSource"]): string => {
+  if (source === "product_default") {
+    return "product default";
+  }
+
+  if (source === "repo_config") {
+    return "repo config";
+  }
+
+  return "not assigned";
+};
+
+const rosterStateLabel = (item: RoleRosterItem): string =>
+  item.issues.length > 0 ? `${item.state} (${item.issues.join(", ")})` : item.state;
+
+const permissionWord = (value: boolean): string => value ? "yes" : "no";
+
+const formatRosterPermissions = (item: RoleRosterItem): string =>
+  [
+    `read:${permissionWord(item.permissions.read)}`,
+    `edit:${permissionWord(item.permissions.edit)}`,
+    `shell:${permissionWord(item.permissions.shell)}`,
+    `network:${permissionWord(item.permissions.network)}`
+  ].join(" ");
+
+export const formatRoleRoster = (roster: RoleRosterItem[], repoPath: string): string => [
+  "Agent Roster",
+  ...roster.flatMap((item) => [
+    `  ${item.laneLabel}`,
+    `    role        ${item.role}`,
+    `    owner       ${item.assignmentLabel} (${rosterSourceLabel(item.assignmentSource)})`,
+    ...(item.defaultAssignmentLabel && item.assignmentSource !== "product_default"
+      ? [`    default     ${item.defaultAssignmentLabel}`]
+      : []),
+    `    state       ${rosterStateLabel(item)}`,
+    `    authority   ${item.authority}`,
+    `    tools       ${formatRosterPermissions(item)}`,
+    `    purpose     ${item.responsibility}`,
+    `    configure   thehood roles set ${item.role} <provider:model> --repo ${quoteArg(repoPath)}`
+  ])
+].join("\n");
 
 export const formatProviders = (providers: ProviderDescriptor[]): string =>
   providers

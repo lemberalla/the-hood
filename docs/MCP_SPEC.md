@@ -94,7 +94,7 @@ Input:
 
 ### `thehood_roles`
 
-Inspect configured role assignments and health.
+Inspect configured role assignments, health, and the full agent roster. The roster is derived from the same runtime role contracts and includes lane labels, provider:model owners, default-vs-repo assignment source, readiness, purpose, and read/edit/shell/network authority. It is display and configuration metadata only; it does not grant permissions or schedule work.
 
 Input:
 

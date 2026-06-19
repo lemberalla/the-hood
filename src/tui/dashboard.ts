@@ -7,12 +7,14 @@ import type {
 } from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
+import type { RoleRosterItem } from "../runtime/roleRoster.js";
 import type { RunMonitorItem } from "../runtime/runMonitor.js";
 import type { ApprovalPolicy, LoopResponsibilityStatus, ReviewLaneState } from "../runtime/types.js";
 
 export interface DashboardInput {
   repoPath: string;
   health: RuntimeHealthReport;
+  roleRoster: RoleRosterItem[];
   browser: BrowserStatus;
   approvalPolicy: ApprovalPolicy;
   runMonitor: RunMonitorItem[];
@@ -61,6 +63,26 @@ const roleLines = (health: RuntimeHealthReport): string[] =>
     const state = role.issues.length === 0 ? "ready" : role.issues.join(", ");
     return `  ${role.role.padEnd(12)} ${formatRoleAssignment(role.assignment).padEnd(28)} ${state}`;
   });
+
+const rosterOwner = (item: RoleRosterItem): string => {
+  if (item.assignmentSource === "product_default") {
+    return `${item.assignmentLabel} default`;
+  }
+
+  if (item.assignmentSource === "repo_config") {
+    return `${item.assignmentLabel} custom`;
+  }
+
+  return "unassigned";
+};
+
+const rosterState = (item: RoleRosterItem): string =>
+  item.issues.length > 0 ? item.issues.join(", ") : item.state;
+
+const rosterLines = (roster: RoleRosterItem[]): string[] =>
+  roster.map((item) =>
+    `  ${item.laneLabel.padEnd(24)} ${truncate(rosterOwner(item), 32).padEnd(32)} ${rosterState(item)}`
+  );
 
 const nextActions = (browser: BrowserStatus): string[] => {
   const actions: string[] = [];
@@ -325,8 +347,8 @@ export const renderDashboard = (input: DashboardInput): string => {
     `  Tab         ${input.browser.chatGptTabFound ? "found" : "not found"}`,
     `  Provider    ${providerState(input.health, "chatgpt-web")}`,
     "",
-    "Roles",
-    ...roleLines(input.health),
+    "Agent Roster",
+    ...(input.roleRoster.length > 0 ? rosterLines(input.roleRoster) : roleLines(input.health)),
     "",
     "Run Monitor",
     ...(input.runMonitor.length > 0
