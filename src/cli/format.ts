@@ -11,7 +11,13 @@ import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RunInsights } from "../runtime/runInsights.js";
 import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
-import type { ReviewLaneState, RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
+import type {
+  LoopResponsibilityStatus,
+  ReviewLaneState,
+  RoleMap,
+  RunRecord,
+  TheHoodConfig
+} from "../runtime/types.js";
 
 export const printJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -132,6 +138,9 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
 const formatLaneState = (state: ReviewLaneState): string =>
   state.replace(/_/g, " ");
 
+const formatLoopResponsibilityStatus = (status: LoopResponsibilityStatus): string =>
+  status.replace(/_/g, " ");
+
 const formatReviewLaneOwner = (owner: RunInsights["reviewLanes"][number]["owner"]): string =>
   owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label;
 
@@ -155,6 +164,24 @@ const formatReviewLaneLines = (insights: RunInsights): string[] =>
 
 const formatOperatorOwner = (owner: RunInsights["operatorNextActions"][number]["owner"]): string =>
   owner.role ? `${owner.label} (${owner.role})` : owner.label;
+
+const formatLoopResponsibilityOwner = (
+  owner: RunInsights["loopResponsibilities"]["responsibilities"][number]["owner"]
+): string =>
+  owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label;
+
+const formatLoopResponsibilityLines = (insights: RunInsights): string[] =>
+  insights.loopResponsibilities.responsibilities.slice(0, 10).flatMap((item) => {
+    const status = formatLoopResponsibilityStatus(item.status);
+    const gate = item.canSatisfyGate ? "gate" : item.sidecarOnly ? "sidecar" : "view";
+
+    return [
+      `  ${item.kind.padEnd(17)} ${status.padEnd(12)} ${item.required ? "required" : "optional"}  ${gate}  owner=${formatLoopResponsibilityOwner(item.owner)}`,
+      `    ${item.reason}`,
+      ...(item.artifactRefs[0] ? [`    artifact: ${item.artifactRefs[0]}`] : []),
+      ...(item.eventRefs[0] ? [`    event: ${item.eventRefs[0]}`] : [])
+    ];
+  });
 
 const formatOperatorNextActionLines = (insights: RunInsights): string[] =>
   insights.operatorNextActions.slice(0, 6).flatMap((nextAction) => [
@@ -210,6 +237,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
+  const loopResponsibilities = formatLoopResponsibilityLines(insights);
   const operatorNextActions = formatOperatorNextActionLines(insights);
 
   return [
@@ -245,6 +273,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           "",
           "review lanes:",
           ...reviewLanes
+        ]
+      : []),
+    ...(loopResponsibilities.length > 0
+      ? [
+          "",
+          "loop responsibilities:",
+          ...loopResponsibilities
         ]
       : []),
     ...(operatorNextActions.length > 0

@@ -1,5 +1,6 @@
 import { writeRunArtifact } from "./artifacts.js";
 import { newId, nowIso } from "./ids.js";
+import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import { loadRun, saveRun } from "./store.js";
@@ -8,6 +9,7 @@ import {
   type ApprovalEvent,
   type JsonObject,
   type JsonValue,
+  type LoopResponsibility,
   type OperatorNextAction,
   type ProgressPacket,
   type ProgressPacketApproval,
@@ -39,6 +41,7 @@ export const defaultProgressPacketLimits: ProgressPacketLimits = {
   maxOpenQuestions: 20,
   maxReviewLanes: 12,
   maxOperatorNextActions: 8,
+  maxLoopResponsibilities: 12,
   maxStringLength: 1000
 };
 
@@ -60,6 +63,8 @@ const ontologyTerms = [
   "ReviewGate",
   "SidecarEvidence",
   "QA",
+  "LoopResponsibility",
+  "LoopResponsibilitySchedule",
   "OperatorNextAction",
   "OperatorActionOwner",
   "Reconciliation",
@@ -571,6 +576,22 @@ export const buildProgressPacket = (
         : {})
     })
   );
+  const loopResponsibilities = boundedSection(
+    "loopResponsibilities",
+    deriveLoopResponsibilitySchedule(run).responsibilities,
+    state.limits.maxLoopResponsibilities,
+    state,
+    (item): LoopResponsibility => ({
+      ...item,
+      label: truncateText(item.label, state),
+      reason: truncateText(item.reason, state),
+      owner: {
+        ...item.owner,
+        label: truncateText(item.owner.label, state),
+        ...(item.owner.assignment ? { assignment: truncateText(item.owner.assignment, state) } : {})
+      }
+    })
+  );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
@@ -591,6 +612,10 @@ export const buildProgressPacket = (
     ...runEvents.items.map((event) => event.source),
     ...providerResponses.items.flatMap((response) => response.sourceRefs),
     ...reviewLanes.items.flatMap((lane) => lane.sourceRefs),
+    ...loopResponsibilities.items.flatMap((item) => [
+      ...item.eventRefs.map((id): ProgressPacketSourceRef => ({ kind: "run_event", runId: run.runId, id })),
+      ...item.artifactRefs.map((ref): ProgressPacketSourceRef => ({ kind: "run_artifact", runId: run.runId, ref }))
+    ]),
     ...questions.items.flatMap((question) => question.sourceRefs)
   ]);
 
@@ -622,6 +647,7 @@ export const buildProgressPacket = (
     latest,
     reviewLanes,
     operatorNextActions,
+    loopResponsibilities,
     evidence: {
       artifacts,
       providerResponses,
@@ -643,6 +669,7 @@ export const buildProgressPacket = (
         "evidence.verifierVerdicts",
         "reviewLanes",
         "operatorNextActions",
+        "loopResponsibilities",
         "openQuestions"
       ],
       notes: [

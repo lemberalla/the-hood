@@ -340,7 +340,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first.
+Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/QA gates.
 
 Input:
 

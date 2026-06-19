@@ -29,6 +29,8 @@ Same-run summons are read-only sidecar calls attached to an existing run. A summ
 
 Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, QA/validation, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, critic responses, and read-only summon responses. Each lane carries bounded ownership metadata: owner label, role or runtime owner, provider/model assignment when known, required or optional status, current state, compact summary, and artifact/event refs. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only sidecar evidence, but a summon does not satisfy or replace a required verifier or QA lane.
 
+Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
+
 ## State Machine
 
 ```text
@@ -135,7 +137,7 @@ Each provider directive includes a bounded `canonicalMemory` object. It is a ref
 
 Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, and bounded review ownership lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
-Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. They also expose bounded operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
+Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. They also expose bounded loop responsibility schedules and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Loop schedules and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

@@ -8,7 +8,7 @@ import type {
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { RunMonitorItem } from "../runtime/runMonitor.js";
-import type { ApprovalPolicy, ReviewLaneState } from "../runtime/types.js";
+import type { ApprovalPolicy, LoopResponsibilityStatus, ReviewLaneState } from "../runtime/types.js";
 
 export interface DashboardInput {
   repoPath: string;
@@ -88,6 +88,9 @@ const phaseLabel = (phase: RunMonitorItem["phase"]): string =>
 const laneStateLabel = (state: ReviewLaneState): string =>
   state.replace(/_/g, " ");
 
+const loopResponsibilityStatusLabel = (status: LoopResponsibilityStatus): string =>
+  status.replace(/_/g, " ");
+
 const laneOwnerLabel = (lane: RunMonitorItem["reviewLanes"][number]): string =>
   lane.owner.assignment ? `${lane.owner.label} (${lane.owner.assignment})` : lane.owner.label;
 
@@ -105,6 +108,24 @@ const reviewLaneLines = (run: RunMonitorItem): string[] => {
     "      reviews",
     ...run.reviewLanes.slice(0, 3).map((lane) =>
       `        ${lane.kind.padEnd(8)} ${laneStateLabel(lane.state).padEnd(14)} ${laneSatisfactionLabel(lane).padEnd(9)} ${truncate(laneOwnerLabel(lane), 72)}`
+    )
+  ];
+};
+
+const loopResponsibilityOwnerLabel = (
+  item: RunMonitorItem["loopResponsibilities"][number]
+): string =>
+  item.owner.assignment ? `${item.owner.label} (${item.owner.assignment})` : item.owner.label;
+
+const loopResponsibilityLines = (run: RunMonitorItem): string[] => {
+  if (run.loopResponsibilities.length === 0) {
+    return [];
+  }
+
+  return [
+    "      loop",
+    ...run.loopResponsibilities.slice(0, 4).map((item) =>
+      `        ${item.kind.padEnd(17)} ${loopResponsibilityStatusLabel(item.status).padEnd(12)} ${truncate(loopResponsibilityOwnerLabel(item), 64)}`
     )
   ];
 };
@@ -132,6 +153,7 @@ const runMonitorLines = (run: RunMonitorItem, index: number): string[] => {
     ...(run.gate ? [`      gate    ${run.gate}`] : []),
     ...(firstArtifactRef ? [`      artifact ${truncate(firstArtifactRef, 112)}`] : []),
     ...operatorNextActionLines(run),
+    ...loopResponsibilityLines(run),
     ...reviewLaneLines(run)
   ];
 };

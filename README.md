@@ -51,6 +51,7 @@ It supports:
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
 - run status insights for latest provider output and final reports
 - run status insights for latest progress, reconciliation, repo context, final report, and transfer manifest refs
+- runtime-derived loop responsibility schedules showing planner, implementer, verifier, QA, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths

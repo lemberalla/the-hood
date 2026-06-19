@@ -310,6 +310,65 @@ export interface OperatorNextAction {
   artifact?: OperatorNextActionArtifact;
 }
 
+export type LoopResponsibilityKind =
+  | "plan"
+  | "implement"
+  | "verify"
+  | "qa"
+  | "critique"
+  | "reconcile"
+  | "integrate"
+  | "operator_approval"
+  | "complete";
+
+export type LoopResponsibilityStatus =
+  | "pending"
+  | "ready"
+  | "in_progress"
+  | "satisfied"
+  | "blocked"
+  | "skipped"
+  | "advisory";
+
+export type LoopResponsibilityOwnerKind = "runtime" | "role";
+
+export interface LoopResponsibilityOwner {
+  kind: LoopResponsibilityOwnerKind;
+  label: string;
+  role?: RuntimeRole;
+  provider?: string;
+  model?: string;
+  assignment?: string;
+  readOnly?: boolean;
+}
+
+export interface LoopResponsibility {
+  id: string;
+  kind: LoopResponsibilityKind;
+  label: string;
+  owner: LoopResponsibilityOwner;
+  required: boolean;
+  blocking: boolean;
+  status: LoopResponsibilityStatus;
+  state: RunState;
+  reason: string;
+  canSatisfyGate: boolean;
+  artifactRefs: string[];
+  eventRefs: string[];
+  handoffRefs: string[];
+  sidecarOnly?: boolean;
+}
+
+export interface LoopResponsibilitySchedule {
+  schemaVersion: 1;
+  kind: "loop_responsibility_schedule";
+  runId: string;
+  generatedAt: string;
+  phase: RunState;
+  responsibilities: LoopResponsibility[];
+  blockers: LoopResponsibility[];
+}
+
 export interface ProgressPacketLimits {
   maxArtifacts: number;
   maxProviderResponses: number;
@@ -319,6 +378,7 @@ export interface ProgressPacketLimits {
   maxOpenQuestions: number;
   maxReviewLanes: number;
   maxOperatorNextActions: number;
+  maxLoopResponsibilities: number;
   maxStringLength: number;
 }
 
@@ -460,6 +520,7 @@ export interface ProgressPacket {
   latest: ProgressPacketLatestState;
   reviewLanes: ProgressPacketBoundedSection<ReviewLane>;
   operatorNextActions: ProgressPacketBoundedSection<OperatorNextAction>;
+  loopResponsibilities: ProgressPacketBoundedSection<LoopResponsibility>;
   evidence: ProgressPacketEvidence;
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;
