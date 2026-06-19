@@ -7,6 +7,7 @@ import { ProviderUnavailableError } from "../runtime/errors.js";
 import { newId, nowIso } from "../runtime/ids.js";
 import { redactText } from "../runtime/redaction.js";
 import { loadRun, saveRun } from "../runtime/store.js";
+import { agentMarkdownField } from "./markdownPayload.js";
 import { buildAgentResponseSchema } from "./responseSchema.js";
 import type { AgentRequest, AgentResponse, ProviderAdapter } from "./types.js";
 import type { JsonObject, JsonValue, RunArtifact, RuntimeRole } from "../runtime/types.js";
@@ -343,6 +344,7 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
     data: {
       [requiredDataKey]: {
         "...": "role-specific object matching the directive output contract",
+        [agentMarkdownField]: "optional GitHub-flavored Markdown string for plans, reports, reviews, or rationale",
         thehoodDirectiveAck: directiveAckJson(request)
       }
     }
@@ -351,7 +353,10 @@ export const buildAgentPrompt = (request: AgentRequest): string => {
   return [
     "You are a provider adapter worker for TheHood.",
     "Follow the runtime directive exactly. Do not reveal hidden reasoning.",
-    "Return only a JSON object. Do not wrap it in Markdown.",
+    "Return only a JSON object. Do not wrap the response itself in Markdown.",
+    `For long human-facing content, use data.${requiredDataKey}.${agentMarkdownField} as a JSON string containing GitHub-flavored Markdown.`,
+    "Keep mechanical control fields such as action, verdict, status, refs, and directive acknowledgement outside the markdown string.",
+    "Do not encode long plans, reports, reviews, or rationale as deep nested JSON objects or arrays.",
     "The JSON object must match this envelope:",
     JSON.stringify(responseEnvelope, null, 2),
     "The JSON object must satisfy this exact JSON Schema:",

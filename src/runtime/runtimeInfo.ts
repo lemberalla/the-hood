@@ -18,6 +18,7 @@ export const runtimeCapabilities = [
   "planner_reconciliation",
   "canonical_memory_rehydration",
   "provider_directive_ack",
+  "provider_markdown_payloads",
   "mcp_final_report_next_action",
   "max_iteration_enforcement",
   "validation_command_capture",

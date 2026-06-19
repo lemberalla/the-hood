@@ -4,6 +4,7 @@ import { buildCanonicalMemory, latestCanonicalArtifactRefs } from "./canonicalMe
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
+import { agentMarkdownField, boundAgentMarkdownPayloads, extractAgentMarkdown } from "../providers/markdownPayload.js";
 import {
   latestRunHandoff,
   recentRunHandoffSummaries,
@@ -34,7 +35,15 @@ export interface LatestAgentResponseInsight {
   data: JsonObject;
   primaryOutputKey?: string;
   primaryOutput?: JsonObject;
+  markdown?: LatestAgentResponseMarkdownInsight;
   decision?: JsonObject;
+}
+
+export interface LatestAgentResponseMarkdownInsight {
+  field: typeof agentMarkdownField;
+  preview: string;
+  truncated: boolean;
+  charLength: number;
 }
 
 export interface FinalReportInsight {
@@ -68,6 +77,7 @@ const primaryOutputKeys = [
   "critiqueResult",
   "researchResult"
 ];
+const markdownPreviewChars = 2_000;
 
 const summarizeArtifact = (artifact: RunArtifact): RunArtifactSummary => ({
   kind: artifact.kind,
@@ -77,6 +87,19 @@ const summarizeArtifact = (artifact: RunArtifact): RunArtifactSummary => ({
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
+
+const markdownInsight = (markdown: string | undefined): LatestAgentResponseMarkdownInsight | undefined => {
+  if (!markdown) {
+    return undefined;
+  }
+
+  return {
+    field: agentMarkdownField,
+    preview: markdown.slice(0, markdownPreviewChars),
+    truncated: markdown.length > markdownPreviewChars,
+    charLength: markdown.length
+  };
+};
 
 const readArtifactJson = async (
   run: RunRecord,
@@ -117,18 +140,21 @@ const parseAgentResponse = (
 ): LatestAgentResponseInsight | undefined => {
   const status = payload.status;
   const summary = payload.summary;
-  const data = payload.data;
+  const rawData = payload.data;
 
   if (
     (status !== "ok" && status !== "blocked" && status !== "failed") ||
     typeof summary !== "string" ||
-    !isJsonObject(data)
+    !isJsonObject(rawData)
   ) {
     issues.push(`Artifact ${artifact.ref} is not a valid AgentResponse envelope.`);
     return undefined;
   }
 
-  const primaryOutputKey = primaryOutputKeys.find((key) => isJsonObject(data[key]));
+  const primaryOutputKey = primaryOutputKeys.find((key) => isJsonObject(rawData[key]));
+  const rawPrimaryOutput = primaryOutputKey ? rawData[primaryOutputKey] as JsonObject : undefined;
+  const markdown = markdownInsight(extractAgentMarkdown(rawPrimaryOutput));
+  const data = boundAgentMarkdownPayloads(rawData, markdownPreviewChars);
   const primaryOutput = primaryOutputKey ? data[primaryOutputKey] as JsonObject : undefined;
   const decision = isJsonObject(data.decision) ? data.decision : undefined;
 
@@ -139,6 +165,7 @@ const parseAgentResponse = (
     data,
     ...(primaryOutputKey ? { primaryOutputKey } : {}),
     ...(primaryOutput ? { primaryOutput } : {}),
+    ...(markdown ? { markdown } : {}),
     ...(decision ? { decision } : {})
   };
 };

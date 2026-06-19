@@ -3,6 +3,7 @@ import { buildCanonicalMemory } from "./canonicalMemory.js";
 import { newId } from "./ids.js";
 import { defaultRolePermissions } from "./permissions.js";
 import { formatRoleAssignment } from "./role-assignment.js";
+import { agentMarkdownField } from "../providers/markdownPayload.js";
 import type { AgentDirective, AgentOutputContract } from "../providers/types.js";
 import type { JsonObject, RoleAssignment, RunRecord, RuntimeRole } from "./types.js";
 
@@ -127,6 +128,12 @@ const canonicalMemoryInstructions = [
   "Do not infer large artifact bodies from canonicalMemory; it is a bounded refs-only index."
 ];
 
+const markdownPayloadInstructions = (requiredDataKey: string): string[] => [
+  "Keep the AgentResponse JSON envelope mechanical and small: status, summary, required control fields, artifact refs, and directive acknowledgement.",
+  `Put human-facing plans, reports, reviews, critique, rationale, acceptance criteria, and other long narrative content in data.${requiredDataKey}.${agentMarkdownField} as GitHub-flavored Markdown.`,
+  "Do not model long plans or reports as deep nested JSON arrays/objects; use markdown lists or tables inside the markdown string instead."
+];
+
 const enabledTools = (permissions: AgentDirective["toolPermissions"]): string[] =>
   Object.entries(permissions)
     .filter(([, enabled]) => enabled)
@@ -163,6 +170,7 @@ export const buildAgentDirective = async (
     objective: roleObjectives[role],
     instructions: [
       ...roleInstructions[role],
+      ...markdownPayloadInstructions(outputContract.requiredDataKey),
       ...canonicalMemoryInstructions
     ],
     toolPermissions,

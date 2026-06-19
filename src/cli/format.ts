@@ -1,4 +1,5 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
+import { agentMarkdownField } from "../providers/markdownPayload.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { ReconcileRunResult } from "../runtime/reconciliation.js";
 import type { SummonAgentResult } from "../runtime/summons.js";
@@ -101,6 +102,30 @@ const formatDecisionLines = (decision: Record<string, unknown>): string[] => [
     : [])
 ];
 
+const markdownPreviewLineLimit = 24;
+
+const formatAgentMarkdownLines = (
+  run: RunRecord,
+  response: NonNullable<RunInsights["latestAgentResponse"]>
+): string[] => {
+  const markdown = response.markdown;
+
+  if (!markdown) {
+    return [];
+  }
+
+  const previewLines = markdown.preview.trimEnd().split("\n").slice(0, markdownPreviewLineLimit);
+  const lineTruncated = markdown.preview.trimEnd().split("\n").length > markdownPreviewLineLimit;
+  const truncated = markdown.truncated || lineTruncated;
+
+  return [
+    "markdown preview:",
+    ...previewLines.map((line) => `  ${line}`),
+    ...(truncated ? [`  ... truncated (${markdown.charLength} chars)`] : []),
+    `inspect: thehood artifact ${run.runId} ${quoteArg(response.artifact.ref)} --repo ${quoteArg(run.repoPath)}`
+  ];
+};
+
 const formatPrimaryOutputLines = (insights: RunInsights): string[] => {
   const response = insights.latestAgentResponse;
 
@@ -118,7 +143,10 @@ const formatPrimaryOutputLines = (insights: RunInsights): string[] => {
   }
 
   return Object.entries(primary)
-    .filter(([, value]) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    .filter(([key, value]) =>
+      key !== agentMarkdownField &&
+      (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    )
     .map(([key, value]) => `${key}: ${String(value)}`);
 };
 
@@ -248,7 +276,8 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           `  status: ${response.status}`,
           `  summary: ${response.summary}`,
           `  artifact: ${response.artifact.ref}`,
-          ...formatPrimaryOutputLines(insights).map((line) => `  ${line}`)
+          ...formatPrimaryOutputLines(insights).map((line) => `  ${line}`),
+          ...formatAgentMarkdownLines(run, response).map((line) => `  ${line}`)
         ]
       : []),
     ...(finalReport

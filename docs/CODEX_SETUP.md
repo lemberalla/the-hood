@@ -133,7 +133,7 @@ Example ChatGPT Pro orchestrator consult:
 export THEHOOD_CHATGPT_WEB_COMMAND=/path/to/chatgpt-web-bridge
 ```
 
-The bridge receives the TheHood prompt on stdin, gets `--model <model>` and `--schema <schema-path>` arguments, uses the user's authenticated ChatGPT session, and prints the normalized `AgentResponse` JSON envelope to stdout. TheHood intentionally does not read ChatGPT cookies, browser local storage, or tokens.
+The bridge receives the TheHood prompt on stdin, gets `--model <model>` and `--schema <schema-path>` arguments, uses the user's authenticated ChatGPT session, and prints the normalized `AgentResponse` JSON envelope to stdout. The JSON envelope is for mechanical fields; long plans, reports, and rationale should be returned as markdown in the role payload's `markdown` string. TheHood intentionally does not read ChatGPT cookies, browser local storage, or tokens.
 
 This package includes an experimental Chrome DevTools bridge:
 

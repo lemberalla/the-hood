@@ -1,4 +1,5 @@
 import type { AgentRequest } from "./types.js";
+import { agentMarkdownField, agentMarkdownFieldDescription } from "./markdownPayload.js";
 import type { JsonObject } from "../runtime/types.js";
 
 const basePayloadSchema = (): JsonObject => ({
@@ -17,6 +18,10 @@ const withDirectiveAckSchema = (request: AgentRequest, schema: JsonObject): Json
     required: [...new Set([...required, request.directive.directiveAck.responseField])],
     properties: {
       ...properties,
+      [agentMarkdownField]: {
+        type: "string",
+        description: agentMarkdownFieldDescription
+      },
       [request.directive.directiveAck.responseField]: {
         type: "object",
         additionalProperties: false,

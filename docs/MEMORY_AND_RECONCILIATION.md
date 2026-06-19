@@ -166,7 +166,7 @@ planner reconciles plan against evidence
 runtime stores reconciliation
 ```
 
-The planner should answer:
+The planner should answer with small mechanical JSON fields plus markdown narrative in the role payload's `markdown` field:
 
 - which plan items are complete
 - which acceptance criteria are satisfied

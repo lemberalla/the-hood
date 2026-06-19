@@ -42,6 +42,7 @@ It supports:
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances
+- provider response contracts that keep JSON mechanical while long plans, reports, and reviews live in markdown payload fields
 - guarded local CLI adapters for Codex CLI and Claude Code
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
 - provider access-mode metadata for agent bridges, API agents, and MCP connectors

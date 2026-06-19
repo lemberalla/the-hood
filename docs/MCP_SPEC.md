@@ -229,7 +229,7 @@ ChatGPT Pro example:
 
 `chatgpt-web` requires `THEHOOD_CHATGPT_WEB_COMMAND`; without it the run returns `blocked`.
 
-Output includes the created run id, current or final state, consulted role, consulted agent, stop reason, provider response count, normalized provider responses, and artifacts. Read-only model-backed guest agents may return `awaiting_approval` before the first provider call; continue only after the user approves invoking that provider.
+Output includes the created run id, current or final state, consulted role, consulted agent, stop reason, provider response count, normalized provider response summaries, and artifacts. Provider response summaries keep markdown payloads bounded; read the response artifact for the complete markdown plan, report, review, or critique. Read-only model-backed guest agents may return `awaiting_approval` before the first provider call; continue only after the user approves invoking that provider.
 
 Output:
 
@@ -271,7 +271,7 @@ Input:
 
 The runtime records `agent_summoned`, a typed handoff, and provider directive/response artifacts when the provider runs. A one-call `agent` override does not rewrite the run's role mapping. Model-backed providers still pass through the provider-invocation approval gate; autopilot may auto-approve that bounded gate according to policy.
 
-Output includes the run summary, summoned role, summoned agent, summon kind, stop reason, directive and response artifact refs when present, provider response count, and normalized provider responses.
+Output includes the run summary, summoned role, summoned agent, summon kind, stop reason, directive and response artifact refs when present, provider response count, and normalized provider response summaries. Long provider-authored plans, reports, reviews, and critique should be returned as markdown in the role payload and are bounded in tool responses.
 
 ### `thehood_continue`
 
@@ -307,7 +307,7 @@ Current behavior:
 - finds or creates a `progress` artifact for a completed run
 - writes a `transfer_manifest` artifact and pauses for approval before sending progress packets to browser or API providers
 - invokes the configured `planner`, or `orchestrator` when no planner is assigned
-- stores the schema-bound provider response as a `reconciliation` artifact
+- stores the schema-bound provider response as a `reconciliation` artifact whose role payload may include markdown narrative
 
 Input:
 

@@ -60,6 +60,8 @@ agent_request:
 
 The runtime writes each directive as a `directive` artifact before provider execution. It validates each provider response against the role output contract before advancing the run state.
 
+`AgentResponse` JSON is the mechanical envelope for runtime control. Role payloads should keep small fields such as `action`, `reason`, `status`, `verdict`, refs, and `thehoodDirectiveAck` as JSON. Human-facing plans, reports, reviews, critique, rationale, acceptance criteria, and other long narrative content should be returned as GitHub-flavored Markdown in `data.<required_data_key>.markdown`. Adapters should avoid asking providers to express long plans as nested JSON arrays or objects.
+
 ## Local Command Runner
 
 The local command runner is shared by CLI-backed adapters.
@@ -70,6 +72,7 @@ Rules:
 - It passes the runtime directive as stdin or prompt input.
 - It asks the provider to return the normalized `AgentResponse` JSON envelope.
 - It builds a role-specific JSON Schema for the expected `AgentResponse`.
+- It tells the provider to keep the JSON envelope mechanical and put long human-facing content in `data.<required_data_key>.markdown`.
 - It redacts obvious secrets from captured process output before parsing.
 - It fails closed with a schema-compatible blocked or failed response when output is unstructured.
 - It does not use dangerous bypass flags.
@@ -116,6 +119,7 @@ Current implementation:
 - Sends the runtime directive as stdin.
 - Passes `--model <model>` and `--schema <schema-path>` to the bridge command.
 - Expects stdout to contain the normalized `AgentResponse` JSON envelope.
+- Directs ChatGPT to place plans and reports in the role payload's `markdown` string instead of deep nested JSON.
 - Returns `blocked` when no bridge command is configured.
 
 Included bridge:

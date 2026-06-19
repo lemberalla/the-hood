@@ -6,6 +6,7 @@ import { advanceRun } from "../runtime/loop.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
+import { boundAgentMarkdownPayloads } from "../providers/markdownPayload.js";
 import {
   getRepoGitDiff,
   getRepoGitStatus,
@@ -75,7 +76,7 @@ const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
   responses.map((response) => ({
     status: response.status,
     summary: response.summary,
-    data: response.data
+    data: boundAgentMarkdownPayloads(response.data, 2_000)
   }));
 
 const toJsonObject = (value: unknown): JsonObject =>
