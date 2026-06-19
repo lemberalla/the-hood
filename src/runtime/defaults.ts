@@ -80,7 +80,7 @@ export const defaultRoles: RoleMap = {
 export const createDefaultConfig = (): TheHoodConfig => ({
   version: 1,
   defaults: {
-    maxIterations: 5,
+    maxIterations: 8,
     editRequiresApproval: true,
     dependencyInstallRequiresApproval: true,
     networkRequiresApproval: true,

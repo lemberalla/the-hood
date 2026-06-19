@@ -93,7 +93,7 @@ Initial config shape:
 {
   "version": 1,
   "defaults": {
-    "maxIterations": 5,
+    "maxIterations": 8,
     "editRequiresApproval": true,
     "dependencyInstallRequiresApproval": true,
     "networkRequiresApproval": true,
