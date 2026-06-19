@@ -130,7 +130,7 @@ The packet may include compact descriptions for navigation, but every important 
 
 Provider directives should tell the model to ignore stale browser or conversation memory and reason only from TheHood-provided state.
 
-Current provider directives include a compact `canonicalMemory` object. This is not a memory engine. It is a bounded runtime-owned index with the current run snapshot, recent run summaries, and latest artifact refs for progress packets, reconciliation, local repo context, remote repo context, final reports, and transfer manifests. It intentionally excludes large artifact bodies so browser/API providers can be rehydrated without making ChatGPT conversation history the source of truth.
+Current provider directives include a compact `canonicalMemory` object. This is not a memory engine. It is a bounded runtime-owned index with the current run snapshot, recent run summaries, and latest artifact refs for progress packets, reconciliation, local repo context, remote repo context, final reports, review routing, and transfer manifests. It intentionally excludes large artifact bodies so browser/API providers can be rehydrated without making ChatGPT conversation history the source of truth.
 
 ## Repo Context Retrieval
 

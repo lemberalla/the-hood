@@ -55,6 +55,7 @@ Review ownership is derived by the runtime from canonical run evidence. A lane r
 - Verifier ownership is satisfied only by a main verifier response under the runtime loop.
 - Runtime QA/validation ownership is satisfied only by runtime-captured validation evidence and command metadata.
 - QA tester ownership is advisory model evidence and cannot satisfy runtime validation.
+- Review routing ownership is deterministic runtime policy evidence. It can require, skip, or sequence subjective lanes, but it cannot accept work by itself.
 - Critic ownership is advisory. The runtime may call the critic from a `critic_trigger` policy decision, but critic output cannot satisfy validation, verifier, or completion gates.
 - Same-run summons are sidecar evidence and remain read-only.
 - Same-run fan-outs are grouped sidecar evidence and remain read-only.
@@ -140,6 +141,8 @@ When a repair pass is delegated, inputs also include the latest `revision_packet
 
 The QA tester is a read-only model-assisted tester, usually a cheaper model such as Codex Spark.
 
+The runtime calls QA only when review routing requires behavior or regression review. A skipped QA lane must have a recorded routing reason; skipped QA never weakens deterministic validation or verifier requirements.
+
 Inputs:
 
 - user goal
@@ -175,6 +178,8 @@ Outputs:
 ## Verifier
 
 The verifier owns independent assessment.
+
+The current routing policy keeps verifier review required for implementation runs when a verifier is assigned. If the verifier role is missing, the runtime stops for user review instead of completing the run.
 
 Inputs:
 

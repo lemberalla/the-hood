@@ -23,6 +23,7 @@ export const runtimeCapabilities = [
   "mcp_final_report_next_action",
   "max_iteration_enforcement",
   "validation_command_capture",
+  "review_routing_policy",
   "model_assisted_qa_tester",
   "critic_trigger_artifacts",
   "revision_packet_artifacts",

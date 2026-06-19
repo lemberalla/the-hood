@@ -218,6 +218,7 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
     ["repoContext", insights.latestRepoContext],
     ["remoteRepoContext", insights.latestRemoteRepoContext],
     ["revisionPacket", insights.latestRevisionPacket?.artifact],
+    ["reviewRouting", insights.latestReviewRouting?.artifact],
     ["fanout", insights.latestFanout?.artifact],
     ["transferManifest", insights.latestTransferManifest]
   ] as const;
@@ -281,6 +282,25 @@ const formatFanoutLines = (insights: RunInsights): string[] => {
     ...fanout.items.slice(0, 6).map((item) =>
       `  - #${item.index + 1} ${item.role ?? "role"} ${item.status ?? "unknown"} ${item.responseArtifactRef ?? ""}`.trimEnd()
     )
+  ];
+};
+
+const formatReviewRoutingLines = (insights: RunInsights): string[] => {
+  const routing = insights.latestReviewRouting;
+
+  if (!routing) {
+    return [];
+  }
+
+  const required = routing.required ?? {};
+
+  return [
+    "review routing:",
+    ...(routing.riskTier ? [`  risk: ${routing.riskTier}`] : []),
+    ...(routing.action ? [`  action: ${routing.action}`] : []),
+    `  required: validation=${String(required.validation ?? true)} qa=${String(required.qa ?? false)} verifier=${String(required.verifier ?? false)} critic=${String(required.critic ?? false)}`,
+    ...routing.reasons.slice(0, 4).map((reason) => `  - ${reason}`),
+    `  artifact: ${routing.artifact.ref}`
   ];
 };
 
@@ -387,6 +407,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const memoryRefs = formatMemoryRefLines(insights);
   const criticTrigger = formatCriticTriggerLines(insights);
   const revisionPacket = formatRevisionPacketLines(insights);
+  const reviewRouting = formatReviewRoutingLines(insights);
   const fanout = formatFanoutLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
   const loopResponsibilities = formatLoopResponsibilityLines(insights);
@@ -431,6 +452,12 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
       ? [
           "",
           ...revisionPacket
+        ]
+      : []),
+    ...(reviewRouting.length > 0
+      ? [
+          "",
+          ...reviewRouting
         ]
       : []),
     ...(fanout.length > 0

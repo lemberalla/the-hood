@@ -111,6 +111,7 @@ export type RunArtifactKind =
   | "reconciliation"
   | "critic_trigger"
   | "revision_packet"
+  | "review_routing"
   | "fanout"
   | "transfer_manifest";
 

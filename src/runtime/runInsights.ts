@@ -73,6 +73,15 @@ export interface RevisionPacketInsight {
   criticTriggerRef?: string;
 }
 
+export interface ReviewRoutingInsight {
+  artifact: RunArtifactSummary;
+  riskTier?: string;
+  action?: string;
+  required?: JsonObject;
+  reasons: string[];
+  signals?: JsonObject;
+}
+
 export interface FanoutInsight {
   artifact: RunArtifactSummary;
   status?: string;
@@ -98,6 +107,7 @@ export interface RunInsights {
   finalReport?: FinalReportInsight;
   latestCriticTrigger?: CriticTriggerInsight;
   latestRevisionPacket?: RevisionPacketInsight;
+  latestReviewRouting?: ReviewRoutingInsight;
   latestFanout?: FanoutInsight;
   latestProgressPacket?: RunArtifactSummary;
   latestReconciliation?: RunArtifactSummary;
@@ -241,6 +251,9 @@ const criticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
 const revisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "revision_packet").at(-1);
 
+const reviewRoutingArtifact = (run: RunRecord): RunArtifact | undefined =>
+  run.artifacts.filter((artifact) => artifact.kind === "review_routing").at(-1);
+
 const fanoutArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "fanout").at(-1);
 
@@ -281,6 +294,18 @@ const parseRevisionPacket = (
   evidenceRefs: stringArray(payload.evidenceRefs),
   ...(typeof payload.sourceResponseRef === "string" ? { sourceResponseRef: payload.sourceResponseRef } : {}),
   ...(typeof payload.criticTriggerRef === "string" ? { criticTriggerRef: payload.criticTriggerRef } : {})
+});
+
+const parseReviewRouting = (
+  artifact: RunArtifact,
+  payload: JsonObject
+): ReviewRoutingInsight => ({
+  artifact: summarizeArtifact(artifact),
+  ...(typeof payload.riskTier === "string" ? { riskTier: payload.riskTier } : {}),
+  ...(typeof payload.action === "string" ? { action: payload.action } : {}),
+  ...(isJsonObject(payload.required) ? { required: payload.required } : {}),
+  reasons: stringArray(payload.reasons),
+  ...(isJsonObject(payload.signals) ? { signals: payload.signals } : {})
 });
 
 const numberField = (value: unknown): number | undefined =>
@@ -355,6 +380,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const revisionPacketPayload = revisionPacket
     ? await readArtifactJson(run, revisionPacket, issues)
     : undefined;
+  const reviewRouting = reviewRoutingArtifact(run);
+  const reviewRoutingPayload = reviewRouting
+    ? await readArtifactJson(run, reviewRouting, issues)
+    : undefined;
   const latestFanout = fanoutArtifact(run);
   const latestFanoutPayload = latestFanout
     ? await readArtifactJson(run, latestFanout, issues)
@@ -417,6 +446,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
 
   if (revisionPacket && revisionPacketPayload) {
     insights.latestRevisionPacket = parseRevisionPacket(revisionPacket, revisionPacketPayload);
+  }
+
+  if (reviewRouting && reviewRoutingPayload) {
+    insights.latestReviewRouting = parseReviewRouting(reviewRouting, reviewRoutingPayload);
   }
 
   if (latestFanout && latestFanoutPayload) {

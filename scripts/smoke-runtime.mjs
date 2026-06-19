@@ -12,6 +12,9 @@ const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.j
 const { chooseRepoContextRoute, parseGitHubRemoteUrl } = await import(
   pathToFileURL(path.join(root, "dist", "runtime", "remoteRepoContext.js")).href
 );
+const { decideReviewRouting } = await import(
+  pathToFileURL(path.join(root, "dist", "runtime", "reviewRouting.js")).href
+);
 
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
@@ -270,6 +273,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("canonical_memory_rehydrati
 assert.ok(doctorResult.runtime.capabilities.includes("provider_directive_ack"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
+assert.ok(doctorResult.runtime.capabilities.includes("review_routing_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_session_isolation"));
@@ -292,6 +296,36 @@ assert.ok(doctorResult.runtime.capabilities.includes("runtime_revision_delegatio
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
+const lowRiskRouting = decideReviewRouting({
+  changedPaths: ["docs/RUNTIME_LOOP.md"],
+  protectedChangeCount: 0,
+  validationCommandCount: 1,
+  validationFailureCount: 0,
+  hasQaAssignment: true,
+  hasVerifierAssignment: true,
+  hasQaResponse: false,
+  hasVerifierResponse: false
+});
+assert.equal(lowRiskRouting.riskTier, "low");
+assert.equal(lowRiskRouting.action, "run_verifier");
+assert.equal(lowRiskRouting.required.validation, true);
+assert.equal(lowRiskRouting.required.qa, false);
+assert.equal(lowRiskRouting.required.verifier, true);
+assert.ok(lowRiskRouting.skippedRoles.some((role) => role.role === "qa"));
+const highRiskRouting = decideReviewRouting({
+  changedPaths: ["src/runtime/approvalPolicy.ts"],
+  protectedChangeCount: 0,
+  validationCommandCount: 1,
+  validationFailureCount: 0,
+  hasQaAssignment: true,
+  hasVerifierAssignment: true,
+  hasQaResponse: false,
+  hasVerifierResponse: false
+});
+assert.equal(highRiskRouting.riskTier, "high");
+assert.equal(highRiskRouting.action, "run_qa");
+assert.equal(highRiskRouting.required.qa, true);
+assert.equal(highRiskRouting.required.verifier, true);
 const stubHealth = doctorResult.providers.find((provider) => provider.id === "stub");
 assert.equal(stubHealth.implemented, true);
 assert.deepEqual(stubHealth.issues, []);
@@ -1892,6 +1926,17 @@ assert.equal(finalReportQaTesterLane.owner.role, "qa");
 assert.equal(finalReportQaTesterLane.owner.assignment, "stub:qa");
 assert.equal(finalReportQaTesterLane.canSatisfyRequired, false);
 assert.equal(finalReportQaTesterLane.satisfiesRequired, false);
+const reviewRoutingArtifact = loopResult.run.artifacts
+  .filter((artifact) => artifact.kind === "review_routing")
+  .at(-1);
+assert.ok(reviewRoutingArtifact, "verified completed run should attach review routing evidence");
+const reviewRouting = JSON.parse(await fs.readFile(reviewRoutingArtifact.ref, "utf8"));
+assert.equal(reviewRouting.kind, "review_routing");
+assert.equal(reviewRouting.riskTier, "medium");
+assert.equal(reviewRouting.required.validation, true);
+assert.equal(reviewRouting.required.qa, true);
+assert.equal(reviewRouting.required.verifier, true);
+assert.ok(reviewRouting.reasons.some((reason) => reason.includes("deterministic validation")));
 const validationToolEvent = loopResult.run.toolEvents.find((event) => event.tool === "validation_typecheck");
 assert.ok(validationToolEvent, "verification should capture the selected validation command");
 assert.equal(validationToolEvent.command, "npm");
@@ -1955,7 +2000,18 @@ assert.ok(
   "progress packet should expose the QA tester responsibility"
 );
 const verifiedLoopStatusText = await runCli(["status", loopRun.runId, "--repo", loopRepoPath]);
+const verifiedLoopStatusJson = JSON.parse(
+  (await runCli(["status", loopRun.runId, "--repo", loopRepoPath, "--json"])).stdout
+);
+assert.equal(verifiedLoopStatusJson.insights.latestReviewRouting.artifact.ref, reviewRoutingArtifact.ref);
+assert.equal(verifiedLoopStatusJson.insights.latestReviewRouting.riskTier, "medium");
+assert.equal(verifiedLoopStatusJson.insights.latestReviewRouting.action, "run_verifier");
+assert.equal(
+  verifiedLoopStatusJson.insights.canonicalMemory.currentRun.artifacts.latestReviewRouting.ref,
+  reviewRoutingArtifact.ref
+);
 assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));
+assert.ok(verifiedLoopStatusText.stdout.includes("review routing:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("reviewer"));
 assert.ok(verifiedLoopStatusText.stdout.includes("tester"));
 assert.ok(verifiedLoopStatusText.stdout.includes("qa"));

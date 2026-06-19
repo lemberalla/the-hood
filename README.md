@@ -44,6 +44,7 @@ It supports:
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
 - runtime-captured package validation command evidence during verifier review
+- runtime-owned review routing artifacts that classify implementation risk before model QA/verifier dispatch
 - read-only model-assisted QA tester lane for missed cases and validation suggestions
 - runtime-owned critic trigger artifacts when QA, verifier, or validation evidence indicates risk
 - runtime-owned revision packet artifacts that route fixable QA, critic, or verifier findings back to the implementer

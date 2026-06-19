@@ -25,6 +25,12 @@ import {
   writeRevisionPacketArtifact,
   type RevisionPacketDecision
 } from "./revisionPacket.js";
+import {
+  decideReviewRouting,
+  reviewRoutingJson,
+  reviewRoutingSummary,
+  type ReviewRoutingDecision
+} from "./reviewRouting.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import {
   analyzeRepoContextRequest,
@@ -616,6 +622,45 @@ const latestCriticTriggerArtifact = (run: RunRecord): RunArtifact | undefined =>
 
 const latestRevisionPacketArtifact = (run: RunRecord): RunArtifact | undefined =>
   run.artifacts.filter((artifact) => artifact.kind === "revision_packet").at(-1);
+
+const writeReviewRoutingArtifact = async (
+  run: RunRecord,
+  decision: ReviewRoutingDecision
+): Promise<{ run: RunRecord; artifact: RunArtifact }> => {
+  const artifact = await writeRunArtifact({
+    repoPath: run.repoPath,
+    runId: run.runId,
+    kind: "review_routing",
+    name: `review-routing-${newId("review-routing")}.json`,
+    content: `${JSON.stringify(
+      {
+        ...reviewRoutingJson(decision),
+        runId: run.runId,
+        createdAt: nowIso()
+      },
+      null,
+      2
+    )}\n`,
+    summary: reviewRoutingSummary(decision)
+  });
+  const runWithArtifact = await attachRunArtifact(
+    run,
+    artifact,
+    createEvent("review_routing_decided", artifact.summary, {
+      artifactRef: artifact.ref,
+      riskTier: decision.riskTier,
+      action: decision.action,
+      required: decision.required,
+      reasons: decision.reasons,
+      signals: decision.signals as unknown as JsonObject
+    })
+  );
+
+  return {
+    run: runWithArtifact,
+    artifact
+  };
+};
 
 const writeCriticTriggerArtifact = async (
   run: RunRecord,
@@ -1878,11 +1923,33 @@ const advanceOneStep = async (
   if (run.state === "verifying") {
     const evidence = await captureGitEvidence(run.repoPath, run.runId);
     const validation = await captureValidationEvidence(evidence.run);
-    const qaAssignment = validation.run.roleMapping.qa;
     const implementationResponseIndex = latestProviderResponseEventIndex(validation.run, "implementer");
+    const qaAssignment = validation.run.roleMapping.qa;
+    const verifierAssignment = validation.run.roleMapping.verifier;
+    const qaResponded = qaAssignment
+      ? hasProviderRespondedSince(validation.run, "qa", qaAssignment, implementationResponseIndex)
+      : false;
+    const verifierResponded = verifierAssignment
+      ? hasProviderRespondedSince(validation.run, "verifier", verifierAssignment, implementationResponseIndex)
+      : false;
+    const routingDecision = decideReviewRouting({
+      changedPaths: evidence.changedPaths,
+      protectedChangeCount: evidence.protectedChanges.length,
+      validationCommandCount: validation.executedCommands.length,
+      validationFailureCount: validation.failedCommands.length,
+      hasQaAssignment: Boolean(qaAssignment),
+      hasVerifierAssignment: Boolean(verifierAssignment),
+      hasQaResponse: qaResponded,
+      hasVerifierResponse: verifierResponded
+    });
+    const routing = await writeReviewRoutingArtifact(
+      validation.run,
+      routingDecision
+    );
+    const validationRun = routing.run;
 
-    if (qaAssignment && !hasProviderRespondedSince(validation.run, "qa", qaAssignment, implementationResponseIndex)) {
-      let qaRun = validation.run;
+    if (qaAssignment && routingDecision.action === "run_qa") {
+      let qaRun = validationRun;
       const invocationGate = await stopForProviderInvocationApproval(qaRun, "qa", qaAssignment);
 
       if (invocationGate) {
@@ -1906,6 +1973,7 @@ const advanceOneStep = async (
         validationCommandCount: validation.executedCommands.length,
         validationFailureCount: validation.failedCommands.length,
         validationSummaryRef: validation.artifact.ref,
+        reviewRoutingRef: routing.artifact.ref,
         ...(revisionPacket ? { latestRevisionPacket: revisionPacket } : {})
       });
       const stopped = await stopForProviderStatus(qaResult.run, "qa", qaResult.response);
@@ -1999,14 +2067,43 @@ const advanceOneStep = async (
       };
     }
 
-    const revisionPacket = await latestRevisionPacketContext(validation.run);
-    const result = await runAgent(validation.run, "verifier", {
+    if (!verifierAssignment) {
+      const approvalReason = "Verifier role is not assigned; user review is required before implementation can complete.";
+      const gated = await updateRun(
+        validationRun,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [createEvent("approval_required", approvalReason, {
+          reason: "verifier_unassigned",
+          reviewRoutingRef: routing.artifact.ref
+        })],
+        [approvalGateHandoff(validationRun, {
+          reason: approvalReason,
+          role: "verifier",
+          gate: "verifier_unassigned",
+          artifactRefs: [routing.artifact.ref]
+        })]
+      );
+
+      return {
+        run: gated,
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
+
+    const revisionPacket = await latestRevisionPacketContext(validationRun);
+    const result = await runAgent(validationRun, "verifier", {
       phase: "verify",
       changedPathCount: evidence.changedPaths.length,
       protectedChangeCount: evidence.protectedChanges.length,
       validationCommandCount: validation.executedCommands.length,
       validationFailureCount: validation.failedCommands.length,
       validationSummaryRef: validation.artifact.ref,
+      reviewRoutingRef: routing.artifact.ref,
       ...(revisionPacket ? { latestRevisionPacket: revisionPacket } : {})
     });
     const stopped = await stopForProviderStatus(result.run, "verifier", result.response);

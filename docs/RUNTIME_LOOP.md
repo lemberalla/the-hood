@@ -12,13 +12,14 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 5. Delegate scoped task to implementer
 6. Capture diff and implementation notes
 7. Run deterministic validation commands
-8. Ask the mapped read-only QA tester for missed cases and validation suggestions
-9. Ask verifier for verdict using raw evidence
-10. Ask critic when risk or ambiguity warrants it
-11. Write a revision packet and delegate repair when findings are fixable
-12. Ask user, abort, or integrate when runtime policy requires it
-13. Produce final report with evidence
-14. Reconcile planner state against implementation evidence when needed
+8. Write a runtime-owned review-routing artifact from changed paths, protected-path matches, validation evidence, and role state
+9. Ask the mapped read-only QA tester when routing requires behavior or regression review
+10. Ask verifier for verdict using raw evidence
+11. Ask critic when risk or ambiguity warrants it
+12. Write a revision packet and delegate repair when findings are fixable
+13. Ask user, abort, or integrate when runtime policy requires it
+14. Produce final report with evidence
+15. Reconcile planner state against implementation evidence when needed
 ```
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
@@ -36,6 +37,8 @@ Same-run fan-out is a bounded group of summons attached to one run. The current 
 Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, runtime QA/validation, QA tester, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, QA tester responses, critic responses, and read-only summon responses. Each lane carries bounded ownership metadata: owner label, role or runtime owner, provider/model assignment when known, required or optional status, current state, compact summary, and artifact/event refs. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only sidecar evidence, but a summon does not satisfy or replace a required verifier or runtime QA/validation lane.
 
 Critic triggers are runtime decisions, not model decisions. When QA, verifier, or deterministic validation evidence indicates risk, the runtime can invoke the configured read-only critic and write a `critic_trigger` artifact with the reason code, source roles, evidence refs, and critic response ref. The critic can recommend revision or missing evidence, but it cannot edit, satisfy validation, approve completion, or replace verifier ownership.
+
+Review routing is a runtime decision, not a model decision. After deterministic validation evidence is captured, the runtime writes a `review_routing` artifact with a conservative risk tier, required lanes, skipped-role reasons, and compact signals. The first policy slice keeps verifier review required for implementation runs, gates model-assisted QA by risk, and keeps critic escalation controlled by critic policy. Low risk is intentionally narrow, such as docs/copy-only changes with passing deterministic validation; runtime, provider, approval, artifact, CLI/TUI behavior, MCP, protected-path, dependency, network, schema, or validation changes route to stronger review.
 
 Revision packets are runtime repair handoffs, not reviewer authority. When QA returns `needs_revision`, verifier returns `revise`, or critic returns `needs_revision`, the runtime writes a compact `revision_packet` artifact and moves the run back to `implementing` with that packet in the implementer directive context. The next QA/verifier pass must use fresh post-repair runtime evidence. Verifier `ask_user` or `abort`, protected test gates, unsafe critic feedback, max-iteration failures, and other hard policy gates still stop instead of silently revising.
 
@@ -132,6 +135,7 @@ The runtime captures evidence directly:
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
 - derived review ownership metadata for verifier, runtime QA/validation, model-assisted QA tester, critic, and read-only summon evidence
+- review routing artifacts explaining risk tier, required lanes, skipped roles, and routing reasons
 - critic trigger artifacts explaining why an advisory critic was called
 - revision packet artifacts explaining why repair was delegated back to the implementer
 - external transfer manifest artifacts before approved provider transfers
@@ -145,7 +149,7 @@ TheHood's memory is canonical runtime state, not provider session context. Exact
 
 Provider directives should assume that browser and API conversation context may be stale or empty. The runtime rehydrates providers from bounded packets that point back to exact artifacts.
 
-Each provider directive includes a bounded `canonicalMemory` object. It is a refs-only project memory index containing the current run snapshot, recent run summaries, and latest progress packet, reconciliation, repo context, final report, and transfer manifest refs when available. It does not include large artifact bodies. Providers must treat this runtime-owned memory as authoritative and ignore stale provider session context unless that context is repeated in the directive.
+Each provider directive includes a bounded `canonicalMemory` object. It is a refs-only project memory index containing the current run snapshot, recent run summaries, and latest progress packet, reconciliation, repo context, final report, review routing, and transfer manifest refs when available. It does not include large artifact bodies. Providers must treat this runtime-owned memory as authoritative and ignore stale provider session context unless that context is repeated in the directive.
 
 ## Final Reports
 
@@ -201,7 +205,8 @@ delegating
   -> verifying
   -> git evidence capture
   -> package validation command capture
-  -> mapped QA tester response
+  -> review routing artifact capture
+  -> mapped QA tester response when required by routing
   -> critic response when runtime trigger policy detects QA, verifier, or validation risk
   -> revision packet and implementer repair pass when QA, critic, or verifier returns a fixable revision finding
   -> verifier response

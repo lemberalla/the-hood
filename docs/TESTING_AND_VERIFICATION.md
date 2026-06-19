@@ -39,6 +39,7 @@ Current implementation:
 - `thehood exec <run-id> -- <command> [args...]` captures command logs as artifacts.
 - `thehood evidence <run-id>` captures git status, git diff, and protected path matches.
 - The verification phase discovers package validation scripts in `typecheck`, `test`, `lint`, `build` order, runs the first available script through the runtime command runner, and attaches a validation summary artifact before verifier review.
+- After validation evidence is captured, the runtime attaches a `review_routing` artifact that classifies implementation risk and records which subjective review lanes are required or skipped.
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.
@@ -118,6 +119,19 @@ Examples:
 
 The runtime should prefer existing project validation commands.
 
+## Review Routing
+
+Deterministic validation is always required for implementation verification.
+
+The current routing policy is conservative:
+
+- Verifier review remains required for implementation runs when a verifier is assigned.
+- Model-assisted QA is risk-gated. It runs for standard or high-risk implementation evidence and can be skipped for narrow docs/copy-only changes.
+- Critic remains escalation-only and is triggered from QA, verifier, or validation evidence by runtime policy.
+- Missing verifier assignment stops at an approval gate instead of silently completing.
+
+The `review_routing` artifact records the risk tier, action, required lanes, skipped roles, compact signals, and reasons. It is display and orchestration evidence; it does not replace validation logs, QA output, verifier verdicts, or critic trigger artifacts.
+
 ## Verdicts
 
 | Verdict | Meaning |
@@ -153,3 +167,4 @@ evidence:
 - A model QA response is treated as proof that validation commands passed.
 - A critic response is treated as proof that implementation is accepted or deterministic validation passed.
 - A stale pre-revision verifier or validation result is treated as satisfying the post-repair review gate.
+- A risk-routing decision is treated as proof that code behavior is correct without validation and verifier evidence.

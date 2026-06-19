@@ -289,6 +289,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("canonical_memory_rehydrat
 assert.ok(doctorContent.runtime.capabilities.includes("provider_directive_ack"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
+assert.ok(doctorContent.runtime.capabilities.includes("review_routing_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_session_isolation"));
@@ -1503,5 +1504,27 @@ assert.equal(loopCreate[1].result.structuredContent.status, "awaiting_approval")
 assert.equal(loopContinue[1].result.structuredContent.status, "completed");
 assert.equal(loopContinue[1].result.structuredContent.provider_response_count, 4);
 assert.equal(loopContinue[1].result.structuredContent.provider_responses.at(-1).data.verificationResult.verdict, "approve");
+const loopReviewRoutingArtifact = loopContinue[1].result.structuredContent.artifacts.find(
+  (artifact) => artifact.kind === "review_routing"
+);
+assert.ok(loopReviewRoutingArtifact, "MCP loop result should include review routing artifact evidence");
+const loopRoutingStatus = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_status",
+      arguments: {
+        run_id: loopRunId,
+        repo_path: loopRepoPath
+      }
+    }
+  }
+]);
+assert.equal(loopRoutingStatus[1].result.structuredContent.insights.latestReviewRouting.riskTier, "medium");
+assert.equal(loopRoutingStatus[1].result.structuredContent.insights.latestReviewRouting.required.qa, true);
+assert.equal(loopRoutingStatus[1].result.structuredContent.insights.latestReviewRouting.required.verifier, true);
 
 process.stdout.write(`MCP smoke passed using ${repoPath}\n`);
