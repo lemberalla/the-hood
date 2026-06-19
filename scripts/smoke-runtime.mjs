@@ -2476,6 +2476,7 @@ const schemaContext = {
 };
 const codexArgs = buildCodexCliArgs(fakeVerifierRequest, schemaContext);
 assert.deepEqual(codexArgs.slice(0, 5), ["exec", "--cd", loopRepoPath, "--sandbox", "read-only"]);
+assert.equal(codexArgs.includes("--ask-for-approval"), false);
 assert.equal(codexArgs.includes("--output-schema"), true);
 assert.equal(codexArgs[codexArgs.indexOf("--output-schema") + 1], schemaContext.schemaPath);
 assert.equal(codexArgs.at(-1), "-");

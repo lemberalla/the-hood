@@ -12,8 +12,6 @@ export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentComm
     context.workspacePath,
     "--sandbox",
     sandboxForRequest(request),
-    "--ask-for-approval",
-    "never",
     "--color",
     "never",
     "--skip-git-repo-check",
