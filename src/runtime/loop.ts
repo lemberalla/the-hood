@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { requiredAssignment, runAgent } from "./agentRunner.js";
 import {
   autopilotApprovalReason,
+  autopilotPolicyReason,
   autoApprovalReason,
   evaluateExternalTransferPolicy,
   isAutopilotEnabled
@@ -90,6 +91,8 @@ const autoApproveGate = async (
       createEvent("approval_auto_approved", approvalReason, {
         gate: input.gate,
         gateReason: input.reason,
+        policyDecision: "auto_approve",
+        policyReason: autopilotPolicyReason(input.gate),
         ...(input.data ?? {})
       })
     ]

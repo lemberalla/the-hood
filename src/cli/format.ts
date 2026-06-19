@@ -121,6 +121,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
 
   const response = insights.latestAgentResponse;
   const finalReport = insights.finalReport;
+  const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
 
   return [
     ...(response
@@ -141,6 +142,17 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           `  artifact: ${finalReport.artifact.ref}`,
           ...(finalReport.stopReason ? [`  stopReason: ${finalReport.stopReason}`] : []),
           `  inspect: thehood artifact ${run.runId} ${quoteArg(finalReport.artifact.ref)} --repo ${quoteArg(run.repoPath)}`
+        ]
+      : []),
+    ...(autopilotApprovals.length > 0
+      ? [
+          "",
+          "recent autopilot approvals:",
+          ...autopilotApprovals.flatMap((approval) => [
+            `  ${approval.createdAt}  ${approval.gate ?? "autopilot"}  ${approval.policyReason ?? approval.message}`,
+            ...(approval.artifact ? [`    artifact: ${approval.artifact.ref}`] : []),
+            ...(approval.sourceArtifact ? [`    source: ${approval.sourceArtifact.ref}`] : [])
+          ])
         ]
       : []),
     ...(insights.issues.length > 0

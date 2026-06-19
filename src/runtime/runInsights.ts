@@ -1,5 +1,7 @@
 import { readRunArtifact } from "./artifacts.js";
+import { recentAutopilotApprovalsFromRuns } from "./approvalInbox.js";
 import type { AgentResponse } from "../providers/types.js";
+import type { AutopilotApproval } from "./approvalInbox.js";
 import type { JsonObject, RunArtifact, RunRecord } from "./types.js";
 
 export interface RunArtifactSummary {
@@ -27,6 +29,7 @@ export interface FinalReportInsight {
 export interface RunInsights {
   latestAgentResponse?: LatestAgentResponseInsight;
   finalReport?: FinalReportInsight;
+  recentAutopilotApprovals: AutopilotApproval[];
   issues: string[];
 }
 
@@ -155,7 +158,10 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
     ? parseAgentResponse(latestAgent, latestAgentPayload, issues)
     : undefined;
 
-  const insights: RunInsights = { issues };
+  const insights: RunInsights = {
+    recentAutopilotApprovals: recentAutopilotApprovalsFromRuns([run]),
+    issues
+  };
 
   if (latestAgentResponse) {
     insights.latestAgentResponse = latestAgentResponse;

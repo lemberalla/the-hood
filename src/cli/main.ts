@@ -20,7 +20,7 @@ import {
   listRuns,
   recordApproval
 } from "../runtime/runtime.js";
-import { approvalMessageHint, pendingApprovalsFromRuns } from "../runtime/approvalInbox.js";
+import { approvalInboxViewFromRuns, approvalMessageHint } from "../runtime/approvalInbox.js";
 import {
   approvalDecisions,
   runModes,
@@ -654,22 +654,22 @@ const handleUi = async (
   const health = await inspectRuntimeHealth(config);
   const browser = await inspectBrowser(browserOptionsFromCli(options));
   const runs = await listRuns(repoPath);
-  const pendingApprovals = pendingApprovalsFromRuns(runs);
+  const approvalInbox = approvalInboxViewFromRuns(runs);
   const dashboard = {
     repoPath,
     health,
     browser,
     approvalPolicy: config.approvalPolicy,
-    pendingApprovals
+    approvalInbox
   };
 
   if (shouldPrintJson(options)) {
-    printJson(subcommand === "approvals" ? pendingApprovals : dashboard);
+    printJson(subcommand === "approvals" ? approvalInbox : dashboard);
     return;
   }
 
   process.stdout.write(
-    `${subcommand === "approvals" ? renderApprovalInbox(pendingApprovals) : renderDashboard(dashboard)}\n`
+    `${subcommand === "approvals" ? renderApprovalInbox(approvalInbox) : renderDashboard(dashboard)}\n`
   );
 };
 

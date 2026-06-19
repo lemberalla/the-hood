@@ -19,6 +19,9 @@ export const isAutopilotEnabled = (config: TheHoodConfig): boolean =>
 export const autopilotApprovalReason = (summary: string): string =>
   `Auto-approved by TheHood autopilot policy: ${summary}`;
 
+export const autopilotPolicyReason = (gate: string): string =>
+  `Approval policy autopilot allowed ${gate}.`;
+
 const ruleMatches = (
   rule: ExternalTransferPolicyRule,
   manifest: ExternalTransferManifest

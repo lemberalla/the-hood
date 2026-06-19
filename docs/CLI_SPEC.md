@@ -248,7 +248,7 @@ It checks:
 
 `thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.
 
-The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints only pending approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands.
+The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints pending manual approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands. It also shows recent autopilot approvals separately so operators can see what was auto-approved, why it qualified, and which artifact or transfer manifest was involved.
 
 Approval actions can be triggered without retyping the required approval phrase:
 

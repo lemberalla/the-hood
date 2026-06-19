@@ -557,7 +557,8 @@ assert.ok(approvalInbox.stdout.includes("Approval Gates"));
 assert.ok(approvalInbox.stdout.includes("[approve]"));
 assert.ok(approvalInbox.stdout.includes(`--approve ${externalContextPlan.runId}`));
 const approvalInboxJson = JSON.parse((await runCli(["ui", "approvals", "--repo", repoPath, "--json"])).stdout);
-assert.ok(approvalInboxJson.some((approval) => approval.runId === externalContextPlan.runId));
+assert.ok(approvalInboxJson.pendingApprovals.some((approval) => approval.runId === externalContextPlan.runId));
+assert.ok(Array.isArray(approvalInboxJson.recentAutopilotApprovals));
 const uiApprovalResult = JSON.parse(
   (await runCli(["ui", "approvals", "--repo", repoPath, "--approve", externalContextPlan.runId, "--json"])).stdout
 );
@@ -825,7 +826,11 @@ assert.ok(
 );
 assert.ok(
   autopilotCompleted.run.events.some(
-    (event) => event.type === "approval_auto_approved" && event.data?.gate === "provider_invocation"
+    (event) =>
+      event.type === "approval_auto_approved" &&
+      event.data?.gate === "provider_invocation" &&
+      event.data?.policyDecision === "auto_approve" &&
+      event.data?.policyReason.includes("autopilot allowed provider_invocation")
   )
 );
 assert.ok(
@@ -836,6 +841,26 @@ assert.ok(
       event.data?.policyReason.includes("autopilot allowed")
   )
 );
+const autopilotStatus = JSON.parse(
+  (await runCli(["status", autopilotPlan.runId, "--repo", repoPath, "--json"])).stdout
+);
+assert.ok(autopilotStatus.insights.recentAutopilotApprovals.length >= 2);
+assert.ok(
+  autopilotStatus.insights.recentAutopilotApprovals.some(
+    (approval) => approval.gate === "provider_invocation"
+  )
+);
+const autopilotApprovalInbox = JSON.parse(
+  (await runCli(["ui", "approvals", "--repo", repoPath, "--json"])).stdout
+);
+assert.ok(
+  autopilotApprovalInbox.recentAutopilotApprovals.some(
+    (approval) => approval.runId === autopilotPlan.runId && approval.gate === "provider_invocation"
+  )
+);
+const autopilotApprovalInboxText = await runCli(["ui", "approvals", "--repo", repoPath]);
+assert.ok(autopilotApprovalInboxText.stdout.includes("Autopilot History"));
+assert.ok(autopilotApprovalInboxText.stdout.includes("provider_invocation"));
 const resetAutoLowRiskPolicy = JSON.parse(
   (
     await runCli([

@@ -1,4 +1,4 @@
-import type { RunArtifact, RunRecord } from "./types.js";
+import type { JsonObject, RunArtifact, RunEvent, RunRecord } from "./types.js";
 
 export interface PendingApprovalArtifact {
   kind: RunArtifact["kind"];
@@ -19,6 +19,31 @@ export interface PendingApproval {
   artifacts: PendingApprovalArtifact[];
 }
 
+export interface AutopilotApproval {
+  runId: string;
+  createdAt: string;
+  updatedAt: string;
+  repoPath: string;
+  mode: RunRecord["mode"];
+  state: RunRecord["state"];
+  goal: string;
+  message: string;
+  gate?: string;
+  gateReason?: string;
+  policyDecision?: string;
+  policyReason?: string;
+  artifact?: PendingApprovalArtifact;
+  sourceArtifact?: PendingApprovalArtifact;
+  transfer?: JsonObject;
+}
+
+export interface ApprovalInboxView {
+  pendingApprovals: PendingApproval[];
+  recentAutopilotApprovals: AutopilotApproval[];
+}
+
+const defaultAutopilotApprovalLimit = 8;
+
 export const approvalMessageHint = (run: RunRecord): string => {
   const reason = run.approvalReason ?? "";
   const quoted = reason.match(/"([^"]+)"/)?.[1];
@@ -33,6 +58,14 @@ export const approvalMessageHint = (run: RunRecord): string => {
 
   return `I approve the next TheHood transition for run ${run.runId}.`;
 };
+
+const stringField = (value: unknown): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
+const objectField = (value: unknown): JsonObject | undefined =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as JsonObject
+    : undefined;
 
 const artifactForRef = (run: RunRecord, artifactRef: unknown): PendingApprovalArtifact | undefined => {
   if (typeof artifactRef !== "string") {
@@ -49,6 +82,63 @@ const artifactForRef = (run: RunRecord, artifactRef: unknown): PendingApprovalAr
     ref: artifact.ref,
     summary: artifact.summary
   };
+};
+
+const autopilotApprovalForEvent = (
+  run: RunRecord,
+  event: RunEvent
+): AutopilotApproval | undefined => {
+  if (event.type !== "approval_auto_approved") {
+    return undefined;
+  }
+
+  const gate = stringField(event.data?.gate) ?? stringField(event.data?.reason);
+  const gateReason = stringField(event.data?.gateReason);
+  const policyDecision = stringField(event.data?.policyDecision);
+  const policyReason = stringField(event.data?.policyReason);
+  const artifact = artifactForRef(run, event.data?.artifactRef);
+  const sourceArtifact = artifactForRef(run, event.data?.sourceArtifactRef);
+  const transfer = objectField(event.data?.transfer);
+  const approval: AutopilotApproval = {
+    runId: run.runId,
+    createdAt: event.createdAt,
+    updatedAt: run.updatedAt,
+    repoPath: run.repoPath,
+    mode: run.mode,
+    state: run.state,
+    goal: run.userGoal,
+    message: event.message
+  };
+
+  if (gate) {
+    approval.gate = gate;
+  }
+
+  if (gateReason) {
+    approval.gateReason = gateReason;
+  }
+
+  if (policyDecision) {
+    approval.policyDecision = policyDecision;
+  }
+
+  if (policyReason) {
+    approval.policyReason = policyReason;
+  }
+
+  if (artifact) {
+    approval.artifact = artifact;
+  }
+
+  if (sourceArtifact) {
+    approval.sourceArtifact = sourceArtifact;
+  }
+
+  if (transfer) {
+    approval.transfer = transfer;
+  }
+
+  return approval;
 };
 
 const compactArtifacts = (artifacts: Array<PendingApprovalArtifact | undefined>): PendingApprovalArtifact[] => {
@@ -106,3 +196,24 @@ export const pendingApprovalsFromRuns = (runs: RunRecord[]): PendingApproval[] =
     .map(pendingApprovalForRun)
     .filter((approval): approval is PendingApproval => approval !== undefined)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+
+export const recentAutopilotApprovalsFromRuns = (
+  runs: RunRecord[],
+  limit = defaultAutopilotApprovalLimit
+): AutopilotApproval[] =>
+  runs
+    .flatMap((run) =>
+      run.events
+        .map((event) => autopilotApprovalForEvent(run, event))
+        .filter((approval): approval is AutopilotApproval => approval !== undefined)
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, limit);
+
+export const approvalInboxViewFromRuns = (
+  runs: RunRecord[],
+  limit = defaultAutopilotApprovalLimit
+): ApprovalInboxView => ({
+  pendingApprovals: pendingApprovalsFromRuns(runs),
+  recentAutopilotApprovals: recentAutopilotApprovalsFromRuns(runs, limit)
+});

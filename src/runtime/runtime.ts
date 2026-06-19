@@ -1,5 +1,5 @@
 import { loadConfig } from "./config.js";
-import { autopilotApprovalReason, isAutopilotEnabled } from "./approvalPolicy.js";
+import { autopilotApprovalReason, autopilotPolicyReason, isAutopilotEnabled } from "./approvalPolicy.js";
 import { InputError } from "./errors.js";
 import { newId, nowIso } from "./ids.js";
 import { assertRoleInvariants } from "./permissions.js";
@@ -150,8 +150,11 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     run.approvalRequired = false;
     run.approvalEvents.push(createApprovalEvent("approve", approvalReason));
     run.events.push(createEvent("approval_auto_approved", approvalReason, {
+      gate: "implementation_start",
       reason: "implementation_start",
       gateReason: initial.reason,
+      policyDecision: "auto_approve",
+      policyReason: autopilotPolicyReason("implementation_start"),
       policyMode: config.approvalPolicy.mode
     }));
   } else if (initial.reason) {

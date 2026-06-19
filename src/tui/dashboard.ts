@@ -1,5 +1,5 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
-import type { PendingApproval } from "../runtime/approvalInbox.js";
+import type { ApprovalInboxView, AutopilotApproval, PendingApproval } from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { ApprovalPolicy } from "../runtime/types.js";
@@ -9,7 +9,7 @@ export interface DashboardInput {
   health: RuntimeHealthReport;
   browser: BrowserStatus;
   approvalPolicy: ApprovalPolicy;
-  pendingApprovals: PendingApproval[];
+  approvalInbox: ApprovalInboxView;
 }
 
 const wideLogo = [
@@ -99,6 +99,16 @@ const transferPreviewCommand = (approval: PendingApproval): string =>
     quoteArg(approval.repoPath)
   ].join(" ");
 
+const autopilotTransferPreviewCommand = (approval: AutopilotApproval): string =>
+  [
+    "thehood",
+    "transfer",
+    "preview",
+    approval.runId,
+    "--repo",
+    quoteArg(approval.repoPath)
+  ].join(" ");
+
 const approvalLines = (approval: PendingApproval, index: number): string[] => [
   `  [${index + 1}] ${approval.runId}  ${approval.mode}  ${approval.state}`,
   `      goal    ${truncate(approval.goal, 96)}`,
@@ -120,11 +130,33 @@ const approvalLines = (approval: PendingApproval, index: number): string[] => [
   `        [resume]  thehood continue ${approval.runId} --repo ${quoteArg(approval.repoPath)}`
 ];
 
-export const renderApprovalInbox = (approvals: PendingApproval[]): string => [
+const autopilotApprovalLines = (approval: AutopilotApproval, index: number): string[] => [
+  `  [${index + 1}] ${approval.runId}  ${approval.mode}  ${approval.state}`,
+  `      gate    ${approval.gate ?? "autopilot"}`,
+  `      goal    ${truncate(approval.goal, 96)}`,
+  `      reason  ${truncate(approval.policyReason ?? approval.message, 120)}`,
+  ...(approval.artifact
+    ? [`      artifact ${approval.artifact.kind}: ${approval.artifact.summary}`]
+    : []),
+  ...(approval.sourceArtifact
+    ? [`      source  ${approval.sourceArtifact.kind}: ${approval.sourceArtifact.summary}`]
+    : []),
+  ...(approval.artifact?.kind === "transfer_manifest"
+    ? [`      preview ${autopilotTransferPreviewCommand(approval)}`]
+    : [])
+];
+
+export const renderApprovalInbox = (inbox: ApprovalInboxView): string => [
   "Approval Gates",
-  ...(approvals.length > 0
-    ? approvals.flatMap(approvalLines)
-    : ["  no pending approval gates"])
+  "  autopilot still stops for protected test changes, secret-risk transfers, and destructive/dependency/network commands",
+  ...(inbox.pendingApprovals.length > 0
+    ? inbox.pendingApprovals.flatMap(approvalLines)
+    : ["  no pending manual approval gates"]),
+  "",
+  "Autopilot History",
+  ...(inbox.recentAutopilotApprovals.length > 0
+    ? inbox.recentAutopilotApprovals.flatMap(autopilotApprovalLines)
+    : ["  no recent autopilot approvals"])
 ].join("\n");
 
 const automationLines = (input: DashboardInput): string[] => {
@@ -169,7 +201,7 @@ export const renderDashboard = (input: DashboardInput): string => {
     "Roles",
     ...roleLines(input.health),
     "",
-    renderApprovalInbox(input.pendingApprovals),
+    renderApprovalInbox(input.approvalInbox),
     "",
     "Next Actions",
     ...(actions.length > 0 ? actions.map((action) => `  > ${action}`) : ["  > no immediate action"])
