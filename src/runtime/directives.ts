@@ -63,12 +63,14 @@ const roleInstructions: Record<RuntimeRole, string[]> = {
     "Do not edit files directly.",
     "Delegate the smallest useful task to one role at a time.",
     "Ask for approval when policy, uncertainty, or protected paths require it.",
+    "When approvalPolicy.mode is autopilot, do not ask the user to approve bounded gates the runtime can enforce.",
     "Return structured data matching the output contract."
   ],
   planner: [
     "Inspect provided context before proposing work.",
     "Separate facts from assumptions.",
     "Prefer minimal, reversible steps.",
+    "When approvalPolicy.mode is autopilot, plan around runtime-enforced gates instead of asking for user approval.",
     "Return structured data matching the output contract."
   ],
   researcher: [
@@ -150,6 +152,7 @@ export const buildAgentDirective = async (
         constraints: run.constraints,
         maxIterations: run.maxIterations,
         approvalPolicy: {
+          mode: config.approvalPolicy.mode,
           editRequiresApproval: config.defaults.editRequiresApproval,
           dependencyInstallRequiresApproval: config.defaults.dependencyInstallRequiresApproval,
           networkRequiresApproval: config.defaults.networkRequiresApproval,

@@ -387,7 +387,16 @@ const isAgentResponse = (value: unknown): value is AgentResponse => {
   );
 };
 
-const unwrapAgentResponse = (value: unknown): unknown => {
+const hasRequiredDataKey = (response: AgentResponse, requiredDataKey: string | undefined): boolean => {
+  if (!requiredDataKey) {
+    return true;
+  }
+
+  const payload = response.data[requiredDataKey];
+  return payload !== null && typeof payload === "object" && !Array.isArray(payload);
+};
+
+const unwrapAgentResponse = (value: unknown, requiredDataKey?: string): unknown => {
   if (isAgentResponse(value)) {
     return value;
   }
@@ -399,7 +408,7 @@ const unwrapAgentResponse = (value: unknown): unknown => {
   const candidate = value as { result?: unknown; message?: unknown };
 
   if (typeof candidate.result === "string") {
-    return parseAgentResponse(candidate.result) ?? value;
+    return parseAgentResponse(candidate.result, requiredDataKey) ?? value;
   }
 
   if (candidate.result !== undefined) {
@@ -407,18 +416,18 @@ const unwrapAgentResponse = (value: unknown): unknown => {
   }
 
   if (typeof candidate.message === "string") {
-    return parseAgentResponse(candidate.message) ?? value;
+    return parseAgentResponse(candidate.message, requiredDataKey) ?? value;
   }
 
   return value;
 };
 
-const parseAgentResponse = (text: string): AgentResponse | undefined => {
+const parseAgentResponse = (text: string, requiredDataKey?: string): AgentResponse | undefined => {
   for (const candidate of jsonCandidateStrings(text)) {
     const parsed = tryParseJson(candidate);
-    const unwrapped = unwrapAgentResponse(parsed);
+    const unwrapped = unwrapAgentResponse(parsed, requiredDataKey);
 
-    if (isAgentResponse(unwrapped)) {
+    if (isAgentResponse(unwrapped) && hasRequiredDataKey(unwrapped, requiredDataKey)) {
       return unwrapped;
     }
   }
@@ -700,6 +709,7 @@ const waitForAgentResponse = async (
   client: CdpClient,
   responseSelector: string,
   previousResponses: string[],
+  requiredDataKey: string,
   timeoutMs: number
 ): Promise<{ response?: AgentResponse; browserError?: string; bridgeError?: string; diagnostics: ResponseDiagnostics }> => {
   const startedAt = Date.now();
@@ -735,7 +745,7 @@ const waitForAgentResponse = async (
     };
 
     for (const candidate of candidates) {
-      const response = parseAgentResponse(candidate);
+      const response = parseAgentResponse(candidate, requiredDataKey);
       if (response) {
         return {
           response,
@@ -809,7 +819,13 @@ const run = async (): Promise<AgentResponse> => {
       return fallback(requiredDataKey, `ChatGPT Web bridge could not send prompt: ${sent.error ?? "unknown error"}`);
     }
 
-    const result = await waitForAgentResponse(client, options.responseSelector, before, options.timeoutMs);
+    const result = await waitForAgentResponse(
+      client,
+      options.responseSelector,
+      before,
+      requiredDataKey,
+      options.timeoutMs
+    );
 
     if (result.response) {
       return result.response;
