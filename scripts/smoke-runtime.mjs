@@ -137,10 +137,12 @@ assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_acti
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
+assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
+assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -317,6 +319,52 @@ const resumedPlan = JSON.parse((await runCli(["continue", strandedPlan.runId, "-
 assert.equal(resumedPlan.run.state, "completed");
 assert.equal(resumedPlan.providerResponses.length, 1);
 assert.equal(resumedPlan.providerResponses[0].status, "ok");
+
+const summonPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "summon a QA critic on the same run",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+const summonResult = JSON.parse(
+  (
+    await runCli([
+      "summon",
+      summonPlan.runId,
+      "--repo",
+      repoPath,
+      "--role",
+      "critic",
+      "--agent",
+      "stub:critic",
+      "--kind",
+      "qa",
+      "--brief",
+      "QA this planning slice without editing files.",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(summonResult.role, "critic");
+assert.equal(summonResult.summonKind, "qa");
+assert.equal(summonResult.providerResponses.length, 1);
+assert.equal(summonResult.providerResponses[0].data.critiqueResult.verdict, "acceptable");
+assert.equal(summonResult.responseArtifact.kind, "agent");
+assert.ok(summonResult.run.events.some((event) => event.type === "agent_summoned"));
+assert.ok(summonResult.run.events.some((event) => event.type === "summon_response"));
+assert.ok(summonResult.run.events.some((event) => event.type === "summon_completed"));
+assert.ok(
+  summonResult.run.handoffs.some((handoff) => handoff.kind === "agent_handoff" && handoff.toRole === "critic")
+);
+const summonStatus = JSON.parse((await runCli(["status", summonPlan.runId, "--repo", repoPath, "--json"])).stdout);
+assert.equal(summonStatus.insights.latestAgentResponse.primaryOutputKey, "critiqueResult");
 
 await fs.writeFile(path.join(repoPath, "README.md"), "# Smoke Repo\n\nProvider milestone notes.\n", "utf8");
 await fs.mkdir(path.join(repoPath, "src", "providers"), { recursive: true });

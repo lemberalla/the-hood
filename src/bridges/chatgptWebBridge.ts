@@ -19,6 +19,7 @@ interface BridgeOptions {
   schemaPath: string;
   cdpUrl: string;
   timeoutMs: number;
+  commandTimeoutMs: number;
   promptSelector: string;
   sendSelector: string;
   responseSelector: string;
@@ -50,6 +51,7 @@ const defaultOptions: BridgeOptions = {
   schemaPath: "",
   cdpUrl: process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222",
   timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 300_000),
+  commandTimeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_CDP_COMMAND_TIMEOUT_MS ?? 15_000),
   promptSelector:
     process.env.THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR ?? "#prompt-textarea,[contenteditable='true'],textarea",
   sendSelector:
@@ -112,6 +114,9 @@ const parseArgs = (argv: string[]): BridgeOptions => {
       case "--timeout-ms":
         options.timeoutMs = Number(next);
         break;
+      case "--command-timeout-ms":
+        options.commandTimeoutMs = Number(next);
+        break;
       case "--prompt-selector":
         options.promptSelector = next;
         break;
@@ -134,6 +139,10 @@ const parseArgs = (argv: string[]): BridgeOptions => {
 
   if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) {
     throw new Error("--timeout-ms must be a positive number.");
+  }
+
+  if (!Number.isFinite(options.commandTimeoutMs) || options.commandTimeoutMs <= 0) {
+    throw new Error("--command-timeout-ms must be a positive number.");
   }
 
   return options;
@@ -200,11 +209,74 @@ const fallback = (requiredDataKey: string, summary: string, status: AgentRespons
   }
 });
 
+const repairMissingClosingBraces = (text: string): string | undefined => {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) {
+    return undefined;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (const char of trimmed) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth < 0) {
+        return undefined;
+      }
+    }
+  }
+
+  if (inString || depth <= 0 || depth > 3) {
+    return undefined;
+  }
+
+  return `${trimmed}${"}".repeat(depth)}`;
+};
+
 const tryParseJson = (text: string): unknown | undefined => {
   try {
     return JSON.parse(text);
   } catch {
-    return undefined;
+    const repaired = repairMissingClosingBraces(text);
+    if (!repaired) {
+      return undefined;
+    }
+
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return undefined;
+    }
   }
 };
 
@@ -381,14 +453,27 @@ const findChatGptTarget = async (cdpUrl: string): Promise<ChromeTarget> => {
   return target;
 };
 
-const connectCdp = async (webSocketUrl: string): Promise<CdpClient> => {
+const connectCdp = async (webSocketUrl: string, commandTimeoutMs: number): Promise<CdpClient> => {
   let nextId = 1;
-  const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
+  const pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+  >();
   const socket = new WebSocket(webSocketUrl);
 
   await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", resolve);
-    socket.addEventListener("error", () => reject(new Error("Could not connect to Chrome DevTools websocket.")));
+    const timer = setTimeout(() => {
+      reject(new Error(`Could not connect to Chrome DevTools websocket within ${commandTimeoutMs}ms.`));
+      socket.close();
+    }, commandTimeoutMs);
+    socket.addEventListener("open", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timer);
+      reject(new Error("Could not connect to Chrome DevTools websocket."));
+    });
   });
 
   socket.addEventListener("message", (event) => {
@@ -410,6 +495,7 @@ const connectCdp = async (webSocketUrl: string): Promise<CdpClient> => {
     }
 
     pending.delete(message.id);
+    clearTimeout(callbacks.timer);
 
     if (message.error) {
       callbacks.reject(new Error(message.error.message ?? "Chrome DevTools command failed."));
@@ -421,6 +507,7 @@ const connectCdp = async (webSocketUrl: string): Promise<CdpClient> => {
 
   socket.addEventListener("close", () => {
     for (const callbacks of pending.values()) {
+      clearTimeout(callbacks.timer);
       callbacks.reject(new Error("Chrome DevTools websocket closed."));
     }
     pending.clear();
@@ -431,16 +518,28 @@ const connectCdp = async (webSocketUrl: string): Promise<CdpClient> => {
     nextId += 1;
 
     return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`Chrome DevTools command ${method} timed out after ${commandTimeoutMs}ms.`));
+        socket.close();
+      }, commandTimeoutMs);
       pending.set(id, {
         resolve,
-        reject
+        reject,
+        timer
       });
 
-      socket.send(JSON.stringify({
-        id,
-        method,
-        params
-      }));
+      try {
+        socket.send(JSON.stringify({
+          id,
+          method,
+          params
+        }));
+      } catch (error) {
+        clearTimeout(timer);
+        pending.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   };
 
@@ -602,7 +701,7 @@ const waitForAgentResponse = async (
   responseSelector: string,
   previousResponses: string[],
   timeoutMs: number
-): Promise<{ response?: AgentResponse; browserError?: string; diagnostics: ResponseDiagnostics }> => {
+): Promise<{ response?: AgentResponse; browserError?: string; bridgeError?: string; diagnostics: ResponseDiagnostics }> => {
   const startedAt = Date.now();
   const deadline = Date.now() + timeoutMs;
   const previousText = new Set(previousResponses);
@@ -614,7 +713,16 @@ const waitForAgentResponse = async (
   };
 
   while (Date.now() < deadline) {
-    const responses = await client.evaluate<string[]>(assistantSnapshotExpression(responseSelector));
+    let responses: string[];
+    try {
+      responses = await client.evaluate<string[]>(assistantSnapshotExpression(responseSelector));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        bridgeError: `Chrome DevTools evaluation failed: ${message}`,
+        diagnostics
+      };
+    }
     const newByPosition = responses.slice(previousResponses.length);
     const changedOrNew = responses.filter((response, index) => index >= previousResponses.length || !previousText.has(response));
     const candidates = Array.from(new Set([...newByPosition, ...changedOrNew])).reverse();
@@ -636,7 +744,16 @@ const waitForAgentResponse = async (
       }
     }
 
-    const browserError = await client.evaluate<string | null>(chatGptErrorExpression());
+    let browserError: string | null;
+    try {
+      browserError = await client.evaluate<string | null>(chatGptErrorExpression());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        bridgeError: `Chrome DevTools evaluation failed: ${message}`,
+        diagnostics
+      };
+    }
     if (browserError) {
       return {
         browserError,
@@ -672,7 +789,7 @@ const run = async (): Promise<AgentResponse> => {
   }
 
   const target = await findChatGptTarget(options.cdpUrl);
-  const client = await connectCdp(target.webSocketDebuggerUrl ?? "");
+  const client = await connectCdp(target.webSocketDebuggerUrl ?? "", options.commandTimeoutMs);
 
   try {
     if (!options.reuseChat) {
@@ -700,6 +817,10 @@ const run = async (): Promise<AgentResponse> => {
 
     if (result.browserError) {
       return fallback(requiredDataKey, `ChatGPT reported: ${result.browserError}.`);
+    }
+
+    if (result.bridgeError) {
+      return fallback(requiredDataKey, `ChatGPT Web bridge failed fast: ${result.bridgeError}.`, "failed");
     }
 
     return fallback(

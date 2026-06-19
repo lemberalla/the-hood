@@ -148,6 +148,10 @@ assert.ok(
   "tools/list should expose thehood_consult"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_summon"),
+  "tools/list should expose thehood_summon"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_reconcile"),
   "tools/list should expose thehood_reconcile"
 );
@@ -169,6 +173,33 @@ assert.ok(
 );
 assert.equal(happyPath[2].result.structuredContent.status, "created");
 assert.equal(happyPath[2].result.structuredContent.mode, "plan");
+
+const summonPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_summon",
+      arguments: {
+        run_id: happyPath[2].result.structuredContent.run_id,
+        repo_path: repoPath,
+        role: "critic",
+        agent: "stub:critic",
+        kind: "qa",
+        brief: "QA the current run without editing files."
+      }
+    }
+  }
+]);
+const summonContent = summonPath[1].result.structuredContent;
+assert.equal(summonContent.summoned_role, "critic");
+assert.equal(summonContent.summoned_agent, "stub:critic");
+assert.equal(summonContent.summon_kind, "qa");
+assert.equal(summonContent.provider_response_count, 1);
+assert.equal(summonContent.provider_responses[0].data.critiqueResult.verdict, "acceptable");
+assert.equal(summonContent.response_artifact.kind, "agent");
 
 const doctorPath = await runMcp([
   ...baseMessages,
@@ -201,9 +232,11 @@ assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_act
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
+assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
+assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));

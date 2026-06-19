@@ -5,6 +5,7 @@ export const runtimeCapabilities = [
   "protected_integrated_patch_gate",
   "repo_context_external_approval",
   "chatgpt_web_bridge",
+  "chatgpt_web_bridge_fail_fast",
   "chatgpt_browser_manager",
   "cli_artifact_reads",
   "approval_phrase_enforcement",
@@ -21,6 +22,7 @@ export const runtimeCapabilities = [
   "approval_inbox_tui",
   "autopilot_approval_policy",
   "run_status_insights",
+  "same_run_agent_summons",
   "provider_access_modes",
   "mcp_repo_gateway_tools",
   "chatgpt_mcp_connector_mode"

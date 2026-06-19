@@ -256,6 +256,7 @@ for (const expectedTool of [
   "thehood_plan",
   "thehood_orchestrate",
   "thehood_consult",
+  "thehood_summon",
   "thehood_continue",
   "thehood_status",
   "thehood_runs",
@@ -279,9 +280,11 @@ for (const expectedCapability of [
   "max_iteration_enforcement",
   "validation_command_capture",
   "chatgpt_browser_manager",
+  "chatgpt_web_bridge_fail_fast",
   "branded_tui_shell",
   "autopilot_approval_policy",
-  "run_status_insights"
+  "run_status_insights",
+  "same_run_agent_summons"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),

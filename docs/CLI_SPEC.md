@@ -32,6 +32,7 @@ thehood approvals policy set mode autopilot
 thehood approvals policy set external-transfers auto-low-risk
 thehood continue <run-id>
 thehood reconcile <run-id>
+thehood summon <run-id> --role critic --brief "Review this slice" --kind qa
 thehood abort <run-id>
 thehood mcp
 thehood mcp config
@@ -213,6 +214,8 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 `thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, and verifier phases without external model calls.
 
 `thehood reconcile <run-id>` reconciles a completed run by sending its latest `progress` artifact to the configured `planner`, or to the `orchestrator` when no planner is assigned. Browser and API providers such as `chatgpt-web`, `openai-api`, and `anthropic-api` first write a `transfer_manifest` artifact and pause at an approval gate before the progress packet is sent. After approval, the provider response is stored as a `reconciliation` artifact.
+
+`thehood summon <run-id> --role <role> --brief <text>` attaches a read-only same-run agent call to an existing run. Summon roles are `orchestrator`, `planner`, `researcher`, `verifier`, and `critic`; use `--kind qa|review|critique|research|plan` to label the handoff. `--agent provider:model` overrides the role assignment for that one call without changing the run's role mapping. The runtime records an `agent_summoned` event, a typed handoff, directive and response artifacts when the provider runs, and the usual approval gate when a model-backed provider invocation needs approval.
 
 `thehood transfer preview <run-id>` reads the latest `transfer_manifest` artifact for a run without sending anything externally. The preview includes destination provider, purpose, source artifacts, byte counts, hashes, risk class, approval phrase, and a bounded content preview.
 

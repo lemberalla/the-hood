@@ -64,6 +64,7 @@ Implemented tools:
 - `thehood_plan`
 - `thehood_orchestrate`
 - `thehood_consult`
+- `thehood_summon`
 - `thehood_continue`
 - `thehood_reconcile`
 - `thehood_status`
@@ -237,6 +238,30 @@ Output:
   ]
 }
 ```
+
+### `thehood_summon`
+
+Summon a read-only role onto an existing run. This is the same-run path for planner, reviewer, QA, research, and critic work when the response should be attached to the active run instead of a separate consult run.
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string",
+  "role": "orchestrator | planner | researcher | verifier | critic",
+  "brief": "string",
+  "agent": "optional provider:model",
+  "kind": "optional review | qa | critique | research | plan",
+  "persona": "optional short role brief",
+  "constraints": ["string"],
+  "evidence_refs": ["artifact ref"]
+}
+```
+
+The runtime records `agent_summoned`, a typed handoff, and provider directive/response artifacts when the provider runs. A one-call `agent` override does not rewrite the run's role mapping. Model-backed providers still pass through the provider-invocation approval gate; autopilot may auto-approve that bounded gate according to policy.
+
+Output includes the run summary, summoned role, summoned agent, summon kind, stop reason, directive and response artifact refs when present, provider response count, and normalized provider responses.
 
 ### `thehood_continue`
 

@@ -16,6 +16,7 @@ import type {
 } from "./types.js";
 
 export interface RunAgentOptions {
+  assignment?: RoleAssignment;
   responseArtifactKind?: RunArtifactKind;
   responseArtifactNamePrefix?: string;
   responseArtifactSummary?: (response: AgentResponse) => string;
@@ -56,7 +57,7 @@ export const runAgent = async (
   context: JsonObject,
   options: RunAgentOptions = {}
 ): Promise<RunAgentResult> => {
-  const assignment = requiredAssignment(run, role);
+  const assignment = options.assignment ?? requiredAssignment(run, role);
   const adapter = getProviderAdapter(assignment);
   const callId = newId("response");
   const directive = await buildAgentDirective(run, role, assignment, context);

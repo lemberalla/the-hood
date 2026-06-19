@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
 import type { ReconcileRunResult } from "../runtime/reconciliation.js";
+import type { SummonAgentResult } from "../runtime/summons.js";
 import type { ExternalTransferPreview } from "../runtime/externalTransfer.js";
 import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../runtime/browserManager.js";
 import type { RunCommandResult } from "../runtime/commandRunner.js";
@@ -308,6 +309,19 @@ export const formatReconcileRunResult = (result: ReconcileRunResult): string => 
         `inspect: thehood artifact ${result.run.runId} ${quoteArg(result.reconciliationArtifact.ref)} --repo ${quoteArg(result.run.repoPath)}`
       ]
     : []),
+  `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatSummonAgentResult = (result: SummonAgentResult): string => [
+  formatRunSummary(result.run),
+  "",
+  `summonRole: ${result.role}`,
+  `summonKind: ${result.summonKind}`,
+  `agent: ${formatRoleAssignment(result.assignment)}`,
+  `advanced: ${result.advanced}`,
+  `stopReason: ${result.stopReason}`,
+  ...(result.directiveArtifact ? [`directiveArtifact: ${result.directiveArtifact.ref}`] : []),
+  ...(result.responseArtifact ? [`responseArtifact: ${result.responseArtifact.ref}`] : []),
   `providerResponses: ${result.providerResponses.length}`
 ].join("\n");
 

@@ -27,6 +27,21 @@ The same model provider can fill different roles across different runs, but a si
 - Runtime command logs beat model summaries.
 - Test changes must be explicit and separately reviewed.
 
+## Same-Run Summons
+
+A summon is a runtime-owned read-only call to an existing role on an existing run. It is how the runtime can ask a planner, researcher, verifier, or critic to review a slice, perform QA, challenge assumptions, or gather evidence without changing the main loop owner.
+
+Summons carry:
+
+- role
+- kind such as `review`, `qa`, `critique`, `research`, or `plan`
+- brief and optional persona
+- constraints
+- artifact refs used as evidence
+- optional one-call provider assignment
+
+A summon does not grant edit tools, apply patches, accept work, or rewrite the run's role mapping. Model-backed summon providers still require provider-invocation approval unless autopilot policy auto-approves the bounded gate.
+
 ## Orchestrator
 
 The orchestrator owns the strategy, not the filesystem.
@@ -168,4 +183,3 @@ Responsibilities:
 - verify target checkout state
 - ensure no unrelated files are included
 - capture final diff
-

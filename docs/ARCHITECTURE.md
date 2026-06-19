@@ -171,6 +171,8 @@ Providers can expose multiple access modes:
 
 The runtime contract is the same regardless of access mode. The mode changes the transport and who initiates the model call, not who owns permissions, repo access, approvals, logs, or verification.
 
+Same-run summons use the same provider router and role contracts. CLI and MCP can request a read-only planner, researcher, verifier, or critic with a brief and optional one-call provider assignment, but the runtime still builds the directive, records the handoff, enforces approval gates, validates the response, and stores artifacts on the run.
+
 ### Agent Contracts
 
 Each role has a schema-bound contract:

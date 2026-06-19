@@ -13,6 +13,7 @@ import { listProviders } from "../runtime/providers.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
+import { summonAgent } from "../runtime/summons.js";
 import {
   abortRun,
   createRun,
@@ -56,6 +57,7 @@ import {
   formatRunEvents,
   formatRunList,
   formatRunSummary,
+  formatSummonAgentResult,
   printJson
 } from "./format.js";
 import { renderApprovalInbox, renderDashboard } from "../tui/dashboard.js";
@@ -85,6 +87,7 @@ Usage:
   thehood approvals policy [show|set mode manual|auto-low-risk|autopilot|set external-transfers manual|auto-low-risk] [--repo <path>] [--json]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
+  thehood summon <run-id> --role <role> --brief <text> [--agent <provider:model>] [--kind <kind>] [--json]
   thehood transfer preview <run-id> [--repo <path>] [--json]
   thehood abort <run-id> [--repo <path>] [--reason <text>]
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
@@ -103,6 +106,9 @@ Role override options for plan/run:
   --verifier provider:model
   --critic provider:model
   --constraint "text"
+
+Summon roles:
+  orchestrator | planner | researcher | verifier | critic
 `;
 
 const repoFromOptions = (options: Record<string, CliOptionValue>): string =>
@@ -526,6 +532,34 @@ const handleReconcile = async (
   shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatReconcileRunResult(result)}\n`);
 };
 
+const handleSummon = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const roleValue = getStringOption(options, "role");
+  if (!roleValue) {
+    throw new InputError("Option --role is required for summon.");
+  }
+
+  const brief = getStringOption(options, "brief") ?? args.slice(1).join(" ").trim();
+  const agent = getStringOption(options, "agent");
+  const persona = getStringOption(options, "persona");
+  const summonKind = getStringOption(options, "kind");
+  const result = await summonAgent({
+    repoPath: repoFromOptions(options),
+    runId: ensureRunId(args[0]),
+    role: parseRole(roleValue),
+    brief,
+    ...(summonKind ? { summonKind } : {}),
+    ...(persona ? { persona } : {}),
+    ...(agent ? { agent: parseRoleAssignment(agent) } : {}),
+    constraints: getStringListOption(options, "constraint"),
+    evidenceRefs: getStringListOption(options, "evidence")
+  });
+
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatSummonAgentResult(result)}\n`);
+};
+
 const handleTransfer = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -734,6 +768,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "reconcile":
       await handleReconcile(args, parsed.options);
+      return;
+    case "summon":
+      await handleSummon(args, parsed.options);
       return;
     case "transfer":
       await handleTransfer(args, parsed.options);

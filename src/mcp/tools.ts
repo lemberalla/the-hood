@@ -16,6 +16,7 @@ import {
 import { approvalMessageHint } from "../runtime/approvalInbox.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { getRunInsights } from "../runtime/runInsights.js";
+import { summonAgent } from "../runtime/summons.js";
 import type { AgentResponse } from "../providers/types.js";
 import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
@@ -595,6 +596,87 @@ const createConsultTool = (): McpTool => ({
     })
 });
 
+const createSummonTool = (): McpTool => ({
+  definition: {
+    name: "thehood_summon",
+    title: "Summon Same-Run TheHood Agent",
+    description: "Summon a read-only role onto an existing run for planning, review, QA, research, or critique. The runtime records the handoff and enforces provider invocation approval before model-backed calls.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        role: {
+          type: "string",
+          enum: ["orchestrator", "planner", "researcher", "verifier", "critic"]
+        },
+        brief: {
+          type: "string"
+        },
+        agent: {
+          type: "string",
+          description: "Optional one-call provider:model assignment, for example claude-code:default or stub:critic."
+        },
+        kind: {
+          type: "string",
+          description: "Optional summon kind such as review, qa, critique, research, or plan."
+        },
+        persona: {
+          type: "string"
+        },
+        constraints: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        },
+        evidence_refs: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        }
+      },
+      required: ["run_id", "repo_path", "role", "brief"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const agent = optionalString(args, "agent");
+      const kind = optionalString(args, "kind");
+      const persona = optionalString(args, "persona");
+      const result = await summonAgent({
+        repoPath: requiredString(args, "repo_path"),
+        runId: requiredString(args, "run_id"),
+        role: parseRole(requiredString(args, "role")),
+        brief: requiredString(args, "brief"),
+        ...(agent ? { agent: parseRoleAssignment(agent) } : {}),
+        ...(kind ? { summonKind: kind } : {}),
+        ...(persona ? { persona } : {}),
+        constraints: optionalStringList(args, "constraints"),
+        evidenceRefs: optionalStringList(args, "evidence_refs")
+      });
+
+      return {
+        ...runSummary(result.run),
+        summoned_role: result.role,
+        summoned_agent: formatRoleAssignment(result.assignment),
+        summon_kind: result.summonKind,
+        advanced: result.advanced,
+        stop_reason: result.stopReason,
+        directive_artifact: result.directiveArtifact ? artifactSummary(result.directiveArtifact) : null,
+        response_artifact: result.responseArtifact ? artifactSummary(result.responseArtifact) : null,
+        provider_response_count: result.providerResponses.length,
+        provider_responses: agentResponsesSummary(result.providerResponses)
+      };
+    })
+});
+
 const createContinueTool = (): McpTool => ({
   definition: {
     name: "thehood_continue",
@@ -1139,6 +1221,7 @@ export const mcpTools: McpTool[] = [
   createPlanTool(),
   createOrchestrateTool(),
   createConsultTool(),
+  createSummonTool(),
   createContinueTool(),
   createReconcileTool(),
   createTransferPreviewTool(),
