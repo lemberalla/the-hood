@@ -57,6 +57,7 @@ export const formatConfig = (config: TheHoodConfig): string => [
   `  networkRequiresApproval: ${config.defaults.networkRequiresApproval}`,
   "",
   "approval policy:",
+  `  mode: ${config.approvalPolicy.mode}`,
   `  externalTransfers: ${config.approvalPolicy.externalTransfers.mode}`,
   `  maxAutoApproveBytes: ${config.approvalPolicy.externalTransfers.maxAutoApproveBytes}`,
   "",

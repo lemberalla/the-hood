@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.js";
+import { autopilotApprovalReason, isAutopilotEnabled } from "./approvalPolicy.js";
 import { InputError } from "./errors.js";
 import { newId, nowIso } from "./ids.js";
 import { assertRoleInvariants } from "./permissions.js";
@@ -7,6 +8,7 @@ import { saveRun, loadRun, listRuns as loadRuns } from "./store.js";
 import type {
   ApprovalDecision,
   ApprovalEvent,
+  JsonObject,
   RoleMap,
   RunEvent,
   RunMode,
@@ -24,11 +26,12 @@ export interface CreateRunInput {
   constraints?: string[];
 }
 
-const createEvent = (type: string, message: string): RunEvent => ({
+const createEvent = (type: string, message: string, data?: JsonObject): RunEvent => ({
   id: newId("event"),
   createdAt: nowIso(),
   type,
-  message
+  message,
+  ...(data ? { data } : {})
 });
 
 const createApprovalEvent = (decision: ApprovalDecision, reason: string): ApprovalEvent => ({
@@ -141,7 +144,17 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     ]
   };
 
-  if (initial.reason) {
+  if (initial.reason && isAutopilotEnabled(config)) {
+    const approvalReason = autopilotApprovalReason(initial.reason);
+    run.state = approvedStateForRun(run);
+    run.approvalRequired = false;
+    run.approvalEvents.push(createApprovalEvent("approve", approvalReason));
+    run.events.push(createEvent("approval_auto_approved", approvalReason, {
+      reason: "implementation_start",
+      gateReason: initial.reason,
+      policyMode: config.approvalPolicy.mode
+    }));
+  } else if (initial.reason) {
     run.approvalReason = initial.reason;
     run.events.push(createEvent("approval_required", initial.reason));
   }

@@ -87,6 +87,7 @@ export const createDefaultConfig = (): TheHoodConfig => ({
     protectedTestPaths: [...defaultProtectedTestPaths]
   },
   approvalPolicy: {
+    mode: "manual",
     externalTransfers: {
       mode: "manual",
       maxAutoApproveBytes: 200_000,

@@ -280,6 +280,7 @@ for (const expectedCapability of [
   "validation_command_capture",
   "chatgpt_browser_manager",
   "branded_tui_shell",
+  "autopilot_approval_policy",
   "run_status_insights"
 ]) {
   assert.ok(

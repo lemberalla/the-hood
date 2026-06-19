@@ -53,6 +53,7 @@ export interface RuntimeDefaults {
   protectedTestPaths: string[];
 }
 
+export type ApprovalPolicyMode = "manual" | "auto_low_risk" | "autopilot";
 export type ExternalTransferApprovalMode = "manual" | "auto_low_risk";
 export type ExternalTransferPolicyDecision = "manual" | "auto_approve";
 
@@ -72,6 +73,7 @@ export interface ExternalTransferApprovalPolicy {
 }
 
 export interface ApprovalPolicy {
+  mode: ApprovalPolicyMode;
   externalTransfers: ExternalTransferApprovalPolicy;
 }
 

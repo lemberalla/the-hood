@@ -1,6 +1,11 @@
 import fs from "node:fs/promises";
 import { requiredAssignment, runAgent } from "./agentRunner.js";
-import { autoApprovalReason, evaluateExternalTransferPolicy } from "./approvalPolicy.js";
+import {
+  autopilotApprovalReason,
+  autoApprovalReason,
+  evaluateExternalTransferPolicy,
+  isAutopilotEnabled
+} from "./approvalPolicy.js";
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
 import { loadConfig } from "./config.js";
@@ -62,6 +67,51 @@ const createApprovalEvent = (reason: string): ApprovalEvent => ({
   decision: "approve",
   reason
 });
+
+const autoApproveGate = async (
+  run: RunRecord,
+  input: {
+    gate: string;
+    reason: string;
+    state?: RunState;
+    data?: JsonObject;
+  }
+): Promise<RunRecord> => {
+  const { approvalReason: _approvalReason, ...base } = run;
+  const approvalReason = autopilotApprovalReason(input.reason);
+  const updated: RunRecord = {
+    ...base,
+    updatedAt: nowIso(),
+    ...(input.state ? { state: input.state } : {}),
+    approvalRequired: false,
+    approvalEvents: [...run.approvalEvents, createApprovalEvent(approvalReason)],
+    events: [
+      ...run.events,
+      createEvent("approval_auto_approved", approvalReason, {
+        gate: input.gate,
+        gateReason: input.reason,
+        ...(input.data ?? {})
+      })
+    ]
+  };
+
+  await saveRun(updated);
+  return updated;
+};
+
+const autoApproveGateIfEnabled = async (
+  run: RunRecord,
+  input: {
+    gate: string;
+    reason: string;
+    state?: RunState;
+    data?: JsonObject;
+  }
+): Promise<RunRecord | undefined> => {
+  const config = await loadConfig(run.repoPath);
+
+  return isAutopilotEnabled(config) ? autoApproveGate(run, input) : undefined;
+};
 
 const updateRun = async (
   run: RunRecord,
@@ -664,7 +714,7 @@ const stopForProviderInvocationApproval = async (
   run: RunRecord,
   role: RuntimeRole,
   assignment: RoleAssignment
-): Promise<{ run: RunRecord; response: AgentResponse; stopReason: string } | undefined> => {
+): Promise<{ run: RunRecord; gated: boolean; response?: AgentResponse; stopReason?: string } | undefined> => {
   if (
     !readOnlyProvidersRequiringInvocationApproval.has(assignment.provider) ||
     hasProviderResponded(run, role, assignment) ||
@@ -674,6 +724,23 @@ const stopForProviderInvocationApproval = async (
   }
 
   const approvalReason = providerInvocationApprovalReason(role, assignment);
+  const autoApproved = await autoApproveGateIfEnabled(run, {
+    gate: "provider_invocation",
+    reason: approvalReason,
+    data: {
+      role,
+      provider: assignment.provider,
+      model: assignment.model
+    }
+  });
+
+  if (autoApproved) {
+    return {
+      run: autoApproved,
+      gated: false
+    };
+  }
+
   const gated = await updateRun(
     run,
     {
@@ -693,6 +760,7 @@ const stopForProviderInvocationApproval = async (
 
   return {
     run: gated,
+    gated: true,
     response: createApprovalGateResponse(role, approvalReason),
     stopReason: approvalReason
   };
@@ -800,6 +868,10 @@ const executeReadOnlyRun = async (
   const invocationGate = await stopForProviderInvocationApproval(run, role, assignment);
 
   if (invocationGate) {
+    run = invocationGate.run;
+  }
+
+  if (invocationGate?.gated && invocationGate.response && invocationGate.stopReason) {
     return {
       run: invocationGate.run,
       response: invocationGate.response,
@@ -1096,6 +1168,25 @@ const advanceOneStep = async (
 
     if (patchArtifact) {
       const approvalReason = isolatedPatchApprovalReason(patchArtifact);
+      const autoApproved = await autoApproveGateIfEnabled(result.run, {
+        gate: "isolated_patch_application",
+        reason: approvalReason,
+        state: "integrating",
+        data: {
+          artifactRef: patchArtifact.ref,
+          artifactSummary: patchArtifact.summary
+        }
+      });
+
+      if (autoApproved) {
+        return {
+          run: autoApproved,
+          response: result.response,
+          advanced: true,
+          stopReason: approvalReason
+        };
+      }
+
       const gated = await updateRun(
         result.run,
         {

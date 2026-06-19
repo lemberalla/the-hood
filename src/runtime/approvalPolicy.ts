@@ -10,6 +10,15 @@ export interface ExternalTransferPolicyEvaluation {
   reason: string;
 }
 
+export const activeApprovalPolicyMode = (config: TheHoodConfig): TheHoodConfig["approvalPolicy"]["mode"] =>
+  config.approvalPolicy.mode ?? config.approvalPolicy.externalTransfers.mode;
+
+export const isAutopilotEnabled = (config: TheHoodConfig): boolean =>
+  activeApprovalPolicyMode(config) === "autopilot";
+
+export const autopilotApprovalReason = (summary: string): string =>
+  `Auto-approved by TheHood autopilot policy: ${summary}`;
+
 const ruleMatches = (
   rule: ExternalTransferPolicyRule,
   manifest: ExternalTransferManifest
@@ -42,6 +51,7 @@ export const evaluateExternalTransferPolicy = (
   manifest: ExternalTransferManifest
 ): ExternalTransferPolicyEvaluation => {
   const policy = config.approvalPolicy.externalTransfers;
+  const mode = activeApprovalPolicyMode(config);
   const matchingRule = policy.rules.find((rule) => ruleMatches(rule, manifest));
 
   if (matchingRule) {
@@ -52,7 +62,20 @@ export const evaluateExternalTransferPolicy = (
   }
 
   if (
-    policy.mode === "auto_low_risk" &&
+    mode === "autopilot" &&
+    manifest.risk.class !== "secret_risk" &&
+    manifest.totalBytes <= policy.maxAutoApproveBytes
+  ) {
+    return {
+      decision: "auto_approve",
+      reason:
+        `Approval policy autopilot allowed ${manifest.purpose} ` +
+        `(${manifest.totalBytes}/${policy.maxAutoApproveBytes} bytes, risk ${manifest.risk.class}).`
+    };
+  }
+
+  if (
+    (mode === "auto_low_risk" || policy.mode === "auto_low_risk") &&
     manifest.risk.class !== "secret_risk" &&
     manifest.totalBytes <= policy.maxAutoApproveBytes
   ) {

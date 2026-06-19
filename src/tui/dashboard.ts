@@ -2,11 +2,13 @@ import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import type { PendingApproval } from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
+import type { ApprovalPolicy } from "../runtime/types.js";
 
 export interface DashboardInput {
   repoPath: string;
   health: RuntimeHealthReport;
   browser: BrowserStatus;
+  approvalPolicy: ApprovalPolicy;
   pendingApprovals: PendingApproval[];
 }
 
@@ -32,6 +34,8 @@ export const renderHeader = (width = terminalWidth()): string =>
   (width >= 72 ? [...wideLogo, "", "THEHOOD - local agent runtime"] : compactLogo).join("\n");
 
 const statusWord = (ready: boolean): string => ready ? "ready" : "needs attention";
+
+const modeLabel = (value: string): string => value.replace(/_/g, "-");
 
 const quoteArg = (value: string): string =>
   /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
@@ -123,6 +127,25 @@ export const renderApprovalInbox = (approvals: PendingApproval[]): string => [
     : ["  no pending approval gates"])
 ].join("\n");
 
+const automationLines = (input: DashboardInput): string[] => {
+  const mode = input.approvalPolicy.mode;
+  const posture =
+    mode === "autopilot"
+      ? "runtime may auto-approve bounded gates"
+      : mode === "auto_low_risk"
+        ? "bounded low-risk transfers can auto-approve"
+        : "manual approval required";
+
+  return [
+    "Automation",
+    `  Mode        ${modeLabel(mode)}`,
+    `  Posture     ${posture}`,
+    `  Transfers   ${modeLabel(input.approvalPolicy.externalTransfers.mode)} up to ${input.approvalPolicy.externalTransfers.maxAutoApproveBytes} bytes`,
+    "  Hard stops  secret-risk transfers, protected test changes, destructive/dependency/network commands",
+    `  Configure   thehood approvals policy set mode autopilot --repo ${quoteArg(input.repoPath)}`
+  ];
+};
+
 export const renderDashboard = (input: DashboardInput): string => {
   const actions = nextActions(input.browser);
 
@@ -133,6 +156,9 @@ export const renderDashboard = (input: DashboardInput): string => {
     `  Repo        ${input.repoPath}`,
     `  Runtime     ${input.health.runtime.name} ${input.health.runtime.version}`,
     `  Browser     ${statusWord(input.browser.readyForBridge)}`,
+    `  Automation  ${modeLabel(input.approvalPolicy.mode)}`,
+    "",
+    ...automationLines(input),
     "",
     "ChatGPT Web",
     `  CDP         ${input.browser.cdpReachable ? "reachable" : "unreachable"} (${input.browser.cdpUrl})`,

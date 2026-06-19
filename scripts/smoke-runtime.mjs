@@ -139,6 +139,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
+assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
@@ -200,6 +201,7 @@ assert.equal(browserStatus.chatGptTabFound, true);
 assert.equal(browserStatus.readyForBridge, true);
 const dashboard = await runCli(["ui", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(dashboard.stdout.includes("THEHOOD"));
+assert.ok(dashboard.stdout.includes("Automation"));
 assert.ok(dashboard.stdout.includes("ChatGPT Web"));
 assert.ok(dashboard.stdout.includes("CDP         reachable"));
 await new Promise((resolve, reject) => {
@@ -658,6 +660,7 @@ assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().s
 const defaultApprovalPolicy = JSON.parse(
   (await runCli(["approvals", "policy", "show", "--repo", repoPath, "--json"])).stdout
 );
+assert.equal(defaultApprovalPolicy.mode, "manual");
 assert.equal(defaultApprovalPolicy.externalTransfers.mode, "manual");
 const enabledApprovalPolicy = JSON.parse(
   (
@@ -673,6 +676,7 @@ const enabledApprovalPolicy = JSON.parse(
     ])
   ).stdout
 );
+assert.equal(enabledApprovalPolicy.mode, "manual");
 assert.equal(enabledApprovalPolicy.externalTransfers.mode, "auto_low_risk");
 const enabledApprovalPolicyText = await runCli(["config", "show", "--repo", repoPath]);
 assert.ok(enabledApprovalPolicyText.stdout.includes("externalTransfers: auto_low_risk"));
@@ -765,6 +769,89 @@ assert.ok(
       event.data?.policyDecision === "auto_approve"
   )
 );
+const autopilotApprovalPolicy = JSON.parse(
+  (
+    await runCli([
+      "approvals",
+      "policy",
+      "set",
+      "mode",
+      "autopilot",
+      "--repo",
+      repoPath,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(autopilotApprovalPolicy.mode, "autopilot");
+assert.equal(autopilotApprovalPolicy.externalTransfers.mode, "auto_low_risk");
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const autopilotPlan = JSON.parse(
+  (
+    await runCli(
+      [
+        "plan",
+        "autopilot-mode smoke provider milestone",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const autopilotCompleted = JSON.parse(
+  (await runCli(["continue", autopilotPlan.runId, "--repo", repoPath, "--json"], { env: fakeExternalEnv })).stdout
+);
+assert.equal(autopilotCompleted.run.state, "completed");
+assert.deepEqual(autopilotCompleted.providerResponses.map((response) => response.data.decision.action), [
+  "delegate",
+  "complete"
+]);
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "no-context",
+  "context"
+]);
+assert.ok(
+  autopilotCompleted.run.approvalEvents.some(
+    (approval) =>
+      approval.reason.includes("Auto-approved by TheHood autopilot policy") &&
+      approval.reason.includes("Invoking chatgpt-web:chatgpt-pro")
+  )
+);
+assert.ok(
+  autopilotCompleted.run.events.some(
+    (event) => event.type === "approval_auto_approved" && event.data?.gate === "provider_invocation"
+  )
+);
+assert.ok(
+  autopilotCompleted.run.events.some(
+    (event) =>
+      event.type === "approval_auto_approved" &&
+      event.data?.reason === "repo_context_external_transfer" &&
+      event.data?.policyReason.includes("autopilot allowed")
+  )
+);
+const resetAutoLowRiskPolicy = JSON.parse(
+  (
+    await runCli([
+      "approvals",
+      "policy",
+      "set",
+      "mode",
+      "auto-low-risk",
+      "--repo",
+      repoPath,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(resetAutoLowRiskPolicy.mode, "auto_low_risk");
+assert.equal(resetAutoLowRiskPolicy.externalTransfers.mode, "auto_low_risk");
 await fs.mkdir(path.join(repoPath, "notes"), { recursive: true });
 for (let index = 0; index < 8; index += 1) {
   await fs.writeFile(
@@ -937,7 +1024,7 @@ const restoredApprovalPolicy = JSON.parse(
       "approvals",
       "policy",
       "set",
-      "external-transfers",
+      "mode",
       "manual",
       "--repo",
       repoPath,
@@ -945,6 +1032,7 @@ const restoredApprovalPolicy = JSON.parse(
     ])
   ).stdout
 );
+assert.equal(restoredApprovalPolicy.mode, "manual");
 assert.equal(restoredApprovalPolicy.externalTransfers.mode, "manual");
 
 const plan = await runCli(["plan", "capture runtime evidence", "--repo", repoPath, "--json"]);
@@ -1046,6 +1134,68 @@ assert.ok(verifierDirectiveArtifact, "verifier directive artifact should be capt
 const verifierDirective = JSON.parse(await fs.readFile(verifierDirectiveArtifact.ref, "utf8"));
 assert.equal(verifierDirective.toolPermissions.edit, false);
 assert.equal(verifierDirective.outputContract.requiredDataKey, "verificationResult");
+
+const autopilotLoopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-autopilot-loop-smoke-"));
+await runCli(["init", "--repo", autopilotLoopRepoPath]);
+await fs.writeFile(
+  path.join(autopilotLoopRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('autopilot validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const autopilotLoopPolicy = JSON.parse(
+  (
+    await runCli([
+      "approvals",
+      "policy",
+      "set",
+      "mode",
+      "autopilot",
+      "--repo",
+      autopilotLoopRepoPath,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(autopilotLoopPolicy.mode, "autopilot");
+const autopilotLoopRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "exercise autopilot deterministic loop",
+      "--repo",
+      autopilotLoopRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--verifier",
+      "stub:verifier",
+      "--critic",
+      "stub:critic",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(autopilotLoopRun.state, "delegating");
+assert.equal(autopilotLoopRun.approvalRequired, false);
+assert.ok(
+  autopilotLoopRun.approvalEvents.some((approval) =>
+    approval.reason.includes("Auto-approved by TheHood autopilot policy")
+  )
+);
+const autopilotLoopContinue = JSON.parse(
+  (await runCli(["continue", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath, "--json"])).stdout
+);
+assert.equal(autopilotLoopContinue.run.state, "completed");
+assert.equal(autopilotLoopContinue.providerResponses.length, 3);
 
 const maxIterationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-max-iterations-smoke-"));
 await runCli(["init", "--repo", maxIterationRepoPath]);

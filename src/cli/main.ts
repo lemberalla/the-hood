@@ -25,6 +25,7 @@ import {
   approvalDecisions,
   runModes,
   type ApprovalDecision,
+  type ApprovalPolicyMode,
   type ExternalTransferApprovalMode,
   type RoleMap,
   type RunMode
@@ -81,7 +82,7 @@ Usage:
   thehood approve <run-id> [--repo <path>] [--reason <text>]
   thehood reject <run-id> [--repo <path>] [--reason <text>]
   thehood revise <run-id> [--repo <path>] [--reason <text>]
-  thehood approvals policy [show|set external-transfers manual|auto-low-risk] [--repo <path>] [--json]
+  thehood approvals policy [show|set mode manual|auto-low-risk|autopilot|set external-transfers manual|auto-low-risk] [--repo <path>] [--json]
   thehood continue <run-id> [--repo <path>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
   thehood transfer preview <run-id> [--repo <path>] [--json]
@@ -151,6 +152,16 @@ const parseExternalTransferApprovalMode = (value: string): ExternalTransferAppro
   }
 
   throw new InputError("External transfer policy must be manual or auto-low-risk.");
+};
+
+const parseApprovalPolicyMode = (value: string): ApprovalPolicyMode => {
+  const normalized = value.replace(/-/g, "_");
+
+  if (normalized === "manual" || normalized === "auto_low_risk" || normalized === "autopilot") {
+    return normalized;
+  }
+
+  throw new InputError("Approval policy mode must be manual, auto-low-risk, or autopilot.");
 };
 
 const ensureRunId = (value: string | undefined): string => {
@@ -443,24 +454,49 @@ const handleApprovals = async (
     return;
   }
 
-  if (action !== "set" || args[2] !== "external-transfers") {
-    throw new InputError("Use: thehood approvals policy set external-transfers manual|auto-low-risk");
+  if (action !== "set") {
+    throw new InputError("Use: thehood approvals policy set mode manual|auto-low-risk|autopilot");
   }
 
-  const mode = parseExternalTransferApprovalMode(args[3] ?? "");
-  const updated = {
-    ...config,
-    approvalPolicy: {
-      ...config.approvalPolicy,
-      externalTransfers: {
-        ...config.approvalPolicy.externalTransfers,
-        mode
+  if (args[2] === "mode") {
+    const mode = parseApprovalPolicyMode(args[3] ?? "");
+    const externalTransferMode: ExternalTransferApprovalMode = mode === "manual" ? "manual" : "auto_low_risk";
+    const updated = {
+      ...config,
+      approvalPolicy: {
+        ...config.approvalPolicy,
+        mode,
+        externalTransfers: {
+          ...config.approvalPolicy.externalTransfers,
+          mode: externalTransferMode
+        }
       }
-    }
-  };
+    };
 
-  await writeConfig(repoPath, updated);
-  shouldPrintJson(options) ? printJson(updated.approvalPolicy) : process.stdout.write(`${formatConfig(updated)}\n`);
+    await writeConfig(repoPath, updated);
+    shouldPrintJson(options) ? printJson(updated.approvalPolicy) : process.stdout.write(`${formatConfig(updated)}\n`);
+    return;
+  }
+
+  if (args[2] === "external-transfers") {
+    const mode = parseExternalTransferApprovalMode(args[3] ?? "");
+    const updated = {
+      ...config,
+      approvalPolicy: {
+        ...config.approvalPolicy,
+        externalTransfers: {
+          ...config.approvalPolicy.externalTransfers,
+          mode
+        }
+      }
+    };
+
+    await writeConfig(repoPath, updated);
+    shouldPrintJson(options) ? printJson(updated.approvalPolicy) : process.stdout.write(`${formatConfig(updated)}\n`);
+    return;
+  }
+
+  throw new InputError("Use: thehood approvals policy set mode manual|auto-low-risk|autopilot");
 };
 
 const handleContinue = async (
@@ -623,6 +659,7 @@ const handleUi = async (
     repoPath,
     health,
     browser,
+    approvalPolicy: config.approvalPolicy,
     pendingApprovals
   };
 

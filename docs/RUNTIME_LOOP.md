@@ -85,9 +85,11 @@ User approval is required before:
 - continuing to verification after an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - switching orchestrator or verifier mid-run for an active task
 
+When `approvalPolicy.mode` is `autopilot`, the user has pre-authorized the runtime to approve bounded low-risk gates without another prompt. Autopilot may approve provider invocation, implementation start, external transfers that pass transfer-manifest policy, and isolated patch application. It must still stop for secret-risk transfers, protected test/fixture/snapshot/eval changes, destructive or dependency/network commands that require explicit command approval, dirty-checkout integration blockers, max-iteration failures, and verifier revise/ask-user outcomes.
+
 When an approval reason includes an exact phrase such as `Approval message must mention "apply isolated patch"`, the runtime enforces that phrase before recording an approving transition.
 
-Before sending repo context or a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine. If the user configures `externalTransfers: auto_low_risk`, bounded transfers that do not have `secret_risk` can be auto-approved; the runtime still records the manifest, approval event, and `approval_auto_approved` event.
+Before sending repo context or a progress packet to a browser or API provider, the runtime writes a `transfer_manifest` artifact. The approval gate points at that manifest so CLI, MCP, TUI, and future app surfaces can show the destination provider, purpose, source artifacts, byte counts, hashes, risk class, exact approval phrase, and bounded preview before anything leaves the machine. If the user configures `approvalPolicy.mode: auto_low_risk`, `approvalPolicy.mode: autopilot`, or `externalTransfers: auto_low_risk`, bounded transfers that do not have `secret_risk` can be auto-approved; the runtime still records the manifest, approval event, and `approval_auto_approved` event.
 
 `maxIterations` is enforced from persisted provider responses. If the next transition would call another provider after the run has already recorded `maxIterations` agent responses, the runtime fails closed with reason `max_iterations`.
 

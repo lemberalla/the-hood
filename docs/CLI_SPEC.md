@@ -28,6 +28,7 @@ thehood approve <run-id>
 thehood reject <run-id>
 thehood revise <run-id>
 thehood approvals policy show
+thehood approvals policy set mode autopilot
 thehood approvals policy set external-transfers auto-low-risk
 thehood continue <run-id>
 thehood reconcile <run-id>
@@ -213,7 +214,9 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood transfer preview <run-id>` reads the latest `transfer_manifest` artifact for a run without sending anything externally. The preview includes destination provider, purpose, source artifacts, byte counts, hashes, risk class, approval phrase, and a bounded content preview.
 
-`thehood approvals policy show` prints the configured approval policy. `thehood approvals policy set external-transfers manual|auto-low-risk` controls whether repo context and progress packet transfers always stop for manual approval or can be auto-approved when the manifest is bounded and does not have `secret_risk`.
+`thehood approvals policy show` prints the configured approval policy. `thehood approvals policy set mode manual|auto-low-risk|autopilot` controls the global approval posture. `manual` stops at approval gates, `auto-low-risk` allows bounded non-secret external transfers, and `autopilot` lets the runtime auto-approve bounded gates such as provider invocation, implementation start, external transfers, and isolated patch application while still stopping for protected test changes, secret-risk transfers, destructive commands, dependency installs, dirty-checkout integration blockers, and verifier revise/ask-user outcomes.
+
+`thehood approvals policy set external-transfers manual|auto-low-risk` remains available for transfer-specific policy tuning. It controls whether repo context and progress packet transfers always stop for manual approval or can be auto-approved when the manifest is bounded and does not have `secret_risk`.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. The runtime responds by capturing a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact and pause at an approval gate before that repo context is sent back to the provider. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
