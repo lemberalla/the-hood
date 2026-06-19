@@ -2449,6 +2449,12 @@ assert.ok(
   fakeVerifierSchema.properties.data.properties.verificationResult.required.includes("thehoodDirectiveAck"),
   "provider response schema should require directive ack inside role payload"
 );
+assert.equal(fakeVerifierSchema.properties.data.properties.verificationResult.additionalProperties, false);
+assert.deepEqual(
+  fakeVerifierSchema.properties.data.properties.verificationResult.required.sort(),
+  Object.keys(fakeVerifierSchema.properties.data.properties.verificationResult.properties).sort(),
+  "provider response schema should satisfy strict structured-output required fields"
+);
 assert.throws(
   () => validateAgentResponse("verifier", fakeVerifierRequest.directive, {
     status: "ok",

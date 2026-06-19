@@ -2,9 +2,24 @@ import type { AgentRequest } from "./types.js";
 import { agentMarkdownField, agentMarkdownFieldDescription } from "./markdownPayload.js";
 import type { JsonObject } from "../runtime/types.js";
 
+const nullableStringSchema = (): JsonObject => ({
+  type: ["string", "null"]
+});
+
+const nullableBooleanSchema = (): JsonObject => ({
+  type: ["boolean", "null"]
+});
+
+const nullableStringArraySchema = (): JsonObject => ({
+  type: ["array", "null"],
+  items: {
+    type: "string"
+  }
+});
+
 const basePayloadSchema = (): JsonObject => ({
   type: "object",
-  additionalProperties: true
+  additionalProperties: false
 });
 
 const withDirectiveAckSchema = (request: AgentRequest, schema: JsonObject): JsonObject => {
@@ -13,35 +28,37 @@ const withDirectiveAckSchema = (request: AgentRequest, schema: JsonObject): Json
     ? schema.properties
     : {};
 
-  return {
-    ...schema,
-    required: [...new Set([...required, request.directive.directiveAck.responseField])],
-    properties: {
-      ...properties,
-      [agentMarkdownField]: {
-        type: "string",
-        description: agentMarkdownFieldDescription
-      },
-      [request.directive.directiveAck.responseField]: {
-        type: "object",
-        additionalProperties: false,
-        required: ["runId", "nonce", "responseField"],
-        properties: {
-          runId: {
-            type: "string",
-            const: request.directive.directiveAck.runId
-          },
-          nonce: {
-            type: "string",
-            const: request.directive.directiveAck.nonce
-          },
-          responseField: {
-            type: "string",
-            const: request.directive.directiveAck.responseField
-          }
+  const finalProperties = {
+    ...properties,
+    [agentMarkdownField]: {
+      type: ["string", "null"],
+      description: agentMarkdownFieldDescription
+    },
+    [request.directive.directiveAck.responseField]: {
+      type: "object",
+      additionalProperties: false,
+      required: ["runId", "nonce", "responseField"],
+      properties: {
+        runId: {
+          type: "string",
+          enum: [request.directive.directiveAck.runId]
+        },
+        nonce: {
+          type: "string",
+          enum: [request.directive.directiveAck.nonce]
+        },
+        responseField: {
+          type: "string",
+          enum: [request.directive.directiveAck.responseField]
         }
       }
     }
+  };
+
+  return {
+    ...schema,
+    required: [...new Set([...required, ...Object.keys(finalProperties)])],
+    properties: finalProperties
   };
 };
 
@@ -60,7 +77,25 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           },
           reason: {
             type: "string"
-          }
+          },
+          delegateTo: {
+            type: ["string", "null"],
+            enum: ["orchestrator", "planner", "implementer", "qa", "verifier", "critic", null]
+          },
+          nextRole: {
+            type: ["string", "null"],
+            enum: ["orchestrator", "planner", "implementer", "qa", "verifier", "critic", null]
+          },
+          requiresMoreEvidence: nullableBooleanSchema(),
+          sliceName: nullableStringSchema(),
+          targetPaths: nullableStringArraySchema(),
+          requestedPaths: nullableStringArraySchema(),
+          evidenceRefs: nullableStringArraySchema(),
+          artifactRefs: nullableStringArraySchema(),
+          callCritic: nullableBooleanSchema(),
+          reasonCode: nullableStringSchema(),
+          sourceRoles: nullableStringArraySchema(),
+          acceptanceCriteria: nullableStringArraySchema()
         }
       };
     case "implementer":
@@ -71,7 +106,11 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           status: {
             type: "string",
             enum: ["changed", "no_change", "blocked", "failed"]
-          }
+          },
+          changedFiles: nullableStringArraySchema(),
+          commandsRun: nullableStringArraySchema(),
+          unresolvedRisks: nullableStringArraySchema(),
+          evidenceRefs: nullableStringArraySchema()
         }
       };
     case "qa":
@@ -85,7 +124,10 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           },
           summary: {
             type: "string"
-          }
+          },
+          suggestedCommands: nullableStringArraySchema(),
+          risks: nullableStringArraySchema(),
+          evidenceRefs: nullableStringArraySchema()
         }
       };
     case "verifier":
@@ -99,7 +141,11 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           },
           summary: {
             type: "string"
-          }
+          },
+          failedCriteria: nullableStringArraySchema(),
+          risks: nullableStringArraySchema(),
+          nextAction: nullableStringSchema(),
+          evidenceRefs: nullableStringArraySchema()
         }
       };
     case "critic":
@@ -110,7 +156,11 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           verdict: {
             type: "string",
             enum: ["acceptable", "needs_revision", "unsafe", "unclear"]
-          }
+          },
+          blockingConcerns: nullableStringArraySchema(),
+          nonBlockingConcerns: nullableStringArraySchema(),
+          risks: nullableStringArraySchema(),
+          evidenceRefs: nullableStringArraySchema()
         }
       };
     default:
