@@ -13,6 +13,7 @@ const orchestratorActions = new Set([
   "abort"
 ]);
 const implementationStatuses = new Set(["changed", "no_change", "blocked", "failed"]);
+const qaVerdicts = new Set(["pass", "needs_revision", "needs_more_evidence", "blocked"]);
 const verificationVerdicts = new Set(["approve", "revise", "abort", "ask_user"]);
 const critiqueVerdicts = new Set(["acceptable", "needs_revision", "unsafe", "unclear"]);
 
@@ -46,6 +47,10 @@ const validateRolePayload = (role: RuntimeRole, payload: JsonObject, contractNam
       return;
     case "implementer":
       requireAllowedValue(payload, "status", implementationStatuses, contractName);
+      return;
+    case "qa":
+      requireAllowedValue(payload, "verdict", qaVerdicts, contractName);
+      requireStringField(payload, "summary", contractName);
       return;
     case "verifier":
       requireAllowedValue(payload, "verdict", verificationVerdicts, contractName);

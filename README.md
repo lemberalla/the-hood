@@ -8,7 +8,7 @@ The core idea is simple:
 - The runtime enforces.
 - Users stay in control.
 
-TheHood lets a user assign different models or agent tools to different responsibilities. ChatGPT Pro can orchestrate, Claude Opus can critique, Codex can implement, a cheaper GPT model can perform scoped work, and a separate verifier can test without edit permissions.
+TheHood lets a user assign different models or agent tools to different responsibilities. ChatGPT Pro can orchestrate, Claude Opus can critique, Codex can implement, a cheaper GPT model can perform scoped QA, and a separate verifier can test without edit permissions.
 
 The first product surface is a CLI plus an MCP server. The macOS menubar app should remain a thin trigger and status surface over the same local runtime.
 
@@ -39,6 +39,7 @@ It supports:
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
 - runtime-captured package validation command evidence during verifier review
+- read-only model-assisted QA tester lane for missed cases and validation suggestions
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - schema-bound agent directives and response validation before runtime state advances
@@ -52,7 +53,7 @@ It supports:
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
 - run status insights for latest provider output and final reports
 - run status insights for latest progress, reconciliation, repo context, final report, and transfer manifest refs
-- runtime-derived loop responsibility schedules showing planner, implementer, verifier, QA, critic, reconciliation, integration, approval, and completion ownership
+- runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths
@@ -111,13 +112,14 @@ MCP connector mode
   lets ChatGPT, Codex, or another MCP host call TheHood's runtime and repo tools
 
 Agents
-  orchestrator, planner, researcher, implementer, verifier, critic, integrator
+  orchestrator, planner, researcher, implementer, qa tester, verifier, critic, integrator
 ```
 
 ## Foundation Rules
 
 - The implementer and verifier must not be the same agent.
 - The verifier does not get edit tools.
+- The QA tester does not get edit tools and cannot satisfy runtime validation gates.
 - Runtime-captured logs are the source of truth, not model summaries.
 - Model session context is disposable; TheHood preserves exact artifacts and rehydrates providers from runtime state.
 - Test changes require separate classification and review.

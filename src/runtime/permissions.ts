@@ -34,6 +34,12 @@ export const defaultRolePermissions: Record<RuntimeRole, RolePermissionProfile> 
     shell: true,
     network: false
   },
+  qa: {
+    read: true,
+    edit: false,
+    shell: false,
+    network: false
+  },
   verifier: {
     read: true,
     edit: false,
@@ -74,10 +80,10 @@ export const assertRoleInvariants = (roles: RoleMap): void => {
   }
 
   const verifierPermissions = defaultRolePermissions.verifier;
+  const qaPermissions = defaultRolePermissions.qa;
   const criticPermissions = defaultRolePermissions.critic;
 
-  if (verifierPermissions.edit || criticPermissions.edit) {
-    throw new PermissionDeniedError("Verifier and critic roles must not have edit tools.");
+  if (verifierPermissions.edit || qaPermissions.edit || criticPermissions.edit) {
+    throw new PermissionDeniedError("Verifier, QA, and critic roles must not have edit tools.");
   }
 };
-

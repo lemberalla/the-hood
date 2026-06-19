@@ -45,6 +45,7 @@ const summonableRoles: RuntimeRole[] = [
   "orchestrator",
   "planner",
   "researcher",
+  "qa",
   "verifier",
   "critic"
 ];
@@ -126,6 +127,19 @@ const providerInvocationGateResponse = (role: RuntimeRole, summary: string): Age
             summary,
             findings: [],
             sources: []
+          }
+        }
+      };
+    case "qa":
+      return {
+        status: "blocked",
+        summary,
+        data: {
+          qaResult: {
+            verdict: "blocked",
+            summary,
+            suggestedCommands: [],
+            risks: [summary]
           }
         }
       };
@@ -411,7 +425,7 @@ const appendSummonCompleted = async (
 
 export const summonAgent = async (input: SummonAgentInput): Promise<SummonAgentResult> => {
   if (!isSummonableRole(input.role)) {
-    throw new InputError("Summon role must be orchestrator, planner, researcher, verifier, or critic.");
+    throw new InputError("Summon role must be orchestrator, planner, researcher, qa, verifier, or critic.");
   }
 
   const brief = input.brief.trim();
@@ -421,7 +435,7 @@ export const summonAgent = async (input: SummonAgentInput): Promise<SummonAgentR
 
   const initialRun = await loadRun(input.repoPath, input.runId);
   const assignment = input.agent ?? requiredAssignment(initialRun, input.role);
-  const summonKind = input.summonKind?.trim() || "review";
+  const summonKind = input.summonKind?.trim() || (input.role === "qa" ? "qa" : "review");
   const normalizedInput = {
     role: input.role,
     brief,

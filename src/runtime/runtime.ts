@@ -76,6 +76,10 @@ const approvedStateForRun = (run: RunRecord): RunState => {
     return "verifying";
   }
 
+  if (run.mode === "implement" && run.approvalReason?.includes(" for qa requires explicit approval")) {
+    return "verifying";
+  }
+
   return run.mode === "implement" ? "delegating" : "planning";
 };
 

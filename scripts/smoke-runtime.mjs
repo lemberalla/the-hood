@@ -148,6 +148,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
+assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -161,6 +162,11 @@ assert.ok(chatGptHealth.accessModes.includes("mcp-connector"));
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
 assert.equal(defaultOrchestratorHealth.providerImplemented, true);
 assert.ok(defaultOrchestratorHealth.issues.includes("bridge_command_not_configured"));
+const defaultQaHealth = doctorResult.roles.find((role) => role.role === "qa");
+assert.equal(defaultQaHealth.assignment.provider, "codex-cli");
+assert.equal(defaultQaHealth.assignment.model, "spark");
+assert.equal(defaultQaHealth.providerImplemented, true);
+assert.equal(defaultQaHealth.modelConfigured, true);
 const unconfirmedDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
   env: {
     THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
@@ -379,6 +385,63 @@ assert.equal(summonCriticLane.satisfiesRequired, false);
 assert.equal(summonCriticLane.owner.role, "critic");
 assert.equal(summonCriticLane.owner.assignment, "stub:critic");
 assert.ok(summonCriticLane.sidecarEvidence.length > 0, "summon evidence should be marked as sidecar");
+
+const qaSidecarRun = JSON.parse(
+  (
+    await runCli([
+      "run",
+      "exercise QA tester sidecar ownership",
+      "--repo",
+      repoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--implementer",
+      "stub:implementer",
+      "--qa",
+      "stub:qa",
+      "--verifier",
+      "stub:verifier",
+      "--json"
+    ])
+  ).stdout
+);
+const qaSummonResult = JSON.parse(
+  (
+    await runCli([
+      "summon",
+      qaSidecarRun.runId,
+      "--repo",
+      repoPath,
+      "--role",
+      "qa",
+      "--agent",
+      "stub:qa",
+      "--brief",
+      "QA this implementation slice without editing files.",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(qaSummonResult.role, "qa");
+assert.equal(qaSummonResult.summonKind, "qa");
+assert.equal(qaSummonResult.providerResponses[0].data.qaResult.verdict, "pass");
+const qaSidecarStatus = JSON.parse((await runCli(["status", qaSidecarRun.runId, "--repo", repoPath, "--json"])).stdout);
+const pendingRuntimeQaLane = qaSidecarStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-qa");
+assert.ok(pendingRuntimeQaLane, "implementation run should expose a required runtime QA lane");
+assert.equal(pendingRuntimeQaLane.kind, "qa");
+assert.equal(pendingRuntimeQaLane.required, true);
+assert.equal(pendingRuntimeQaLane.state, "pending");
+assert.equal(pendingRuntimeQaLane.canSatisfyRequired, false);
+assert.equal(pendingRuntimeQaLane.satisfiesRequired, false);
+assert.ok(pendingRuntimeQaLane.sidecarEvidence.length > 0, "runtime QA lane should show QA sidecar evidence");
+const qaTesterLane = qaSidecarStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
+assert.ok(qaTesterLane, "QA summon should expose a separate advisory tester lane");
+assert.equal(qaTesterLane.kind, "tester");
+assert.equal(qaTesterLane.role, "qa");
+assert.equal(qaTesterLane.owner.assignment, "stub:qa");
+assert.equal(qaTesterLane.required, false);
+assert.equal(qaTesterLane.canSatisfyRequired, false);
+assert.equal(qaTesterLane.satisfiesRequired, false);
 
 await fs.writeFile(path.join(repoPath, "README.md"), "# Smoke Repo\n\nProvider milestone notes.\n", "utf8");
 await fs.mkdir(path.join(repoPath, "src", "providers"), { recursive: true });
@@ -1258,6 +1321,8 @@ const loopRunOutput = await runCli([
   "stub:orchestrator",
   "--implementer",
   "stub:implementer",
+  "--qa",
+  "stub:qa",
   "--verifier",
   "stub:verifier",
   "--critic",
@@ -1271,7 +1336,7 @@ await runCli(["approve", loopRun.runId, "--repo", loopRepoPath, "--reason", "smo
 const loopContinue = await runCli(["continue", loopRun.runId, "--repo", loopRepoPath, "--json"]);
 const loopResult = JSON.parse(loopContinue.stdout);
 assert.equal(loopResult.run.state, "completed");
-assert.equal(loopResult.providerResponses.length, 3);
+assert.equal(loopResult.providerResponses.length, 4);
 assert.ok(
   loopResult.run.handoffs.some(
     (handoff) =>
@@ -1285,6 +1350,14 @@ assert.ok(
     (handoff) =>
       handoff.kind === "agent_handoff" &&
       handoff.fromRole === "implementer" &&
+      handoff.toRole === "verifier"
+  )
+);
+assert.ok(
+  loopResult.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "qa" &&
       handoff.toRole === "verifier"
   )
 );
@@ -1316,6 +1389,16 @@ assert.equal(finalReportQaLane.state, "satisfied");
 assert.equal(finalReportQaLane.owner.kind, "runtime");
 assert.equal(finalReportQaLane.canSatisfyRequired, true);
 assert.equal(finalReportQaLane.satisfiesRequired, true);
+const finalReportQaTesterLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
+assert.ok(finalReportQaTesterLane, "final report should expose QA tester lane");
+assert.equal(finalReportQaTesterLane.kind, "tester");
+assert.equal(finalReportQaTesterLane.role, "qa");
+assert.equal(finalReportQaTesterLane.required, false);
+assert.equal(finalReportQaTesterLane.state, "satisfied");
+assert.equal(finalReportQaTesterLane.owner.role, "qa");
+assert.equal(finalReportQaTesterLane.owner.assignment, "stub:qa");
+assert.equal(finalReportQaTesterLane.canSatisfyRequired, false);
+assert.equal(finalReportQaTesterLane.satisfiesRequired, false);
 const validationToolEvent = loopResult.run.toolEvents.find((event) => event.tool === "validation_typecheck");
 assert.ok(validationToolEvent, "verification should capture the selected validation command");
 assert.equal(validationToolEvent.command, "npm");
@@ -1358,14 +1441,41 @@ assert.ok(
   ),
   "progress packet should expose satisfied QA lane"
 );
+assert.ok(
+  progressPacket.reviewLanes.items.some(
+    (lane) =>
+      lane.id === "review-lane-qa-tester" &&
+      lane.required === false &&
+      lane.state === "satisfied" &&
+      lane.owner.assignment === "stub:qa" &&
+      lane.satisfiesRequired === false
+  ),
+  "progress packet should expose advisory QA tester lane"
+);
+assert.ok(
+  progressPacket.loopResponsibilities.items.some(
+    (responsibility) =>
+      responsibility.kind === "test" &&
+      responsibility.owner.assignment === "stub:qa" &&
+      responsibility.status === "satisfied"
+  ),
+  "progress packet should expose the QA tester responsibility"
+);
 const verifiedLoopStatusText = await runCli(["status", loopRun.runId, "--repo", loopRepoPath]);
 assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("reviewer"));
+assert.ok(verifiedLoopStatusText.stdout.includes("tester"));
 assert.ok(verifiedLoopStatusText.stdout.includes("qa"));
-assert.ok(verifiedLoopStatusText.stdout.includes("owner=Agent 3 / Verifier (stub:verifier)"));
+assert.ok(verifiedLoopStatusText.stdout.includes("owner=Agent 3 / QA (stub:qa)"));
+assert.ok(verifiedLoopStatusText.stdout.includes("owner=Agent 4 / Verifier (stub:verifier)"));
 assert.ok(verifiedLoopStatusText.stdout.includes("satisfies"));
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
-assert.equal(directiveArtifacts.length, 3);
+assert.equal(directiveArtifacts.length, 4);
+const qaDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("qa directive"));
+assert.ok(qaDirectiveArtifact, "QA directive artifact should be captured");
+const qaDirective = JSON.parse(await fs.readFile(qaDirectiveArtifact.ref, "utf8"));
+assert.equal(qaDirective.toolPermissions.edit, false);
+assert.equal(qaDirective.outputContract.requiredDataKey, "qaResult");
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));
 assert.ok(verifierDirectiveArtifact, "verifier directive artifact should be captured");
 const verifierDirective = JSON.parse(await fs.readFile(verifierDirectiveArtifact.ref, "utf8"));
@@ -1413,6 +1523,8 @@ const autopilotLoopRun = JSON.parse(
       "stub:orchestrator",
       "--implementer",
       "stub:implementer",
+      "--qa",
+      "stub:qa",
       "--verifier",
       "stub:verifier",
       "--critic",
@@ -1432,7 +1544,7 @@ const autopilotLoopContinue = JSON.parse(
   (await runCli(["continue", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath, "--json"])).stdout
 );
 assert.equal(autopilotLoopContinue.run.state, "completed");
-assert.equal(autopilotLoopContinue.providerResponses.length, 3);
+assert.equal(autopilotLoopContinue.providerResponses.length, 4);
 
 const maxIterationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-max-iterations-smoke-"));
 await runCli(["init", "--repo", maxIterationRepoPath]);
@@ -1464,6 +1576,8 @@ const maxIterationRun = JSON.parse(
       "stub:orchestrator",
       "--implementer",
       "stub:implementer",
+      "--qa",
+      "stub:qa",
       "--verifier",
       "stub:verifier",
       "--critic",
@@ -1517,6 +1631,8 @@ const failingValidationRun = JSON.parse(
       "stub:orchestrator",
       "--implementer",
       "stub:implementer",
+      "--qa",
+      "stub:qa",
       "--verifier",
       "stub:verifier",
       "--critic",

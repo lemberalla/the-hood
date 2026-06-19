@@ -82,20 +82,20 @@ const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
 const toJsonObject = (value: unknown): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject;
 
-const consultRoles = new Set(["orchestrator", "planner", "researcher", "critic"]);
+const consultRoles = new Set(["orchestrator", "planner", "researcher", "qa", "critic"]);
 
 const parseConsultRole = (value: string): RuntimeRole => {
   const role = parseRole(value);
 
   if (!consultRoles.has(role)) {
-    throw new Error("role must be orchestrator, planner, researcher, or critic.");
+    throw new Error("role must be orchestrator, planner, researcher, qa, or critic.");
   }
 
   return role;
 };
 
 const modeForConsultRole = (role: RuntimeRole): RunMode => {
-  if (role === "critic") {
+  if (role === "critic" || role === "qa") {
     return "review";
   }
 
@@ -377,7 +377,7 @@ const createConsultTool = (): McpTool => ({
         },
         role: {
           type: "string",
-          enum: ["orchestrator", "planner", "researcher", "critic"]
+          enum: ["orchestrator", "planner", "researcher", "qa", "critic"]
         },
         agent: {
           type: "string",
@@ -441,7 +441,7 @@ const createSummonTool = (): McpTool => ({
         },
         role: {
           type: "string",
-          enum: ["orchestrator", "planner", "researcher", "verifier", "critic"]
+          enum: ["orchestrator", "planner", "researcher", "qa", "verifier", "critic"]
         },
         brief: {
           type: "string"

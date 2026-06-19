@@ -185,8 +185,8 @@ const summonPath = await runMcp([
       arguments: {
         run_id: happyPath[2].result.structuredContent.run_id,
         repo_path: repoPath,
-        role: "critic",
-        agent: "stub:critic",
+        role: "qa",
+        agent: "stub:qa",
         kind: "qa",
         brief: "QA the current run without editing files."
       }
@@ -194,11 +194,11 @@ const summonPath = await runMcp([
   }
 ]);
 const summonContent = summonPath[1].result.structuredContent;
-assert.equal(summonContent.summoned_role, "critic");
-assert.equal(summonContent.summoned_agent, "stub:critic");
+assert.equal(summonContent.summoned_role, "qa");
+assert.equal(summonContent.summoned_agent, "stub:qa");
 assert.equal(summonContent.summon_kind, "qa");
 assert.equal(summonContent.provider_response_count, 1);
-assert.equal(summonContent.provider_responses[0].data.critiqueResult.verdict, "acceptable");
+assert.equal(summonContent.provider_responses[0].data.qaResult.verdict, "pass");
 assert.equal(summonContent.response_artifact.kind, "agent");
 
 const doctorPath = await runMcp([
@@ -242,6 +242,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
+assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
@@ -808,6 +809,7 @@ const isolatedCreate = await runMcp([
         role_mapping: {
           orchestrator: "stub:orchestrator",
           implementer: "codex-cli:default",
+          qa: "stub:qa",
           verifier: "stub:verifier",
           critic: "stub:critic"
         }
@@ -1036,6 +1038,7 @@ const protectedCreate = await runMcp([
         role_mapping: {
           orchestrator: "stub:orchestrator",
           implementer: "codex-cli:default",
+          qa: "stub:qa",
           verifier: "stub:verifier",
           critic: "stub:critic"
         }
@@ -1240,6 +1243,7 @@ const loopCreate = await runMcp([
         role_mapping: {
           orchestrator: "stub:orchestrator",
           implementer: "stub:implementer",
+          qa: "stub:qa",
           verifier: "stub:verifier",
           critic: "stub:critic"
         }
@@ -1269,7 +1273,7 @@ const loopContinue = await runMcp([
 
 assert.equal(loopCreate[1].result.structuredContent.status, "awaiting_approval");
 assert.equal(loopContinue[1].result.structuredContent.status, "completed");
-assert.equal(loopContinue[1].result.structuredContent.provider_response_count, 3);
+assert.equal(loopContinue[1].result.structuredContent.provider_response_count, 4);
 assert.equal(loopContinue[1].result.structuredContent.provider_responses.at(-1).data.verificationResult.verdict, "approve");
 
 process.stdout.write(`MCP smoke passed using ${repoPath}\n`);

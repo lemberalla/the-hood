@@ -117,6 +117,7 @@ Input:
     "planner": "provider:model",
     "researcher": "provider:model",
     "implementer": "provider:model",
+    "qa": "provider:model",
     "verifier": "provider:model",
     "critic": "provider:model"
   }
@@ -182,6 +183,7 @@ Input:
     "planner": "provider:model",
     "researcher": "provider:model",
     "implementer": "provider:model",
+    "qa": "provider:model",
     "verifier": "provider:model",
     "critic": "provider:model"
   },
@@ -199,7 +201,7 @@ Input:
 {
   "goal": "string",
   "repo_path": "string",
-  "role": "orchestrator | planner | researcher | critic",
+  "role": "orchestrator | planner | researcher | qa | critic",
   "agent": "provider:model",
   "constraints": ["string"]
 }
@@ -224,6 +226,17 @@ ChatGPT Pro example:
   "repo_path": "/path/to/repo",
   "role": "orchestrator",
   "agent": "chatgpt-web:chatgpt-pro"
+}
+```
+
+QA tester example:
+
+```json
+{
+  "goal": "Inspect the current implementation evidence and recommend missed validation cases.",
+  "repo_path": "/path/to/repo",
+  "role": "qa",
+  "agent": "codex-cli:spark"
 }
 ```
 
@@ -259,7 +272,7 @@ Input:
 {
   "run_id": "string",
   "repo_path": "string",
-  "role": "orchestrator | planner | researcher | verifier | critic",
+  "role": "orchestrator | planner | researcher | qa | verifier | critic",
   "brief": "string",
   "agent": "optional provider:model",
   "kind": "optional review | qa | critique | research | plan",
@@ -269,7 +282,7 @@ Input:
 }
 ```
 
-The runtime records `agent_summoned`, a typed handoff, and provider directive/response artifacts when the provider runs. A one-call `agent` override does not rewrite the run's role mapping. Model-backed providers still pass through the provider-invocation approval gate; autopilot may auto-approve that bounded gate according to policy.
+The runtime records `agent_summoned`, a typed handoff, and provider directive/response artifacts when the provider runs. A one-call `agent` override does not rewrite the run's role mapping. Model-backed providers still pass through the provider-invocation approval gate; autopilot may auto-approve that bounded gate according to policy. A `qa` summon records model-assisted tester evidence, but runtime-captured validation artifacts remain the proof for runtime QA/validation gates.
 
 Output includes the run summary, summoned role, summoned agent, summon kind, stop reason, directive and response artifact refs when present, provider response count, and normalized provider response summaries. Long provider-authored plans, reports, reviews, and critique should be returned as markdown in the role payload and are bounded in tool responses.
 
@@ -340,7 +353,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/QA gates.
+Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
 
 Input:
 
@@ -461,6 +474,6 @@ Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
 2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Claude as critic or verifier.
-3. Call `thehood_consult` to bring in a guest read-only agent; approve the provider-invocation gate before Claude, Codex, or Pro is actually called.
+3. Call `thehood_consult` or `thehood_summon` to bring in a guest read-only agent such as a critic or QA tester; approve the provider-invocation gate before Claude, Codex, or Pro is actually called.
 4. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
 5. Call `thehood_continue` with approval only after the user authorizes the next runtime transition.

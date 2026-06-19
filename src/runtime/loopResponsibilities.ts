@@ -17,7 +17,7 @@ import {
   type RuntimeRole
 } from "./types.js";
 
-const readOnlyRoles = new Set<RuntimeRole>(["orchestrator", "planner", "researcher", "verifier", "critic", "citation"]);
+const readOnlyRoles = new Set<RuntimeRole>(["orchestrator", "planner", "researcher", "qa", "verifier", "critic", "citation"]);
 const providerResponseEventTypes = new Set(["agent_response", "reconciliation_response", "summon_response"]);
 
 const stringField = (value: unknown): string | undefined =>
@@ -173,6 +173,9 @@ const reviewLane = (lanes: ReviewLane[], role: RuntimeRole): ReviewLane | undefi
 const qaLane = (lanes: ReviewLane[]): ReviewLane | undefined =>
   lanes.find((lane) => lane.kind === "qa");
 
+const qaTesterLane = (lanes: ReviewLane[]): ReviewLane | undefined =>
+  lanes.find((lane) => lane.kind === "tester" && lane.role === "qa");
+
 const responsibility = (
   run: RunRecord,
   input: {
@@ -307,6 +310,36 @@ const qaResponsibility = (run: RunRecord, lanes: ReviewLane[]): LoopResponsibili
     canSatisfyGate: lane?.canSatisfyRequired ?? false,
     artifactRefs: lane?.artifactRefs ?? [],
     eventRefs: lane?.eventRefs ?? []
+  });
+};
+
+const qaTesterResponsibility = (run: RunRecord, lanes: ReviewLane[], waitingDirective: RunEvent | undefined): LoopResponsibility => {
+  const lane = qaTesterLane(lanes);
+  const event = latestProviderResponseEvent(run, "qa");
+  const summon = latestSummonResponseEvent(run, "qa");
+  const waitingForQa = waitingDirective && roleField(waitingDirective.data?.role) === "qa";
+  const applicable = implementationApplicable(run) || Boolean(lane);
+  const status: LoopResponsibilityStatus = lane
+    ? reviewStatus(lane.state)
+    : waitingForQa
+      ? "in_progress"
+      : applicable
+        ? "ready"
+        : "skipped";
+
+  return responsibility(run, {
+    kind: "test",
+    label: "QA Tester",
+    owner: lane?.owner ?? roleOwner(run, "qa", event ?? summon ?? waitingDirective),
+    required: false,
+    status,
+    reason: lane?.summary ?? (applicable
+      ? "Model-assisted QA can review evidence and suggest tests, but runtime validation remains the proof."
+      : "No model-assisted QA tester responsibility is active for this run."),
+    artifactRefs: lane?.artifactRefs ?? eventArtifactRefs(event ?? summon ?? waitingDirective),
+    eventRefs: lane?.eventRefs ?? unique([event?.id, summon?.id, waitingForQa ? waitingDirective?.id : undefined]),
+    sidecarOnly: lane?.sourceKind === "summon_evidence",
+    blocking: false
   });
 };
 
@@ -463,8 +496,9 @@ export const deriveLoopResponsibilitySchedule = (run: RunRecord): LoopResponsibi
   const responsibilities = [
     planningResponsibility(run, waitingDirective),
     implementationResponsibility(run, waitingDirective),
-    verifierResponsibility(run, lanes),
     qaResponsibility(run, lanes),
+    qaTesterResponsibility(run, lanes, waitingDirective),
+    verifierResponsibility(run, lanes),
     criticResponsibility(run, lanes, waitingDirective),
     integrationResponsibility(run),
     reconciliationResponsibility(run),

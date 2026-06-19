@@ -12,11 +12,12 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 5. Delegate scoped task to implementer
 6. Capture diff and implementation notes
 7. Run deterministic validation commands
-8. Ask verifier for verdict using raw evidence
-9. Ask critic when risk or ambiguity warrants it
-10. Replan, revise, ask user, abort, or integrate
-11. Produce final report with evidence
-12. Reconcile planner state against implementation evidence when needed
+8. Ask the mapped read-only QA tester for missed cases and validation suggestions
+9. Ask verifier for verdict using raw evidence
+10. Ask critic when risk or ambiguity warrants it
+11. Replan, revise, ask user, abort, or integrate
+12. Produce final report with evidence
+13. Reconcile planner state against implementation evidence when needed
 ```
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
@@ -29,9 +30,9 @@ The runtime also records typed `handoffs` on the run record whenever work crosse
 
 Same-run summons are read-only sidecar calls attached to an existing run. A summon carries an explicit brief, kind such as `qa` or `critique`, optional one-call provider assignment, constraints, and artifact refs. The runtime records the handoff and provider artifacts, but the summoned agent does not advance the main state machine or gain edit authority. Model-backed summon providers still pass through provider-invocation approval; autopilot can auto-approve that bounded gate when policy allows it.
 
-Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, QA/validation, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, critic responses, and read-only summon responses. Each lane carries bounded ownership metadata: owner label, role or runtime owner, provider/model assignment when known, required or optional status, current state, compact summary, and artifact/event refs. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only sidecar evidence, but a summon does not satisfy or replace a required verifier or QA lane.
+Review lanes are runtime-derived gate metadata, not separate schedulers. The runtime derives verifier, runtime QA/validation, QA tester, and critic lanes from existing canonical evidence such as verifier responses, validation command artifacts, tool events, QA tester responses, critic responses, and read-only summon responses. Each lane carries bounded ownership metadata: owner label, role or runtime owner, provider/model assignment when known, required or optional status, current state, compact summary, and artifact/event refs. Final reports and progress packets expose those lanes so CLI, MCP, TUI, and future app surfaces can display reviewer/tester/QA/critic state without owning orchestration logic. A summoned agent can add read-only sidecar evidence, but a summon does not satisfy or replace a required verifier or runtime QA/validation lane.
 
-Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
+Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
 
 ## State Machine
 
@@ -121,7 +122,7 @@ The runtime captures evidence directly:
 - protected path classification
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
-- derived review ownership metadata for verifier, QA/validation, critic, and read-only summon evidence
+- derived review ownership metadata for verifier, runtime QA/validation, model-assisted QA tester, critic, and read-only summon evidence
 - external transfer manifest artifacts before approved provider transfers
 - typed handoff records for role delegation, approval mediation, and completion
 

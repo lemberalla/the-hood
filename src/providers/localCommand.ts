@@ -279,6 +279,14 @@ const roleFallbackPayload = (
         unresolvedRisks: [summary],
         process: processMetadata
       };
+    case "qa":
+      return {
+        verdict: responseStatus === "blocked" ? "blocked" : "needs_more_evidence",
+        summary,
+        suggestedCommands: [],
+        risks: [summary],
+        process: processMetadata
+      };
     case "verifier":
       return {
         verdict: "ask_user",

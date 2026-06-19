@@ -22,6 +22,7 @@ export const runtimeCapabilities = [
   "mcp_final_report_next_action",
   "max_iteration_enforcement",
   "validation_command_capture",
+  "model_assisted_qa_tester",
   "branded_tui_shell",
   "approval_inbox_tui",
   "operator_run_monitor",

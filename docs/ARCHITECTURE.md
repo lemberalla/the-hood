@@ -103,6 +103,7 @@ Examples:
 
 - Verifier cannot edit.
 - Critic cannot edit.
+- QA tester cannot edit.
 - Researcher cannot edit.
 - Implementer can edit only allowed paths.
 - Integrator can apply approved patches.
@@ -153,6 +154,9 @@ roles:
   implementer:
     provider: codex-cli
     model: gpt-5.5-low
+  qa:
+    provider: codex-cli
+    model: spark
   verifier:
     provider: claude-code
     model: default
@@ -171,7 +175,7 @@ Providers can expose multiple access modes:
 
 The runtime contract is the same regardless of access mode. The mode changes the transport and who initiates the model call, not who owns permissions, repo access, approvals, logs, or verification.
 
-Same-run summons use the same provider router and role contracts. CLI and MCP can request a read-only planner, researcher, verifier, or critic with a brief and optional one-call provider assignment, but the runtime still builds the directive, records the handoff, enforces approval gates, validates the response, and stores artifacts on the run.
+Same-run summons use the same provider router and role contracts. CLI and MCP can request a read-only planner, researcher, QA tester, verifier, or critic with a brief and optional one-call provider assignment, but the runtime still builds the directive, records the handoff, enforces approval gates, validates the response, and stores artifacts on the run.
 
 ### Agent Contracts
 
@@ -185,6 +189,8 @@ Each role has a schema-bound contract:
 - evidence requirements
 
 The runtime validates structured outputs before acting on them.
+
+The QA tester contract is advisory. It can inspect runtime evidence, call out missed cases, and recommend deterministic validation, but only runtime-captured command evidence can satisfy the runtime QA/validation lane.
 
 ### Rehydration And Reconciliation
 

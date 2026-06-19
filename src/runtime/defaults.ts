@@ -34,7 +34,7 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   "codex-cli": {
     enabled: true,
-    models: ["default"],
+    models: ["default", "spark"],
     accessModes: ["agent-bridge"],
     defaultAccessMode: "agent-bridge"
   },
@@ -46,7 +46,7 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   stub: {
     enabled: true,
-    models: ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"],
+    models: ["orchestrator", "planner", "researcher", "implementer", "qa", "verifier", "critic"],
     accessModes: ["agent-bridge"],
     defaultAccessMode: "agent-bridge"
   },
@@ -66,6 +66,10 @@ export const defaultRoles: RoleMap = {
   implementer: {
     provider: "codex-cli",
     model: "default"
+  },
+  qa: {
+    provider: "codex-cli",
+    model: "spark"
   },
   verifier: {
     provider: "claude-code",

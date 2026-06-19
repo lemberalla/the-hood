@@ -12,6 +12,7 @@ The same model provider can fill different roles across different runs, but a si
 | Planner | Create implementation plan and risks | No | Read-only | No |
 | Researcher | Inspect repo, docs, logs, and external references | No | Read/search only | No |
 | Implementer | Make scoped code changes | Yes, scoped | Yes, scoped | No |
+| QA Tester | Find missed cases and recommend validation from evidence | No | Read-only | No |
 | Verifier | Validate output against acceptance criteria | No | Test/log tools only | Recommends approve/revise/abort |
 | Critic | Find risks, missing cases, design flaws | No | Read-only | No |
 | Integrator | Apply approved patches | Yes, deterministic | Limited | No |
@@ -21,6 +22,7 @@ The same model provider can fill different roles across different runs, but a si
 
 - Implementer and verifier cannot be the same agent for the same task.
 - Verifier cannot edit files.
+- QA tester cannot edit files.
 - Critic cannot edit files.
 - Researcher cannot edit files.
 - Integrator applies only approved patches.
@@ -29,7 +31,7 @@ The same model provider can fill different roles across different runs, but a si
 
 ## Same-Run Summons
 
-A summon is a runtime-owned read-only call to an existing role on an existing run. It is how the runtime can ask a planner, researcher, verifier, or critic to review a slice, perform QA, challenge assumptions, or gather evidence without changing the main loop owner.
+A summon is a runtime-owned read-only call to an existing role on an existing run. It is how the runtime can ask a planner, researcher, QA tester, verifier, or critic to review a slice, perform QA, challenge assumptions, or gather evidence without changing the main loop owner.
 
 Summons carry:
 
@@ -49,7 +51,8 @@ Summon responses can appear as read-only sidecar evidence on review ownership la
 Review ownership is derived by the runtime from canonical run evidence. A lane records the owner, provider/model assignment when the owner is a role, whether the lane is required, whether its evidence can satisfy required gates, and compact artifact/event refs.
 
 - Verifier ownership is satisfied only by a main verifier response under the runtime loop.
-- QA ownership is satisfied only by runtime-captured validation evidence and command metadata.
+- Runtime QA/validation ownership is satisfied only by runtime-captured validation evidence and command metadata.
+- QA tester ownership is advisory model evidence and cannot satisfy runtime validation.
 - Critic ownership is advisory unless the runtime explicitly enters a critic-controlled path.
 - Same-run summons are sidecar evidence and remain read-only.
 
@@ -126,6 +129,42 @@ Outputs:
 - commands run
 - self-check notes
 - unresolved risks
+
+## QA Tester
+
+The QA tester is a read-only model-assisted tester, usually a cheaper model such as Codex Spark.
+
+Inputs:
+
+- user goal
+- current plan
+- diff summaries
+- runtime command metadata
+- validation artifacts
+- verifier or critic evidence when present
+
+Allowed tools:
+
+- read files
+- inspect diffs
+- inspect logs
+- recommend deterministic validation commands
+
+Disallowed:
+
+- editing files
+- changing tests
+- running or claiming command results unless the runtime captured them
+- satisfying runtime QA/validation gates
+- accepting work
+
+Outputs:
+
+- verdict: `pass`, `needs_revision`, `needs_more_evidence`, or `blocked`
+- missed cases
+- suggested validation commands
+- product or regression risks
+- summary grounded in runtime evidence
 
 ## Verifier
 

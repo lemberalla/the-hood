@@ -25,6 +25,7 @@ export const runtimeRoles = [
   "planner",
   "researcher",
   "implementer",
+  "qa",
   "verifier",
   "critic",
   "integrator",
@@ -215,6 +216,7 @@ export type ReviewLaneState = "pending" | "satisfied" | "needs_revision" | "bloc
 export type ReviewLaneSourceKind =
   | "required_gate"
   | "verifier_response"
+  | "qa_response"
   | "critic_response"
   | "validation_evidence"
   | "summon_evidence";
@@ -313,6 +315,7 @@ export interface OperatorNextAction {
 export type LoopResponsibilityKind =
   | "plan"
   | "implement"
+  | "test"
   | "verify"
   | "qa"
   | "critique"

@@ -415,6 +415,15 @@ const createApprovalGateResponse = (role: RuntimeRole, summary: string): AgentRe
             nonBlockingConcerns: []
           }
         };
+      case "qa":
+        return {
+          qaResult: {
+            verdict: "blocked",
+            summary,
+            suggestedCommands: [],
+            risks: [summary]
+          }
+        };
       case "verifier":
         return {
           verificationResult: {
@@ -1473,6 +1482,63 @@ const advanceOneStep = async (
   if (run.state === "verifying") {
     const evidence = await captureGitEvidence(run.repoPath, run.runId);
     const validation = await captureValidationEvidence(evidence.run);
+    const qaAssignment = validation.run.roleMapping.qa;
+
+    if (qaAssignment && !hasProviderResponded(validation.run, "qa", qaAssignment)) {
+      let qaRun = validation.run;
+      const invocationGate = await stopForProviderInvocationApproval(qaRun, "qa", qaAssignment);
+
+      if (invocationGate) {
+        qaRun = invocationGate.run;
+      }
+
+      if (invocationGate?.gated && invocationGate.response && invocationGate.stopReason) {
+        return {
+          run: invocationGate.run,
+          response: invocationGate.response,
+          advanced: true,
+          stopReason: invocationGate.stopReason
+        };
+      }
+
+      const qaResult = await runAgent(qaRun, "qa", {
+        phase: "qa",
+        changedPathCount: evidence.changedPaths.length,
+        protectedChangeCount: evidence.protectedChanges.length,
+        validationCommandCount: validation.executedCommands.length,
+        validationFailureCount: validation.failedCommands.length,
+        validationSummaryRef: validation.artifact.ref
+      });
+      const stopped = await stopForProviderStatus(qaResult.run, "qa", qaResult.response);
+
+      if (stopped) {
+        return {
+          run: stopped.run,
+          response: qaResult.response,
+          advanced: true,
+          stopReason: stopped.stopReason
+        };
+      }
+
+      const qaCompleted = await updateRun(
+        qaResult.run,
+        { state: "verifying" },
+        [createEvent("qa_tester_completed", "QA tester reviewed runtime evidence before verifier review.")],
+        [agentHandoff(qaResult.run, {
+          reason: "QA tester reviewed runtime evidence; verifier remains the required approval lane.",
+          stateAfter: "verifying",
+          fromRole: "qa",
+          toRole: "verifier"
+        })]
+      );
+
+      return {
+        run: qaCompleted,
+        response: qaResult.response,
+        advanced: true
+      };
+    }
+
     const result = await runAgent(validation.run, "verifier", {
       phase: "verify",
       changedPathCount: evidence.changedPaths.length,

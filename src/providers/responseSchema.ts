@@ -74,6 +74,20 @@ const payloadSchemaForRole = (request: AgentRequest): JsonObject => {
           }
         }
       };
+    case "qa":
+      return {
+        ...basePayloadSchema(),
+        required: ["verdict", "summary"],
+        properties: {
+          verdict: {
+            type: "string",
+            enum: ["pass", "needs_revision", "needs_more_evidence", "blocked"]
+          },
+          summary: {
+            type: "string"
+          }
+        }
+      };
     case "verifier":
       return {
         ...basePayloadSchema(),

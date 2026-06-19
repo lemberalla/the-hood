@@ -32,7 +32,7 @@ thehood approvals policy set mode autopilot
 thehood approvals policy set external-transfers auto-low-risk
 thehood continue <run-id>
 thehood reconcile <run-id>
-thehood summon <run-id> --role critic --brief "Review this slice" --kind qa
+thehood summon <run-id> --role qa --agent codex-cli:spark --brief "Look for missed cases"
 thehood abort <run-id>
 thehood mcp
 thehood mcp config
@@ -65,6 +65,7 @@ thehood run "Add export flow" \
   --planner claude-code:opus \
   --researcher claude-code:sonnet \
   --implementer codex-cli:gpt-5.5-low \
+  --qa codex-cli:spark \
   --verifier anthropic-api:claude-opus \
   --critic anthropic-api:claude-sonnet
 ```
@@ -76,6 +77,7 @@ thehood run "Exercise the loop" \
   --repo . \
   --orchestrator stub:orchestrator \
   --implementer stub:implementer \
+  --qa stub:qa \
   --verifier stub:verifier \
   --critic stub:critic
 
@@ -131,7 +133,7 @@ Initial config shape:
     },
     "codex-cli": {
       "enabled": true,
-      "models": ["default"],
+      "models": ["default", "spark"],
       "accessModes": ["agent-bridge"],
       "defaultAccessMode": "agent-bridge"
     },
@@ -143,7 +145,7 @@ Initial config shape:
     },
     "stub": {
       "enabled": true,
-      "models": ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"],
+      "models": ["orchestrator", "planner", "researcher", "implementer", "qa", "verifier", "critic"],
       "accessModes": ["agent-bridge"],
       "defaultAccessMode": "agent-bridge"
     }
@@ -156,6 +158,10 @@ Initial config shape:
     "implementer": {
       "provider": "codex-cli",
       "model": "default"
+    },
+    "qa": {
+      "provider": "codex-cli",
+      "model": "spark"
     },
     "verifier": {
       "provider": "claude-code",
@@ -203,7 +209,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood artifact <run-id> <artifact-ref>` reads a bounded artifact that is already attached to the run. It uses the same safety boundary as `thehood_read_artifact`: refs must stay inside that run's artifact directory and must already be recorded on the run.
 
-`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, a bounded preview of any provider `markdown` payload, the final report artifact when present, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, derived review ownership lanes, bounded loop responsibility schedules, bounded operator next actions, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `reviewLanes`, `loopResponsibilities`, `operatorNextActions`, `latestHandoff`, `handoffTimeline`, and bounded refs-only `canonicalMemory`. Review lanes include owner assignment, required/optional state, whether the lane satisfies required gates, compact summaries, and artifact/event refs only. Loop responsibilities include planner/orchestrator, implementer, verifier, runtime QA/validation, critic, reconciliation, integration, operator approval, and completion ownership as runtime-derived refs-only display guidance. Operator next actions include the suggested action, owner, blocking/required state, compact reason, optional CLI/MCP hints, and artifact/event refs only; they are display guidance, not enforcement. Full provider markdown remains in the response artifact and should be read with `thehood artifact` when needed.
+`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, a bounded preview of any provider `markdown` payload, the final report artifact when present, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, derived review ownership lanes, bounded loop responsibility schedules, bounded operator next actions, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `reviewLanes`, `loopResponsibilities`, `operatorNextActions`, `latestHandoff`, `handoffTimeline`, and bounded refs-only `canonicalMemory`. Review lanes include owner assignment, required/optional state, whether the lane satisfies required gates, compact summaries, and artifact/event refs only. Loop responsibilities include planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion ownership as runtime-derived refs-only display guidance. Operator next actions include the suggested action, owner, blocking/required state, compact reason, optional CLI/MCP hints, and artifact/event refs only; they are display guidance, not enforcement. Full provider markdown remains in the response artifact and should be read with `thehood artifact` when needed.
 
 `thehood logs <run-id>` prints stored runtime events and a bounded `handoffs` section. Handoff labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer` are derived from runtime roles and provider assignments; they are display lanes, not policy grants.
 
@@ -215,7 +221,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood reconcile <run-id>` reconciles a completed run by sending its latest `progress` artifact to the configured `planner`, or to the `orchestrator` when no planner is assigned. Browser and API providers such as `chatgpt-web`, `openai-api`, and `anthropic-api` first write a `transfer_manifest` artifact and pause at an approval gate before the progress packet is sent. After approval, the provider response is stored as a `reconciliation` artifact.
 
-`thehood summon <run-id> --role <role> --brief <text>` attaches a read-only same-run agent call to an existing run. Summon roles are `orchestrator`, `planner`, `researcher`, `verifier`, and `critic`; use `--kind qa|review|critique|research|plan` to label the handoff. `--agent provider:model` overrides the role assignment for that one call without changing the run's role mapping. The runtime records an `agent_summoned` event, a typed handoff, directive and response artifacts when the provider runs, and the usual approval gate when a model-backed provider invocation needs approval. Summon responses may appear as sidecar review ownership evidence, but they cannot satisfy required verifier or QA lanes.
+`thehood summon <run-id> --role <role> --brief <text>` attaches a read-only same-run agent call to an existing run. Summon roles are `orchestrator`, `planner`, `researcher`, `qa`, `verifier`, and `critic`; use `--kind qa|review|critique|research|plan` to label the handoff. `--agent provider:model` overrides the role assignment for that one call without changing the run's role mapping. The runtime records an `agent_summoned` event, a typed handoff, directive and response artifacts when the provider runs, and the usual approval gate when a model-backed provider invocation needs approval. Summon responses may appear as sidecar review ownership evidence, but they cannot satisfy required verifier or runtime QA/validation lanes.
 
 `thehood transfer preview <run-id>` reads the latest `transfer_manifest` artifact for a run without sending anything externally. The preview includes destination provider, purpose, source artifacts, byte counts, hashes, risk class, approval phrase, and a bounded content preview.
 

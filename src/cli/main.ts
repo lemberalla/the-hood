@@ -104,12 +104,13 @@ Role override options for plan/run:
   --planner provider:model
   --researcher provider:model
   --implementer provider:model
+  --qa provider:model
   --verifier provider:model
   --critic provider:model
   --constraint "text"
 
 Summon roles:
-  orchestrator | planner | researcher | verifier | critic
+  orchestrator | planner | researcher | qa | verifier | critic
 `;
 
 const repoFromOptions = (options: Record<string, CliOptionValue>): string =>
@@ -133,7 +134,7 @@ const parseMode = (value: string | undefined, fallback: RunMode): RunMode => {
 const parseRoleOverrides = (options: Record<string, CliOptionValue>): RoleMap => {
   const overrides: RoleMap = {};
 
-  for (const role of ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"] as const) {
+  for (const role of ["orchestrator", "planner", "researcher", "implementer", "qa", "verifier", "critic"] as const) {
     const value = getStringOption(options, role);
     if (value) {
       overrides[role] = parseRoleAssignment(value);

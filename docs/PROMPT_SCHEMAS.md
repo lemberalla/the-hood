@@ -66,6 +66,7 @@ orchestrator:
     - planner
     - researcher
     - implementer
+    - qa
     - verifier
     - critic
   available_tools:
@@ -96,7 +97,7 @@ orchestrator:
 
 ```yaml
 worker:
-  role: planner | researcher | implementer | verifier | critic
+  role: planner | researcher | implementer | qa | verifier | critic
   objective: string
   scope:
     allowed_paths:
@@ -210,7 +211,7 @@ decision:
   reason: string
   markdown: string | null
   confidence: low | medium | high
-  next_role: planner | researcher | implementer | verifier | critic | integrator | null
+  next_role: planner | researcher | implementer | qa | verifier | critic | integrator | null
   task:
     objective: string
     allowed_paths:
@@ -258,6 +259,25 @@ implementation_result:
   unresolved_risks:
     - string
 ```
+
+## QA Tester Output
+
+```yaml
+qa_result:
+  verdict: pass | needs_revision | needs_more_evidence | blocked
+  summary: string
+  markdown: string | null
+  suggested_commands:
+    - string
+  risks:
+    - string
+  thehoodDirectiveAck:
+    runId: string
+    nonce: string
+    responseField: thehoodDirectiveAck
+```
+
+The QA tester output is advisory. It can recommend deterministic validation and identify missed cases, but it cannot satisfy the runtime QA/validation lane.
 
 ## Verifier Output
 

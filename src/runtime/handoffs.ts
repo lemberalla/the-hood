@@ -37,6 +37,7 @@ export interface RunHandoffSummary {
 const agentLaneRoles: RuntimeRole[] = [
   "orchestrator",
   "implementer",
+  "qa",
   "verifier",
   "critic",
   "planner",
@@ -46,7 +47,9 @@ const agentLaneRoles: RuntimeRole[] = [
 ];
 
 const titleCaseRole = (role: RuntimeRole): string =>
-  role
+  role === "qa"
+    ? "QA"
+    : role
     .split("_")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");

@@ -260,6 +260,13 @@ const payloadForKey = (
         commandsRun: [],
         unresolvedRisks: [summary]
       }, expectedAck);
+    case "qaResult":
+      return withDirectiveAck({
+        verdict: "blocked",
+        summary,
+        suggestedCommands: [],
+        risks: [summary]
+      }, expectedAck);
     case "verificationResult":
       return withDirectiveAck({
         verdict: "ask_user",

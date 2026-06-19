@@ -75,7 +75,9 @@ After restart, the TheHood server should expose these tools:
 - `thehood_plan`
 - `thehood_orchestrate`
 - `thehood_consult`
+- `thehood_summon`
 - `thehood_continue`
+- `thehood_reconcile`
 - `thehood_status`
 - `thehood_runs`
 - `thehood_read_artifact`
@@ -84,7 +86,7 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `max_iteration_enforcement`, `validation_command_capture`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `autopilot_approval_policy`, `run_status_insights`, and `same_run_agent_summons`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `max_iteration_enforcement`, `validation_command_capture`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `autopilot_approval_policy`, `run_status_insights`, `same_run_agent_summons`, and `model_assisted_qa_tester`, the chat is still connected to an older MCP server process.
 
 First verification sequence from a Codex chat:
 
@@ -113,6 +115,17 @@ Example guest critic:
   "repo_path": "/path/to/repo",
   "role": "critic",
   "agent": "claude-code:opus"
+}
+```
+
+Example QA tester:
+
+```json
+{
+  "goal": "Review the current evidence and suggest missing validation commands.",
+  "repo_path": "/path/to/repo",
+  "role": "qa",
+  "agent": "codex-cli:spark"
 }
 ```
 
@@ -177,6 +190,7 @@ Example persistent role assignment:
   "repo_path": "/path/to/repo",
   "role_mapping": {
     "orchestrator": "codex-cli:default",
+    "qa": "codex-cli:spark",
     "critic": "claude-code:opus",
     "verifier": "claude-code:sonnet"
   }

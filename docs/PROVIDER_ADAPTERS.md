@@ -34,7 +34,7 @@ Current request shape:
 ```yaml
 agent_request:
   run: RunRecord
-  role: orchestrator | planner | researcher | implementer | verifier | critic
+  role: orchestrator | planner | researcher | implementer | qa | verifier | critic
   assignment:
     provider: string
     model: string
@@ -87,13 +87,14 @@ Rules:
 Purpose:
 
 - Exercise the runtime loop without external model calls.
-- Produce deterministic orchestrator, implementer, critic, and verifier responses.
+- Produce deterministic orchestrator, implementer, QA tester, critic, and verifier responses.
 - Keep smoke tests stable while the real provider adapters are still being built.
 
 Best roles:
 
 - orchestrator
 - implementer
+- qa
 - verifier
 - critic
 
@@ -229,6 +230,7 @@ Best roles:
 
 - implementer
 - researcher
+- qa tester
 - reviewer
 
 Rules:
@@ -236,6 +238,7 @@ Rules:
 - Scope tasks tightly.
 - Capture diffs and logs.
 - Do not let Codex self-verify its own changes.
+- QA tester output is advisory and cannot satisfy runtime validation proof.
 - Run through `codex exec` with TheHood's role directive.
 - Use `read-only` sandbox for non-editing roles.
 - Require explicit provider-invocation approval before read-only repo calls.

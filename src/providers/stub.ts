@@ -90,6 +90,16 @@ const implementerResponse = (): AgentResponse =>
     }
   });
 
+const qaResponse = (): AgentResponse =>
+  response("Stub QA tester found no missing validation concerns.", {
+    qaResult: {
+      verdict: "pass",
+      summary: "Stub QA tester reviewed available evidence and found no extra concerns.",
+      suggestedCommands: [],
+      risks: []
+    }
+  });
+
 const verifierResponse = (request: AgentRequest): AgentResponse => {
   const protectedChangeCount = Number(request.context.protectedChangeCount ?? 0);
   const validationFailureCount = Number(request.context.validationFailureCount ?? 0);
@@ -124,6 +134,8 @@ export const stubProvider: ProviderAdapter = {
         return researcherResponse();
       case "implementer":
         return implementerResponse();
+      case "qa":
+        return qaResponse();
       case "verifier":
         return verifierResponse(request);
       case "critic":

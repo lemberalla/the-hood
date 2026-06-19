@@ -28,6 +28,11 @@ const outputContracts: Record<RuntimeRole, AgentOutputContract> = {
     name: "implementation_result",
     requiredDataKey: "implementationResult"
   },
+  qa: {
+    schemaVersion: 1,
+    name: "qa_result",
+    requiredDataKey: "qaResult"
+  },
   verifier: {
     schemaVersion: 1,
     name: "verification_result",
@@ -55,6 +60,7 @@ const roleObjectives: Record<RuntimeRole, string> = {
   planner: "Create a repo-grounded plan with risks, acceptance criteria, and a small execution path.",
   researcher: "Gather relevant facts and source-grounded context without editing files.",
   implementer: "Make only the scoped changes required for the task and report unresolved risks honestly.",
+  qa: "Act as a read-only tester: inspect runtime evidence, look for missed cases, and recommend concrete validation without claiming proof.",
   verifier: "Independently validate runtime evidence and recommend approve, revise, abort, or ask_user.",
   critic: "Challenge the plan or patch for missing cases, unsafe assumptions, and better alternatives.",
   integrator: "Apply only approved changes and preserve the target checkout state.",
@@ -90,6 +96,14 @@ const roleInstructions: Record<RuntimeRole, string[]> = {
     "Do not change tests, fixtures, snapshots, or evals unless explicitly approved.",
     "Do not claim final acceptance; verification is separate.",
     "Echo directiveAck exactly in data.implementationResult.thehoodDirectiveAck.",
+    "Return structured data matching the output contract."
+  ],
+  qa: [
+    "Do not edit files.",
+    "Do not run or claim command results unless they are present as runtime-captured evidence in the directive context.",
+    "Review plans, diffs, logs, and artifacts for missing cases, product risks, and useful validation commands.",
+    "Treat runtime validation evidence as the only source that can prove tests passed.",
+    "Echo directiveAck exactly in data.qaResult.thehoodDirectiveAck.",
     "Return structured data matching the output contract."
   ],
   verifier: [
