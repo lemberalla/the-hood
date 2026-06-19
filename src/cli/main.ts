@@ -111,7 +111,10 @@ Usage:
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
   thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
-  thehood ui [approvals|settings [page]|overview|crew|providers|presets|budgets|safety|browser|commands|all] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
+  thehood ui [approvals|settings [page]|overview|actions|crew|providers|presets|budgets|safety|browser|commands|all] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
+  thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value> [--repo <path>] [--json]
+  thehood ui team <preset> [--repo <path>] [--json]
+  thehood ui role <role> <provider:model> [--repo <path>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
   thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
@@ -486,6 +489,11 @@ const handleRoles = async (
 
     assertRoleInvariants(updated.roles);
     await writeConfig(repoPath, updated);
+    if (shouldPrintJson(options)) {
+      printJson({ role, assignment, roles: updated.roles });
+      return;
+    }
+
     process.stdout.write(`${role}: ${assignment.provider}:${assignment.model}\n`);
     return;
   }
@@ -897,6 +905,51 @@ const handleUi = async (
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
   const subcommand = args[0];
+
+  if (subcommand === "set") {
+    const key = args[1];
+    const value = args[2];
+
+    if (!key || !value || args.length > 3) {
+      throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value>.");
+    }
+
+    if (key === "approval-mode") {
+      await handleApprovals(["policy", "set", "mode", value], options);
+      return;
+    }
+
+    if (key === "external-transfers") {
+      await handleApprovals(["policy", "set", "external-transfers", value], options);
+      return;
+    }
+
+    if (key === "max-iterations" || key === "fanout-max-items") {
+      await handleConfig(["set", key, value], options);
+      return;
+    }
+
+    throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value>.");
+  }
+
+  if (subcommand === "team") {
+    if (!args[1] || args.length > 2) {
+      throw new InputError("Usage: thehood ui team <preset>.");
+    }
+
+    await handleTeams(["apply", args[1]], options);
+    return;
+  }
+
+  if (subcommand === "role") {
+    if (!args[1] || !args[2] || args.length > 3) {
+      throw new InputError("Usage: thehood ui role <role> <provider:model>.");
+    }
+
+    await handleRoles(["set", args[1], args[2]], options);
+    return;
+  }
+
   const settingsPage = subcommand === "settings"
     ? parseSettingsPage(args[1])
     : isSettingsPage(subcommand)
@@ -907,10 +960,10 @@ const handleUi = async (
     throw new InputError(`Unknown ui subcommand "${subcommand}".`);
   }
   if (subcommand === "settings" && args.length > 2) {
-    throw new InputError("Usage: thehood ui settings [overview|crew|providers|presets|budgets|safety|browser|commands|all].");
+    throw new InputError("Usage: thehood ui settings [overview|actions|crew|providers|presets|budgets|safety|browser|commands|all].");
   }
   if (settingsPage && subcommand !== "settings" && args.length > 1) {
-    throw new InputError("Usage: thehood ui [overview|crew|providers|presets|budgets|safety|browser|commands|all].");
+    throw new InputError("Usage: thehood ui [overview|actions|crew|providers|presets|budgets|safety|browser|commands|all].");
   }
 
   const repoPath = repoFromOptions(options);

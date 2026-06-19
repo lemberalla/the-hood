@@ -412,27 +412,38 @@ assert.ok(dashboard.stdout.includes("JOB BOARD"));
 const settingsOverview = await runCli(["ui", "settings", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsOverview.stdout.includes("THEHOOD SETTINGS COCKPIT"));
 assert.ok(settingsOverview.stdout.includes("OPEN A SETTINGS PAGE"));
+assert.ok(settingsOverview.stdout.includes("actions"));
 assert.ok(settingsOverview.stdout.includes("./dist/cli/main.js ui crew"));
 assert.equal(settingsOverview.stdout.includes("Crew Role Commands"), false);
+const settingsActions = await runCli(["ui", "actions", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsActions.stdout.includes("THEHOOD SETTINGS / ACTIONS"));
+assert.ok(settingsActions.stdout.includes("Quick Actions"));
+assert.ok(settingsActions.stdout.includes("./dist/cli/main.js ui set approval-mode autopilot"));
+assert.ok(settingsActions.stdout.includes("./dist/cli/main.js ui team codex-default"));
 const settingsCrew = await runCli(["ui", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsCrew.stdout.includes("CREW ASSIGNMENTS"));
-assert.ok(settingsCrew.stdout.includes("./dist/cli/main.js"));
+assert.ok(settingsCrew.stdout.includes("./dist/cli/main.js ui role"));
 const explicitSettingsCrew = await runCli(["ui", "settings", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(explicitSettingsCrew.stdout.includes("CREW ASSIGNMENTS"));
 const settingsProviders = await runCli(["ui", "providers", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsProviders.stdout.includes("PROVIDER BAY"));
 const settingsPresets = await runCli(["ui", "presets", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsPresets.stdout.includes("TEAM PRESETS"));
+assert.ok(settingsPresets.stdout.includes("./dist/cli/main.js ui team"));
 const settingsBudgets = await runCli(["ui", "budgets", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsBudgets.stdout.includes("max iterations"));
 assert.ok(settingsBudgets.stdout.includes("fanout max items"));
+assert.ok(settingsBudgets.stdout.includes("./dist/cli/main.js ui set max-iterations"));
 const settingsSafety = await runCli(["ui", "safety", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsSafety.stdout.includes("AUTOPILOT / TRANSFERS"));
 assert.ok(settingsSafety.stdout.includes("external transfers"));
+assert.ok(settingsSafety.stdout.includes("./dist/cli/main.js ui set approval-mode"));
 const settingsBrowser = await runCli(["ui", "browser", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsBrowser.stdout.includes("BROWSER BRIDGE"));
 assert.ok(settingsBrowser.stdout.includes("cdp reachable"));
 const settingsCommands = await runCli(["ui", "commands", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsCommands.stdout.includes("Quick Actions"));
+assert.ok(settingsCommands.stdout.includes("Underlying Commands"));
 assert.ok(settingsCommands.stdout.includes("Crew Role Commands"));
 const settingsAll = await runCli(["ui", "all", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsAll.stdout.includes("Editable In Config"));
@@ -442,6 +453,36 @@ const settingsJson = JSON.parse(
 assert.equal(settingsJson.page, "crew");
 const invalidSettingsPage = await runCli(["ui", "settings", "nope", "--repo", repoPath], { expectExitCode: 2 });
 assert.ok(invalidSettingsPage.stderr.includes("Unknown settings page"));
+const uiAliasRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-ui-settings-smoke-"));
+const uiMaxIterations = JSON.parse(
+  (await runCli(["ui", "set", "max-iterations", "7", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiMaxIterations.defaults.maxIterations, 7);
+const uiFanoutMaxItems = JSON.parse(
+  (await runCli(["ui", "set", "fanout-max-items", "3", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiFanoutMaxItems.defaults.fanoutMaxItems, 3);
+const uiApprovalPolicy = JSON.parse(
+  (await runCli(["ui", "set", "approval-mode", "autopilot", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiApprovalPolicy.mode, "autopilot");
+assert.equal(uiApprovalPolicy.externalTransfers.mode, "auto_low_risk");
+const uiTransferPolicy = JSON.parse(
+  (await runCli(["ui", "set", "external-transfers", "manual", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiTransferPolicy.externalTransfers.mode, "manual");
+const uiTeam = JSON.parse(
+  (await runCli(["ui", "team", "codex-default", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiTeam.preset.id, "codex-default");
+const uiRole = JSON.parse(
+  (await runCli(["ui", "role", "qa", "stub:qa", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiRole.role, "qa");
+assert.equal(uiRole.assignment.provider, "stub");
+assert.equal(uiRole.assignment.model, "qa");
+const invalidUiSet = await runCli(["ui", "set", "unknown", "value", "--repo", uiAliasRepoPath], { expectExitCode: 2 });
+assert.ok(invalidUiSet.stderr.includes("thehood ui set approval-mode"));
 await new Promise((resolve, reject) => {
   cdpServer.close((error) => {
     if (error) {

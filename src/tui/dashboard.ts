@@ -48,6 +48,7 @@ interface RenderOptions {
 
 export const settingsPageIds = [
   "overview",
+  "actions",
   "crew",
   "providers",
   "presets",
@@ -266,6 +267,15 @@ const approvalModeCommand = (repoPath: string, mode: string): string =>
 
 const externalTransferModeCommand = (repoPath: string, mode: string): string =>
   cliCommand(repoPath, ["approvals", "policy", "set", "external-transfers", mode]);
+
+const uiSetCommand = (repoPath: string, key: string, value: string | number): string =>
+  cliCommand(repoPath, ["ui", "set", key, String(value)]);
+
+const uiTeamCommand = (repoPath: string, presetId: string): string =>
+  cliCommand(repoPath, ["ui", "team", presetId]);
+
+const uiRoleCommand = (repoPath: string, role: string, assignment: RoleAssignment | undefined): string =>
+  cliCommand(repoPath, ["ui", "role", role, assignment ? assignmentValue(assignment) : "<provider:model>"]);
 
 const statusWord = (ready: boolean): string => ready ? "ready" : "needs attention";
 
@@ -845,42 +855,42 @@ const settingsOverviewLines = (input: SettingsInput, width: number): string[] =>
 ];
 
 const settingsCrewRows = (input: SettingsInput, width: number): string[] => {
-  const commandWidth = Math.max(16, width - 55);
+  const commandWidth = Math.max(24, width - 45);
 
   return [
     tableRow([
-      ["ROLE", 14],
-      ["ASSIGNMENT", 22],
-      ["STATE", 13],
+      ["ROLE", 12],
+      ["ASSIGNMENT", 18],
+      ["STATE", 9],
       ["COMMAND", commandWidth]
     ]),
     ...input.roleRoster.map((role) =>
       tableRow([
-        [role.role, 14],
-        [truncateEnd(assignmentValue(role.assignment), 22), 22],
-        [truncateEnd(rosterState(role), 13), 13],
-        [truncateEnd(roleSetCommand(input.repoPath, role.role, role.assignment), commandWidth), commandWidth]
+        [role.role, 12],
+        [truncateEnd(assignmentValue(role.assignment), 18), 18],
+        [truncateEnd(rosterState(role), 9), 9],
+        [truncateEnd(uiRoleCommand(input.repoPath, role.role, role.assignment), commandWidth), commandWidth]
       ])
     )
   ];
 };
 
 const settingsTeamRows = (input: SettingsInput, width: number): string[] => {
-  const commandWidth = Math.max(16, width - 50);
+  const commandWidth = Math.max(24, width - 40);
 
   return [
     tableRow([
-      ["ACTIVE", 6],
-      ["PRESET", 18],
-      ["SUMMARY", 20],
+      ["ON", 4],
+      ["PRESET", 16],
+      ["SUMMARY", 14],
       ["COMMAND", commandWidth]
     ]),
     ...input.teamPresets.map((preset) =>
       tableRow([
-        [teamPresetIsActive(input, preset) ? "yes" : "", 6],
-        [preset.id, 18],
-        [truncateEnd(preset.summary, 20), 20],
-        [truncateEnd(teamApplyCommand(input.repoPath, preset.id), commandWidth), commandWidth]
+        [teamPresetIsActive(input, preset) ? "yes" : "", 4],
+        [preset.id, 16],
+        [truncateEnd(preset.summary, 14), 14],
+        [truncateEnd(uiTeamCommand(input.repoPath, preset.id), commandWidth), commandWidth]
       ])
     )
   ];
@@ -888,45 +898,45 @@ const settingsTeamRows = (input: SettingsInput, width: number): string[] => {
 
 const settingsBudgetLines = (input: SettingsInput, width: number): string[] => [
   tableRow([
-    ["SETTING", 24],
-    ["VALUE", 10],
-    ["COMMAND", Math.max(16, width - 38)]
+    ["SETTING", 18],
+    ["VALUE", 7],
+    ["COMMAND", Math.max(24, width - 29)]
   ]),
   tableRow([
-    ["max iterations", 24],
-    [String(input.config.defaults.maxIterations), 10],
-    [truncateEnd(configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations), Math.max(16, width - 38)), Math.max(16, width - 38)]
+    ["max iterations", 18],
+    [String(input.config.defaults.maxIterations), 7],
+    [truncateEnd(uiSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations), Math.max(24, width - 29)), Math.max(24, width - 29)]
   ]),
   tableRow([
-    ["fanout max items", 24],
-    [String(input.config.defaults.fanoutMaxItems), 10],
-    [truncateEnd(configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems), Math.max(16, width - 38)), Math.max(16, width - 38)]
+    ["fanout max items", 18],
+    [String(input.config.defaults.fanoutMaxItems), 7],
+    [truncateEnd(uiSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems), Math.max(24, width - 29)), Math.max(24, width - 29)]
   ])
 ];
 
 const settingsApprovalLines = (input: SettingsInput, width: number): string[] => {
-  const commandWidth = Math.max(16, width - 35);
+  const commandWidth = Math.max(24, width - 29);
 
   return [
-    tableRow([["MODE", 22], ["VALUE", 9], ["COMMAND", commandWidth]]),
+    tableRow([["MODE", 18], ["VALUE", 7], ["COMMAND", commandWidth]]),
     tableRow([
-      ["approval posture", 22],
-      [modeLabel(input.config.approvalPolicy.mode), 9],
-      [truncateEnd(approvalModeCommand(input.repoPath, input.config.approvalPolicy.mode), commandWidth), commandWidth]
+      ["approval posture", 18],
+      [modeLabel(input.config.approvalPolicy.mode), 7],
+      [truncateEnd(uiSetCommand(input.repoPath, "approval-mode", modeLabel(input.config.approvalPolicy.mode)), commandWidth), commandWidth]
     ]),
     tableRow([
-      ["external transfers", 22],
-      [modeLabel(input.config.approvalPolicy.externalTransfers.mode), 9],
-      [truncateEnd(externalTransferModeCommand(input.repoPath, input.config.approvalPolicy.externalTransfers.mode), commandWidth), commandWidth]
+      ["external transfers", 18],
+      [modeLabel(input.config.approvalPolicy.externalTransfers.mode), 7],
+      [truncateEnd(uiSetCommand(input.repoPath, "external-transfers", modeLabel(input.config.approvalPolicy.externalTransfers.mode)), commandWidth), commandWidth]
     ]),
     tableRow([
-      ["max auto bytes", 22],
-      [String(input.config.approvalPolicy.externalTransfers.maxAutoApproveBytes), 9],
+      ["max auto bytes", 18],
+      [String(input.config.approvalPolicy.externalTransfers.maxAutoApproveBytes), 7],
       [truncateEnd("edit .thehood/config.json approvalPolicy.externalTransfers.maxAutoApproveBytes", commandWidth), commandWidth]
     ]),
     tableRow([
-      ["transfer rules", 22],
-      [String(input.config.approvalPolicy.externalTransfers.rules.length), 9],
+      ["transfer rules", 18],
+      [String(input.config.approvalPolicy.externalTransfers.rules.length), 7],
       [truncateEnd("edit .thehood/config.json approvalPolicy.externalTransfers.rules", commandWidth), commandWidth]
     ])
   ];
@@ -987,8 +997,26 @@ const settingsBrowserLines = (input: SettingsInput, width: number): string[] => 
   `status ${truncateEnd("thehood browser status --json", Math.max(10, width - 8))}`
 ];
 
-const settingsCommandDeckLines = (input: SettingsInput, width: number): string[] => [
-  "Exact Commands",
+const settingsActionDeckLines = (input: SettingsInput, width: number): string[] => [
+  "Quick Actions",
+  "  Safety",
+  `    ${uiSetCommand(input.repoPath, "approval-mode", "manual")}`,
+  `    ${uiSetCommand(input.repoPath, "approval-mode", "auto-low-risk")}`,
+  `    ${uiSetCommand(input.repoPath, "approval-mode", "autopilot")}`,
+  `    ${uiSetCommand(input.repoPath, "external-transfers", "manual")}`,
+  `    ${uiSetCommand(input.repoPath, "external-transfers", "auto-low-risk")}`,
+  "  Budgets",
+  `    ${uiSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
+  `    ${uiSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
+  "  Team",
+  ...input.teamPresets.map((preset) => `    ${uiTeamCommand(input.repoPath, preset.id)}`),
+  "",
+  "Current Crew",
+  ...input.roleRoster.map((role) => `  ${truncateEnd(uiRoleCommand(input.repoPath, role.role, role.assignment), width - 2)}`)
+];
+
+const settingsUnderlyingCommandLines = (input: SettingsInput, width: number): string[] => [
+  "Underlying Commands",
   `  ${approvalModeCommand(input.repoPath, "manual")}`,
   `  ${approvalModeCommand(input.repoPath, "auto-low-risk")}`,
   `  ${approvalModeCommand(input.repoPath, "autopilot")}`,
@@ -1012,8 +1040,15 @@ const settingsCommandDeckLines = (input: SettingsInput, width: number): string[]
   "  providers.<id>"
 ];
 
+const settingsCommandDeckLines = (input: SettingsInput, width: number): string[] => [
+  ...settingsActionDeckLines(input, width),
+  "",
+  ...settingsUnderlyingCommandLines(input, width)
+];
+
 const settingsPageDescription: Record<SettingsPageId, string> = {
   overview: "compact status and page menu",
+  actions: "short commands for common settings",
   crew: "role assignments and set commands",
   providers: "provider states and available models",
   presets: "team presets and apply commands",
@@ -1104,6 +1139,18 @@ const renderSettingsCrew = (input: SettingsInput, width: number, useColor: boole
   return frame("THEHOOD SETTINGS / CREW", lines, width, useColor, "amber");
 };
 
+const renderSettingsActions = (input: SettingsInput, width: number, useColor: boolean): string => {
+  const innerWidth = width - 4;
+
+  return frame(
+    "THEHOOD SETTINGS / ACTIONS",
+    settingsActionDeckLines(input, innerWidth),
+    width,
+    useColor,
+    "amber"
+  );
+};
+
 const renderSettingsProviders = (input: SettingsInput, width: number, useColor: boolean): string => {
   const innerWidth = width - 4;
   const lines = [
@@ -1192,6 +1239,8 @@ const settingsWide = (input: SettingsInput, width: number, useColor: boolean): s
     "CREW ASSIGNMENTS",
     ...settingsCrewRows(input, innerWidth),
     "",
+    ...settingsActionDeckLines(input, innerWidth),
+    "",
     "TEAM PRESETS",
     ...settingsTeamRows(input, innerWidth),
     "",
@@ -1199,7 +1248,7 @@ const settingsWide = (input: SettingsInput, width: number, useColor: boolean): s
     "",
     ...bridge,
     "",
-    ...settingsCommandDeckLines(input, innerWidth)
+    ...settingsUnderlyingCommandLines(input, innerWidth)
   ];
 
   return frame("THEHOOD SETTINGS / ALL", lines, width, useColor, "amber");
@@ -1212,6 +1261,8 @@ const settingsCompact = (input: SettingsInput, width: number, useColor: boolean)
     "",
     "CREW ASSIGNMENTS",
     ...settingsCrewRows(input, innerWidth),
+    "",
+    ...settingsActionDeckLines(input, innerWidth),
     "",
     "TEAM PRESETS",
     ...settingsTeamRows(input, innerWidth),
@@ -1231,7 +1282,7 @@ const settingsCompact = (input: SettingsInput, width: number, useColor: boolean)
     "BROWSER BRIDGE",
     ...settingsBrowserLines(input, innerWidth),
     "",
-    ...settingsCommandDeckLines(input, innerWidth)
+    ...settingsUnderlyingCommandLines(input, innerWidth)
   ];
 
   return frame("THEHOOD SETTINGS / ALL", lines, width, useColor, "amber");
@@ -1246,6 +1297,8 @@ const renderSettingsPage = (
   switch (page) {
     case "overview":
       return renderSettingsOverview(input, width, useColor);
+    case "actions":
+      return renderSettingsActions(input, width, useColor);
     case "crew":
       return renderSettingsCrew(input, width, useColor);
     case "providers":
