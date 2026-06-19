@@ -277,6 +277,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
+assert.ok(doctorResult.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
@@ -2037,11 +2038,16 @@ assert.ok(
     approval.reason.includes("Auto-approved by TheHood autopilot policy")
   )
 );
-const autopilotLoopContinue = JSON.parse(
-  (await runCli(["continue", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath, "--json"])).stdout
+const autopilotLoopResult = JSON.parse(
+  (await runCli(["loop", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath, "--json"])).stdout
 );
-assert.equal(autopilotLoopContinue.run.state, "completed");
-assert.equal(autopilotLoopContinue.providerResponses.length, 4);
+assert.equal(autopilotLoopResult.run.state, "completed");
+assert.equal(autopilotLoopResult.stopKind, "terminal");
+assert.equal(autopilotLoopResult.providerResponses.length, 4);
+assert.equal(autopilotLoopResult.cycles.length, 1);
+const completedLoopText = await runCli(["loop", autopilotLoopRun.runId, "--repo", autopilotLoopRepoPath]);
+assert.ok(completedLoopText.stdout.includes("stopKind: terminal"));
+assert.ok(completedLoopText.stdout.includes("cycle log:"));
 
 const qaRevisionRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-qa-revision-smoke-"));
 await runCli(["init", "--repo", qaRevisionRepoPath]);

@@ -4,6 +4,7 @@ import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtim
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
 import { advanceRun } from "../runtime/loop.js";
+import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
@@ -141,6 +142,20 @@ const optionalNumber = (source: JsonObject, key: string): number | undefined => 
   }
 
   throw new Error(`${key} must be a finite number when provided.`);
+};
+
+const optionalPositiveInteger = (source: JsonObject, key: string): number | undefined => {
+  const value = optionalNumber(source, key);
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${key} must be a positive integer when provided.`);
+  }
+
+  return value;
 };
 
 const optionalBoolean = (source: JsonObject, key: string): boolean | undefined => {
@@ -703,6 +718,58 @@ const createContinueTool = (): McpTool => ({
     })
 });
 
+const createLoopTool = (): McpTool => ({
+  definition: {
+    name: "thehood_loop",
+    title: "Run TheHood Autopilot Loop",
+    description: "Keep advancing an existing TheHood run through the runtime loop until it reaches a terminal state, a required approval gate, no progress, or the max cycle cap. This does not approve manual gates; runtime autopilot policy may still auto-approve bounded gates.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        run_id: {
+          type: "string"
+        },
+        repo_path: {
+          type: "string"
+        },
+        max_cycles: {
+          type: "number",
+          description: "Optional positive integer. Defaults to 8."
+        },
+        max_steps_per_cycle: {
+          type: "number",
+          description: "Optional positive integer. Defaults to 10."
+        }
+      },
+      required: ["run_id", "repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const maxCycles = optionalPositiveInteger(args, "max_cycles");
+      const maxStepsPerCycle = optionalPositiveInteger(args, "max_steps_per_cycle");
+      const result = await runAutopilotLoop({
+        repoPath: requiredString(args, "repo_path"),
+        runId: requiredString(args, "run_id"),
+        ...(maxCycles === undefined ? {} : { maxCycles }),
+        ...(maxStepsPerCycle === undefined ? {} : { maxStepsPerCycle })
+      });
+
+      return {
+        ...runSummary(result.run),
+        advanced: result.advanced,
+        stop_kind: result.stopKind,
+        stop_reason: result.stopReason,
+        cycles: result.cycles as unknown as JsonObject[],
+        max_cycles: result.maxCycles,
+        max_steps_per_cycle: result.maxStepsPerCycle,
+        provider_response_count: result.providerResponses.length,
+        provider_responses: agentResponsesSummary(result.providerResponses)
+      };
+    })
+});
+
 const createReconcileTool = (): McpTool => ({
   definition: {
     name: "thehood_reconcile",
@@ -1194,6 +1261,7 @@ export const mcpTools: McpTool[] = [
   createSummonTool(),
   createFanoutTool(),
   createContinueTool(),
+  createLoopTool(),
   createReconcileTool(),
   createTransferPreviewTool(),
   createStatusTool(),

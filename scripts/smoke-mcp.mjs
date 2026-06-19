@@ -161,6 +161,10 @@ assert.ok(
   "tools/list should expose thehood_fanout"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_loop"),
+  "tools/list should expose thehood_loop"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_reconcile"),
   "tools/list should expose thehood_reconcile"
 );
@@ -291,6 +295,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_session_isola
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
+assert.ok(doctorContent.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
@@ -310,6 +315,63 @@ assert.deepEqual(stubProvider.accessModes, ["agent-bridge"]);
 const chatGptProvider = doctorContent.providers.find((provider) => provider.id === "chatgpt-web");
 assert.ok(chatGptProvider.accessModes.includes("agent-bridge"));
 assert.ok(chatGptProvider.accessModes.includes("mcp-connector"));
+
+const mcpLoopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-loop-smoke-"));
+await runCommand(["init", "--repo", mcpLoopRepoPath]);
+await fs.writeFile(
+  path.join(mcpLoopRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('mcp loop validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+await runCommand(["approvals", "policy", "set", "mode", "autopilot", "--repo", mcpLoopRepoPath]);
+const mcpLoopRun = JSON.parse(
+  await runCommand([
+    "run",
+    "exercise mcp loop runner",
+    "--repo",
+    mcpLoopRepoPath,
+    "--orchestrator",
+    "stub:orchestrator",
+    "--implementer",
+    "stub:implementer",
+    "--qa",
+    "stub:qa",
+    "--verifier",
+    "stub:verifier",
+    "--critic",
+    "stub:critic",
+    "--json"
+  ])
+);
+const mcpLoopPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_loop",
+      arguments: {
+        run_id: mcpLoopRun.runId,
+        repo_path: mcpLoopRepoPath,
+        max_cycles: 3
+      }
+    }
+  }
+]);
+const mcpLoopContent = mcpLoopPath[1].result.structuredContent;
+assert.equal(mcpLoopContent.status, "completed");
+assert.equal(mcpLoopContent.stop_kind, "terminal");
+assert.equal(mcpLoopContent.provider_response_count, 4);
+assert.equal(mcpLoopContent.cycles.length, 1);
 
 const reconciliationSeedPath = await runMcp([
   ...baseMessages,

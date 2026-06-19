@@ -50,6 +50,7 @@ It supports:
 - provider config merging that preserves newly added built-in models in stale repo-local configs
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
+- `loop` keeps advancing a run until terminal state, manual gate, no progress, or a cycle cap
 - schema-bound agent directives and response validation before runtime state advances
 - provider response contracts that keep JSON mechanical while long plans, reports, and reviews live in markdown payload fields
 - guarded local CLI adapters for Codex CLI and Claude Code
@@ -98,6 +99,7 @@ node dist/cli/main.js status --repo .
 node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
+node dist/cli/main.js loop <run-id> --repo .
 node dist/cli/main.js transfer preview <run-id> --repo .
 node dist/cli/main.js approvals policy set mode autopilot --repo .
 node dist/cli/main.js ui approvals --repo .

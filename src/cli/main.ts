@@ -8,6 +8,7 @@ import { InputError, TheHoodError } from "../runtime/errors.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { advanceRun } from "../runtime/loop.js";
+import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
@@ -60,6 +61,7 @@ import {
   formatMcpTunnelConfigReport,
   formatExternalTransferPreview,
   formatFanoutAgentsResult,
+  formatRunLoopResult,
   formatProviders,
   formatReconcileRunResult,
   formatRoleRoster,
@@ -107,6 +109,7 @@ Usage:
   thehood revise <run-id> [--repo <path>] [--reason <text>]
   thehood approvals policy [show|set mode manual|auto-low-risk|autopilot|set external-transfers manual|auto-low-risk] [--repo <path>] [--json]
   thehood continue <run-id> [--repo <path>] [--json]
+  thehood loop <run-id> [--repo <path>] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood reconcile <run-id> [--repo <path>] [--role planner|orchestrator] [--json]
   thehood summon <run-id> --role <role> --brief <text> [--agent <provider:model>] [--kind <kind>] [--json]
   thehood fanout <run-id> --items-json <json-array> [--max-items <n>] [--repo <path>] [--json]
@@ -802,6 +805,22 @@ const handleContinue = async (
   shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatAdvanceRunResult(result)}\n`);
 };
 
+const handleLoop = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const maxCycles = parsePositiveIntegerOption(options, "maxCycles");
+  const maxStepsPerCycle = parsePositiveIntegerOption(options, "maxSteps");
+  const result = await runAutopilotLoop({
+    repoPath: repoFromOptions(options),
+    runId: ensureRunId(args[0]),
+    ...(maxCycles === undefined ? {} : { maxCycles }),
+    ...(maxStepsPerCycle === undefined ? {} : { maxStepsPerCycle })
+  });
+
+  shouldPrintJson(options) ? printJson(result) : process.stdout.write(`${formatRunLoopResult(result)}\n`);
+};
+
 const handleReconcile = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -1155,6 +1174,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "continue":
       await handleContinue(args, parsed.options);
+      return;
+    case "loop":
+      await handleLoop(args, parsed.options);
       return;
     case "reconcile":
       await handleReconcile(args, parsed.options);

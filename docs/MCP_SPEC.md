@@ -341,6 +341,29 @@ Input:
 }
 ```
 
+### `thehood_loop`
+
+Run an existing TheHood run through the headless autopilot runner.
+
+Current behavior:
+
+- repeatedly calls the runtime advance path
+- stops on terminal state, required manual approval, no progress, or max cycle cap
+- does not approve manual gates
+- still lets runtime autopilot policy auto-approve bounded gates when configured
+- returns the final run state, stop kind, stop reason, cycle log, provider response count, normalized provider responses, and structured `next_actions`
+
+Input:
+
+```json
+{
+  "run_id": "string",
+  "repo_path": "string",
+  "max_cycles": "optional positive integer, default 8",
+  "max_steps_per_cycle": "optional positive integer, default 10"
+}
+```
+
 ### `thehood_reconcile`
 
 Reconcile a completed run from its latest progress packet.

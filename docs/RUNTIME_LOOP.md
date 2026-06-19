@@ -41,6 +41,8 @@ Revision packets are runtime repair handoffs, not reviewer authority. When QA re
 
 Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
 
+The headless loop runner is a repeat driver over the same runtime state machine. It repeatedly advances a run until terminal state, required manual approval, no progress, or a caller-supplied cycle cap. It does not approve manual gates, add roles, schedule sidecar evidence, or replace verifier/runtime QA ownership.
+
 ## State Machine
 
 ```text

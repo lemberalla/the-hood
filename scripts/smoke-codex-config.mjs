@@ -263,6 +263,7 @@ for (const expectedTool of [
   "thehood_read_artifact",
   "thehood_capture_evidence",
   "thehood_fanout",
+  "thehood_loop",
   "thehood_abort"
 ]) {
   assert.ok(toolNames.includes(expectedTool), `tools/list should expose ${expectedTool}`);
@@ -286,6 +287,7 @@ for (const expectedCapability of [
   "chatgpt_web_session_isolation",
   "branded_tui_shell",
   "operator_next_actions",
+  "runtime_loop_runner",
   "autopilot_approval_policy",
   "mcp_autopilot_continue_guidance",
   "run_status_insights",

@@ -37,6 +37,7 @@ thehood approvals policy show
 thehood approvals policy set mode autopilot
 thehood approvals policy set external-transfers auto-low-risk
 thehood continue <run-id>
+thehood loop <run-id>
 thehood reconcile <run-id>
 thehood summon <run-id> --role qa --agent codex-cli:spark --brief "Look for missed cases"
 thehood fanout <run-id> --items-json '[{"role":"qa","agent":"stub:qa","brief":"Look for missed cases"}]'
@@ -256,7 +257,9 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood exec <run-id> -- <command> [args...]` runs a deterministic command without a shell and stores stdout/stderr as artifacts. Risky commands such as destructive git operations, dependency installs, and network commands require `--allow-risky`.
 
-`thehood continue <run-id>` advances the runtime loop until it reaches a terminal state or a gate. When no manual approval gate is active, continuing is the normal autopilot-aware path: runtime policy may auto-approve bounded provider invocation and non-secret transfer-manifest gates and records those decisions as `approval_auto_approved` events. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, QA, optional critic, revision packet repair when needed, and verifier phases without external model calls.
+`thehood continue <run-id>` advances the runtime loop until it reaches a terminal state, a gate, or its internal step cap. When no manual approval gate is active, continuing is the normal autopilot-aware path: runtime policy may auto-approve bounded provider invocation and non-secret transfer-manifest gates and records those decisions as `approval_auto_approved` events. With `stub` roles, an approved implement run advances through orchestrator, implementer, git evidence capture, QA, optional critic, revision packet repair when needed, and verifier phases without external model calls.
+
+`thehood loop <run-id> --repo .` is the headless autopilot runner. It repeatedly calls the runtime advance path until the run reaches `completed`, `failed`, or `aborted`, stops for a manual approval gate, makes no progress, or reaches the caller's cycle cap. It accepts `--max-cycles <n>` and `--max-steps <n>`; defaults are 8 cycles and 10 advance steps per cycle. It does not approve manual gates itself. In `autopilot` policy mode, the runtime may still auto-approve bounded gates and records those decisions as normal approval evidence.
 
 `thehood reconcile <run-id>` reconciles a completed run by sending its latest `progress` artifact to the configured `planner`, or to the `orchestrator` when no planner is assigned. Browser and API providers such as `chatgpt-web`, `openai-api`, and `anthropic-api` first write a `transfer_manifest` artifact and pause at an approval gate before the progress packet is sent. After approval, the provider response is stored as a `reconciliation` artifact.
 

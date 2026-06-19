@@ -1,6 +1,7 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
 import { agentMarkdownField } from "../providers/markdownPayload.js";
 import type { AdvanceRunResult } from "../runtime/loop.js";
+import type { RunLoopResult } from "../runtime/loopRunner.js";
 import type { FanoutAgentsResult } from "../runtime/fanout.js";
 import type { ReconcileRunResult } from "../runtime/reconciliation.js";
 import type { SummonAgentResult } from "../runtime/summons.js";
@@ -566,6 +567,22 @@ export const formatAdvanceRunResult = (result: AdvanceRunResult): string => [
   `advanced: ${result.advanced}`,
   `stopReason: ${result.stopReason}`,
   `providerResponses: ${result.providerResponses.length}`
+].join("\n");
+
+export const formatRunLoopResult = (result: RunLoopResult): string => [
+  formatRunSummary(result.run),
+  "",
+  `advanced: ${result.advanced}`,
+  `stopKind: ${result.stopKind}`,
+  `stopReason: ${result.stopReason}`,
+  `cycles: ${result.cycles.length}/${result.maxCycles}`,
+  `maxStepsPerCycle: ${result.maxStepsPerCycle}`,
+  `providerResponses: ${result.providerResponses.length}`,
+  "",
+  "cycle log:",
+  ...result.cycles.map((cycle) =>
+    `  #${cycle.cycle} state=${cycle.state} advanced=${cycle.advanced} responses=${cycle.providerResponseCount} stop=${cycle.stopReason}`
+  )
 ].join("\n");
 
 export const formatReconcileRunResult = (result: ReconcileRunResult): string => [
