@@ -133,7 +133,7 @@ Each provider directive includes a bounded `canonicalMemory` object. It is a ref
 
 Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, and bounded review ownership lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
-Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. These are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence.
+Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. They also expose bounded operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

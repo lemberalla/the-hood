@@ -282,6 +282,7 @@ for (const expectedCapability of [
   "chatgpt_browser_manager",
   "chatgpt_web_bridge_fail_fast",
   "branded_tui_shell",
+  "operator_next_actions",
   "autopilot_approval_policy",
   "run_status_insights",
   "same_run_agent_summons"

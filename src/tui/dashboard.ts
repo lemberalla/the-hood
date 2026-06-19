@@ -109,6 +109,18 @@ const reviewLaneLines = (run: RunMonitorItem): string[] => {
   ];
 };
 
+const operatorNextActionLines = (run: RunMonitorItem): string[] => {
+  const nextAction = run.operatorNextActions[0];
+  if (!nextAction) {
+    return [];
+  }
+
+  return [
+    `      next    ${nextAction.blocking ? "blocked" : "ready"} ${truncate(nextAction.label, 88)}`,
+    ...(nextAction.commandHint ? [`      cmd     ${truncate(nextAction.commandHint, 112)}`] : [])
+  ];
+};
+
 const runMonitorLines = (run: RunMonitorItem, index: number): string[] => {
   const firstArtifactRef = run.artifactRefs[0];
 
@@ -119,6 +131,7 @@ const runMonitorLines = (run: RunMonitorItem, index: number): string[] => {
     ...(run.provider ? [`      agent   ${run.lane ?? "provider"} (${run.provider})`] : []),
     ...(run.gate ? [`      gate    ${run.gate}`] : []),
     ...(firstArtifactRef ? [`      artifact ${truncate(firstArtifactRef, 112)}`] : []),
+    ...operatorNextActionLines(run),
     ...reviewLaneLines(run)
   ];
 };

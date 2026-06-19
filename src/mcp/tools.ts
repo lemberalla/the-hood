@@ -14,6 +14,7 @@ import {
   searchRepo
 } from "../runtime/repoGateway.js";
 import { approvalMessageHint } from "../runtime/approvalInbox.js";
+import { deriveOperatorNextActions } from "../runtime/operatorNextActions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { summonAgent } from "../runtime/summons.js";
@@ -44,185 +45,11 @@ const roleSummary = (roles: RoleMap): JsonObject =>
       .map(([role, assignment]) => [role, formatRoleAssignment(assignment)])
   );
 
-const artifactReadAction = (
-  run: RunRecord,
-  artifactRef: string,
-  description: string,
-  action = "inspect_artifact"
-): JsonObject | undefined => {
-  const artifact = run.artifacts.find((candidate) => candidate.ref === artifactRef);
-
-  if (!artifact) {
-    return undefined;
-  }
-
-  return {
-    action,
-    description,
-    tool: "thehood_read_artifact",
-    arguments: {
-      repo_path: run.repoPath,
-      run_id: run.runId,
-      ref: artifact.ref,
-      max_bytes: 20000
-    },
-    artifact: {
-      kind: artifact.kind,
-      ref: artifact.ref,
-      summary: artifact.summary
-    }
-  };
-};
-
 const artifactSummary = (artifact: RunRecord["artifacts"][number]): JsonObject => ({
   kind: artifact.kind,
   ref: artifact.ref,
   summary: artifact.summary
 });
-
-const finalReportActionForRun = (run: RunRecord): JsonObject | undefined => {
-  const event = run.events.filter((candidate) => candidate.type === "final_report_written").at(-1);
-  const artifactRef = event?.data?.artifactRef;
-
-  return typeof artifactRef === "string"
-    ? artifactReadAction(run, artifactRef, "Inspect the final report for this completed run.", "inspect_final_report")
-    : undefined;
-};
-
-const progressPacketActionForRun = (run: RunRecord): JsonObject | undefined => {
-  const artifact = run.artifacts.filter((candidate) => candidate.kind === "progress").at(-1);
-
-  return artifact
-    ? artifactReadAction(run, artifact.ref, "Inspect the progress packet for planner reconciliation.", "inspect_progress_packet")
-    : undefined;
-};
-
-const approvalArtifactActionsForRun = (run: RunRecord): JsonObject[] => {
-  const actions: JsonObject[] = [];
-  const refs = new Set<string>();
-  const addArtifactAction = (artifactRef: unknown, description: string): void => {
-    if (typeof artifactRef !== "string" || refs.has(artifactRef)) {
-      return;
-    }
-
-    const action = artifactReadAction(run, artifactRef, description);
-    if (action) {
-      refs.add(artifactRef);
-      actions.push(action);
-    }
-  };
-
-  const approvalEvent = run.events.filter((event) => event.type === "approval_required").at(-1);
-  addArtifactAction(approvalEvent?.data?.artifactRef, "Inspect the artifact that triggered this approval gate.");
-  addArtifactAction(approvalEvent?.data?.sourceArtifactRef, "Inspect the source artifact for this approval gate.");
-
-  if (run.approvalReason?.includes("protected test changes")) {
-    const integrationReportEvent = run.events
-      .filter((event) => event.type === "integration_report_written")
-      .at(-1);
-    addArtifactAction(
-      integrationReportEvent?.data?.artifactRef,
-      "Inspect the integration report before approving protected path verification."
-    );
-  }
-
-  return actions;
-};
-
-const nextActionsForRun = (run: RunRecord): JsonObject[] => {
-  if (run.approvalRequired) {
-    const isReconciliationApproval = Boolean(run.approvalReason?.includes("send progress packet"));
-    const continueTool = isReconciliationApproval ? "thehood_reconcile" : "thehood_continue";
-    const continueDescription = isReconciliationApproval
-      ? "After the user explicitly approves this boundary, call thehood_reconcile with approval=approve."
-      : "After the user explicitly approves this boundary, call thehood_continue with approval=approve.";
-    return [
-      {
-        action: "review_approval_reason",
-        description: run.approvalReason ?? "Approval is required before this run can continue."
-      },
-      ...approvalArtifactActionsForRun(run),
-      ...(run.artifacts.some((artifact) => artifact.kind === "transfer_manifest")
-        ? [
-            {
-              action: "preview_external_transfer",
-              description: "Preview the exact external transfer manifest before approving.",
-              tool: "thehood_transfer_preview",
-              arguments: {
-                repo_path: run.repoPath,
-                run_id: run.runId
-              }
-            }
-          ]
-        : []),
-      {
-        action: "continue_with_approval",
-        description: continueDescription,
-        tool: continueTool,
-        arguments: {
-          repo_path: run.repoPath,
-          run_id: run.runId,
-          approval: "approve",
-          message: approvalMessageHint(run)
-        }
-      },
-      {
-        action: "reject_or_revise",
-        description: "If the user does not approve, call thehood_continue with approval=reject or approval=revise."
-      }
-    ];
-  }
-
-  if (run.state === "completed" || run.state === "failed" || run.state === "aborted") {
-    const finalReportAction = run.state === "completed" ? finalReportActionForRun(run) : undefined;
-    const progressAction = run.state === "completed" ? progressPacketActionForRun(run) : undefined;
-
-    return [
-      ...(finalReportAction ? [finalReportAction] : []),
-      ...(progressAction ? [progressAction] : []),
-      ...(run.state === "completed"
-        ? [
-            {
-              action: "reconcile",
-              description: "Reconcile this completed run against its progress packet.",
-              tool: "thehood_reconcile",
-              arguments: {
-                repo_path: run.repoPath,
-                run_id: run.runId,
-                approval: "none"
-              }
-            }
-          ]
-        : []),
-      {
-        action: "inspect_artifacts",
-        description: "Inspect any relevant artifacts with thehood_read_artifact."
-      }
-    ];
-  }
-
-  return [
-    {
-      action: "continue",
-      description: "Call thehood_continue to advance this run to the next runtime boundary.",
-      tool: "thehood_continue",
-      arguments: {
-        repo_path: run.repoPath,
-        run_id: run.runId,
-        approval: "none"
-      }
-    },
-    {
-      action: "inspect_status",
-      description: "Call thehood_status to inspect events and artifacts before continuing.",
-      tool: "thehood_status",
-      arguments: {
-        repo_path: run.repoPath,
-        run_id: run.runId
-      }
-    }
-  ];
-};
 
 const runSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
   run_id: run.runId,
@@ -241,7 +68,7 @@ const runSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
     summary: artifact.summary
   })),
   ...(insights ? { insights } : {}),
-  next_actions: nextActionsForRun(run)
+  next_actions: deriveOperatorNextActions(run) as unknown as JsonObject[]
 });
 
 const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>

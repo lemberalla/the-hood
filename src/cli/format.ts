@@ -153,6 +153,18 @@ const formatReviewLaneLines = (insights: RunInsights): string[] =>
     ];
   });
 
+const formatOperatorOwner = (owner: RunInsights["operatorNextActions"][number]["owner"]): string =>
+  owner.role ? `${owner.label} (${owner.role})` : owner.label;
+
+const formatOperatorNextActionLines = (insights: RunInsights): string[] =>
+  insights.operatorNextActions.slice(0, 6).flatMap((nextAction) => [
+    `  ${nextAction.action.padEnd(24)} ${nextAction.blocking ? "blocking" : "ready"}  owner=${formatOperatorOwner(nextAction.owner)}`,
+    `    ${nextAction.description}`,
+    ...(nextAction.commandHint ? [`    command: ${nextAction.commandHint}`] : []),
+    ...(nextAction.tool ? [`    mcp: ${nextAction.tool}`] : []),
+    ...(nextAction.artifactRefs[0] ? [`    artifact: ${nextAction.artifactRefs[0]}`] : [])
+  ]);
+
 const handoffEndpoint = (
   label: string | undefined,
   assignment: string | undefined,
@@ -198,6 +210,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const handoffTimeline = insights.handoffTimeline.slice(-5);
   const memoryRefs = formatMemoryRefLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
+  const operatorNextActions = formatOperatorNextActionLines(insights);
 
   return [
     ...(response
@@ -232,6 +245,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           "",
           "review lanes:",
           ...reviewLanes
+        ]
+      : []),
+    ...(operatorNextActions.length > 0
+      ? [
+          "",
+          "operator next actions:",
+          ...operatorNextActions
         ]
       : []),
     ...(insights.latestHandoff

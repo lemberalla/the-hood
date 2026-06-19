@@ -148,9 +148,19 @@ Output:
   "next_actions": [
     {
       "action": "string",
+      "label": "string",
       "description": "string",
+      "owner": {
+        "kind": "runtime | role",
+        "label": "string",
+        "role": "optional runtime role"
+      },
+      "blocking": "boolean",
+      "required": "boolean",
       "tool": "optional MCP tool name",
-      "arguments": "optional tool arguments"
+      "arguments": "optional tool arguments",
+      "artifactRefs": ["string"],
+      "eventRefs": ["string"]
     }
   ]
 }
@@ -272,6 +282,7 @@ Current behavior:
 - optionally records an approval decision
 - advances the runtime loop until completion or the next gate
 - returns the final state, stop reason, provider response count, normalized provider responses, and structured `next_actions`
+- `next_actions` are derived by the runtime, include bounded owner/blocking/required metadata, and are display guidance for MCP clients rather than policy grants
 - approval gates include `thehood_read_artifact` next actions when a specific patch, integration report, or transfer manifest should be inspected first
 - external provider transfer gates include `thehood_transfer_preview` next actions when a transfer manifest is available
 - completed runs include an `inspect_final_report` next action when a final report artifact is available
@@ -329,7 +340,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, so Codex can show completed Pro state without manually reading artifacts first.
+Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, review lanes, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first.
 
 Input:
 

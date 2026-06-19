@@ -1,5 +1,6 @@
 import { writeRunArtifact } from "./artifacts.js";
 import { newId, nowIso } from "./ids.js";
+import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import { loadRun, saveRun } from "./store.js";
 import {
@@ -7,6 +8,7 @@ import {
   type ApprovalEvent,
   type JsonObject,
   type JsonValue,
+  type OperatorNextAction,
   type ProgressPacket,
   type ProgressPacketApproval,
   type ProgressPacketArtifactRef,
@@ -36,6 +38,7 @@ export const defaultProgressPacketLimits: ProgressPacketLimits = {
   maxRunEvents: 60,
   maxOpenQuestions: 20,
   maxReviewLanes: 12,
+  maxOperatorNextActions: 8,
   maxStringLength: 1000
 };
 
@@ -57,6 +60,8 @@ const ontologyTerms = [
   "ReviewGate",
   "SidecarEvidence",
   "QA",
+  "OperatorNextAction",
+  "OperatorActionOwner",
   "Reconciliation",
   "Decision"
 ];
@@ -546,6 +551,26 @@ export const buildProgressPacket = (
       summary: truncateText(lane.summary, state)
     })
   );
+  const operatorNextActions = boundedSection(
+    "operatorNextActions",
+    deriveOperatorNextActions(run),
+    state.limits.maxOperatorNextActions,
+    state,
+    (nextAction): OperatorNextAction => ({
+      ...nextAction,
+      label: truncateText(nextAction.label, state),
+      description: truncateText(nextAction.description, state),
+      reason: truncateText(nextAction.reason, state),
+      ...(nextAction.artifact
+        ? {
+            artifact: {
+              ...nextAction.artifact,
+              summary: truncateText(nextAction.artifact.summary, state)
+            }
+          }
+        : {})
+    })
+  );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestVerifierResponse = providerResponses.items.filter((response) => response.role === "verifier").at(-1);
@@ -596,6 +621,7 @@ export const buildProgressPacket = (
     roleMapping: cloneRoleMapping(run.roleMapping),
     latest,
     reviewLanes,
+    operatorNextActions,
     evidence: {
       artifacts,
       providerResponses,
@@ -616,6 +642,7 @@ export const buildProgressPacket = (
         "evidence.validation",
         "evidence.verifierVerdicts",
         "reviewLanes",
+        "operatorNextActions",
         "openQuestions"
       ],
       notes: [

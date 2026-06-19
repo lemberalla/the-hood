@@ -22,6 +22,7 @@ export const runtimeCapabilities = [
   "branded_tui_shell",
   "approval_inbox_tui",
   "operator_run_monitor",
+  "operator_next_actions",
   "autopilot_approval_policy",
   "run_status_insights",
   "same_run_agent_summons",

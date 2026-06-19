@@ -236,6 +236,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager")
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
+assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
@@ -277,6 +278,12 @@ assert.ok(
   reconciliationSeed.next_actions.some((action) => action.tool === "thehood_reconcile"),
   "completed MCP consult should suggest reconciliation"
 );
+const reconciliationSeedTerminalAction = reconciliationSeed.next_actions.find(
+  (action) => action.action === "terminal_complete"
+);
+assert.equal(reconciliationSeedTerminalAction.owner.kind, "runtime");
+assert.equal(reconciliationSeedTerminalAction.blocking, false);
+assert.ok(reconciliationSeedTerminalAction.generatedAt);
 const reconciliationPath = await runMcp([
   ...baseMessages,
   {
@@ -478,6 +485,8 @@ const consultFinalReportAction = consultPath[1].result.structuredContent.next_ac
 );
 assert.equal(consultFinalReportAction.tool, "thehood_read_artifact");
 assert.equal(consultFinalReportAction.arguments.ref, consultFinalReportArtifact.ref);
+assert.deepEqual(consultFinalReportAction.artifactRefs, [consultFinalReportArtifact.ref]);
+assert.equal(consultFinalReportAction.owner.kind, "runtime");
 
 const consultStatusPath = await runMcp([
   ...baseMessages,
@@ -501,6 +510,11 @@ assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReport
 assert.equal(consultStatus.insights.latestProgressPacket.kind, "progress");
 assert.equal(consultStatus.insights.canonicalMemory.kind, "canonical_memory");
 assert.equal(consultStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
+assert.ok(Array.isArray(consultStatus.insights.operatorNextActions));
+assert.ok(
+  consultStatus.insights.operatorNextActions.some((nextAction) => nextAction.action === "terminal_complete"),
+  "MCP status insights should expose runtime-derived operator next actions"
+);
 
 const consultAgentArtifact = consultPath[1].result.structuredContent.artifacts.find(
   (artifact) => artifact.kind === "agent"
@@ -584,6 +598,8 @@ assert.equal(fakeClaudeConsultGate[1].result.structuredContent.consulted_agent, 
 assert.equal(fakeClaudeNextApproval.tool, "thehood_continue");
 assert.equal(fakeClaudeNextApproval.arguments.run_id, fakeClaudeRunId);
 assert.equal(fakeClaudeNextApproval.arguments.approval, "approve");
+assert.equal(fakeClaudeNextApproval.owner.kind, "runtime");
+assert.equal(fakeClaudeNextApproval.required, true);
 assert.ok(fakeClaudeNextApproval.arguments.message.includes("invoke claude-code"));
 assert.equal(
   fakeClaudeConsultGate[1].result.structuredContent.provider_responses[0].data.critiqueResult.verdict,

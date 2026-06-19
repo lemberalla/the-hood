@@ -258,6 +258,58 @@ export interface ReviewLane {
   role?: RuntimeRole;
 }
 
+export type OperatorNextActionKind =
+  | "review_approval_reason"
+  | "inspect_artifact"
+  | "inspect_final_report"
+  | "inspect_progress_packet"
+  | "preview_external_transfer"
+  | "continue_with_approval"
+  | "reject_or_revise"
+  | "continue"
+  | "inspect_status"
+  | "inspect_artifacts"
+  | "reconcile"
+  | "wait_for_provider"
+  | "review_required"
+  | "validation_required"
+  | "terminal_complete"
+  | "terminal_failed"
+  | "terminal_aborted";
+
+export type OperatorNextActionOwnerKind = "runtime" | "role";
+
+export interface OperatorNextActionOwner {
+  kind: OperatorNextActionOwnerKind;
+  label: string;
+  role?: RuntimeRole;
+}
+
+export interface OperatorNextActionArtifact {
+  kind: RunArtifactKind;
+  ref: string;
+  summary: string;
+}
+
+export interface OperatorNextAction {
+  action: OperatorNextActionKind;
+  label: string;
+  description: string;
+  owner: OperatorNextActionOwner;
+  blocking: boolean;
+  required: boolean;
+  state: string;
+  reason: string;
+  generatedAt: string;
+  artifactRefs: string[];
+  eventRefs: string[];
+  commandHint?: string;
+  mcpToolHint?: string;
+  tool?: string;
+  arguments?: JsonObject;
+  artifact?: OperatorNextActionArtifact;
+}
+
 export interface ProgressPacketLimits {
   maxArtifacts: number;
   maxProviderResponses: number;
@@ -266,6 +318,7 @@ export interface ProgressPacketLimits {
   maxRunEvents: number;
   maxOpenQuestions: number;
   maxReviewLanes: number;
+  maxOperatorNextActions: number;
   maxStringLength: number;
 }
 
@@ -406,6 +459,7 @@ export interface ProgressPacket {
   roleMapping: RoleMap;
   latest: ProgressPacketLatestState;
   reviewLanes: ProgressPacketBoundedSection<ReviewLane>;
+  operatorNextActions: ProgressPacketBoundedSection<OperatorNextAction>;
   evidence: ProgressPacketEvidence;
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;

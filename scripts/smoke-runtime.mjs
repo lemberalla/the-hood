@@ -142,6 +142,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fa
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
+assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
@@ -489,6 +490,11 @@ assert.equal(repoContextStatus.insights.canonicalMemory.kind, "canonical_memory"
 assert.equal(repoContextStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
 assert.equal(repoContextStatus.insights.canonicalMemory.ignoreProviderSessionContext, true);
 assert.ok(Array.isArray(repoContextStatus.insights.reviewLanes));
+assert.ok(Array.isArray(repoContextStatus.insights.operatorNextActions));
+assert.ok(
+  repoContextStatus.insights.operatorNextActions.some((nextAction) => nextAction.action === "terminal_complete"),
+  "completed status should expose a terminal operator next action"
+);
 assert.ok(repoContextStatus.insights.handoffTimeline.length > 0);
 assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
 const repoContextDirectiveArtifact = repoContextContinue.run.artifacts.find((artifact) => artifact.kind === "directive");
@@ -502,6 +508,7 @@ assert.equal(repoContextDirective.variables.canonicalMemory.ignoreProviderSessio
   assert.ok(repoContextStatusText.stdout.includes("action: complete"));
   assert.ok(repoContextStatusText.stdout.includes("final report:"));
   assert.ok(repoContextStatusText.stdout.includes("canonical memory refs:"));
+  assert.ok(repoContextStatusText.stdout.includes("operator next actions:"));
   assert.ok(!repoContextStatusText.stdout.includes("review lanes:"));
   assert.ok(repoContextStatusText.stdout.includes("handoff timeline:"));
   const repoContextLogsText = await runCli(["logs", repoContextPlan.runId, "--repo", repoPath]);
@@ -510,6 +517,12 @@ assert.equal(repoContextDirective.variables.canonicalMemory.ignoreProviderSessio
     (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
   );
   assert.ok(repoContextProgressArtifact, "completed read-only run should attach a progress packet");
+  const repoContextProgressPacket = JSON.parse(await fs.readFile(repoContextProgressArtifact.ref, "utf8"));
+  assert.ok(Array.isArray(repoContextProgressPacket.operatorNextActions.items));
+  assert.ok(
+    repoContextProgressPacket.operatorNextActions.items.some((nextAction) => nextAction.action === "terminal_complete"),
+    "progress packet should expose bounded operator next actions"
+  );
   const repoContextReconcile = JSON.parse(
     (await runCli(["reconcile", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
   );

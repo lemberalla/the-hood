@@ -1,5 +1,6 @@
+import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
-import type { ReviewLane, RunArtifact, RunEvent, RunRecord } from "./types.js";
+import type { OperatorNextAction, ReviewLane, RunArtifact, RunEvent, RunRecord } from "./types.js";
 
 export type RunMonitorPhase =
   | "provider_wait"
@@ -36,6 +37,7 @@ export interface RunMonitorItem {
   gate?: string;
   artifactRefs: string[];
   reviewLanes: RunMonitorReviewLane[];
+  operatorNextActions: OperatorNextAction[];
 }
 
 const providerResponseEventTypes = new Set(["agent_response", "reconciliation_response", "summon_response"]);
@@ -115,6 +117,9 @@ const reviewLanes = (run: RunRecord): RunMonitorReviewLane[] =>
     sidecarEvidenceCount: lane.sidecarEvidence.length
   }));
 
+const operatorNextActions = (run: RunRecord): OperatorNextAction[] =>
+  deriveOperatorNextActions(run).slice(0, 3);
+
 const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
   const waitingDirective = directiveWait(run);
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
@@ -133,7 +138,8 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       detail: run.approvalReason ?? "Approval is required before this run can continue.",
       ...(gate ? { gate } : {}),
       artifactRefs: approvalArtifactRefs(run),
-      reviewLanes: reviewLanes(run)
+      reviewLanes: reviewLanes(run),
+      operatorNextActions: operatorNextActions(run)
     };
   }
 
@@ -153,7 +159,8 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       ...(role ? { lane: role } : {}),
       ...(provider ? { provider } : {}),
       artifactRefs: artifactRef ? [artifactRef] : [],
-      reviewLanes: reviewLanes(run)
+      reviewLanes: reviewLanes(run),
+      operatorNextActions: operatorNextActions(run)
     };
   }
 
@@ -167,7 +174,8 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       goal: run.userGoal,
       detail: run.stopReason ?? `Run is ${run.state}.`,
       artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
-      reviewLanes: reviewLanes(run)
+      reviewLanes: reviewLanes(run),
+      operatorNextActions: operatorNextActions(run)
     };
   }
 
@@ -180,7 +188,8 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
     goal: run.userGoal,
     detail: `Runtime is in ${run.state}.`,
     artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
-    reviewLanes: reviewLanes(run)
+    reviewLanes: reviewLanes(run),
+    operatorNextActions: operatorNextActions(run)
   };
 };
 
