@@ -85,6 +85,7 @@ export const createDefaultConfig = (): TheHoodConfig => ({
   version: 1,
   defaults: {
     maxIterations: 8,
+    fanoutMaxItems: 8,
     editRequiresApproval: true,
     dependencyInstallRequiresApproval: true,
     networkRequiresApproval: true,

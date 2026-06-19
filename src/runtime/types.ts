@@ -48,6 +48,7 @@ export type ProviderAccessMode = (typeof providerAccessModes)[number];
 
 export interface RuntimeDefaults {
   maxIterations: number;
+  fanoutMaxItems: number;
   editRequiresApproval: boolean;
   dependencyInstallRequiresApproval: boolean;
   networkRequiresApproval: boolean;

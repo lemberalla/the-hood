@@ -1,4 +1,5 @@
 import { writeRunArtifact } from "./artifacts.js";
+import { loadConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import { newId, nowIso } from "./ids.js";
 import { defaultRolePermissions } from "./permissions.js";
@@ -141,13 +142,31 @@ const normalizeItems = (items: FanoutItemInput[], maxItems: number): FanoutItemI
   });
 };
 
-const resolveMaxItems = (value: number | undefined): number => {
+const resolveConfiguredMaxItems = (value: number): number => {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new InputError("Configured defaults.fanoutMaxItems must be a positive integer.");
+  }
+
+  if (value > hardFanoutMaxItems) {
+    throw new InputError(`Configured defaults.fanoutMaxItems cannot exceed ${hardFanoutMaxItems}.`);
+  }
+
+  return value;
+};
+
+const resolveMaxItems = (value: number | undefined, configuredMaxItems: number): number => {
+  const policyMaxItems = resolveConfiguredMaxItems(configuredMaxItems);
+
   if (value === undefined) {
-    return defaultFanoutMaxItems;
+    return policyMaxItems;
   }
 
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new InputError("Fan-out maxItems must be a positive integer.");
+  }
+
+  if (value > policyMaxItems) {
+    throw new InputError(`Fan-out maxItems cannot exceed configured defaults.fanoutMaxItems (${policyMaxItems}).`);
   }
 
   if (value > hardFanoutMaxItems) {
@@ -327,7 +346,8 @@ const appendFanoutArtifact = async (
 };
 
 export const fanoutAgents = async (input: FanoutAgentsInput): Promise<FanoutAgentsResult> => {
-  const maxItems = resolveMaxItems(input.maxItems);
+  const config = await loadConfig(input.repoPath);
+  const maxItems = resolveMaxItems(input.maxItems, config.defaults.fanoutMaxItems);
   const items = normalizeItems(input.items, maxItems);
   const initialRun = await loadRun(input.repoPath, input.runId);
 

@@ -9,11 +9,14 @@ The working command name is `thehood`.
 ```bash
 thehood init
 thehood config show
-thehood config edit
+thehood config set max-iterations 8
+thehood config set fanout-max-items 4
 thehood models
 thehood providers
 thehood doctor
 thehood roster
+thehood teams
+thehood teams apply pro-orchestrator
 thehood roles
 thehood roles set orchestrator codex-cli:default
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
@@ -62,6 +65,8 @@ thehood ui approvals
 Role mapping can be set globally, per repo, or per run.
 
 `thehood roster --repo .` prints the full agent roster: display lane labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer`, provider:model owner, whether the assignment is the product default or repo config, readiness issues from `doctor`, role purpose, and read/edit/shell/network authority. `--json` returns the same roster as structured data so Codex, MCP clients, and future app surfaces can render the same source of truth.
+
+`thehood teams --repo .` lists runtime-owned role presets. `thehood teams apply codex-default|pro-orchestrator|claude-critic --repo .` writes that preset into repo config through the same role invariants as manual role assignment. Presets are convenience maps, not new authority: provider readiness, invocation approvals, transfer gates, and verifier separation still apply.
 
 Codex is the product default:
 
@@ -113,6 +118,7 @@ Initial config shape:
   "version": 1,
   "defaults": {
     "maxIterations": 8,
+    "fanoutMaxItems": 8,
     "editRequiresApproval": true,
     "dependencyInstallRequiresApproval": true,
     "networkRequiresApproval": true,
@@ -192,6 +198,8 @@ Initial config shape:
 }
 ```
 
+`thehood config set max-iterations <n>` updates the provider-call budget used when new runs are created. `thehood config set fanout-max-items <n>` updates the repo-local fan-out policy cap. The runtime hard cap for fan-out remains 8 items; users can lower the repo cap for cost or latency control.
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -240,7 +248,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood summon <run-id> --role <role> --brief <text>` attaches a read-only same-run agent call to an existing run. Summon roles are `orchestrator`, `planner`, `researcher`, `qa`, `verifier`, and `critic`; use `--kind qa|review|critique|research|plan` to label the handoff. `--agent provider:model` overrides the role assignment for that one call without changing the run's role mapping. The runtime records an `agent_summoned` event, a typed handoff, directive and response artifacts when the provider runs, and the usual approval gate when a model-backed provider invocation needs approval. Summon responses may appear as sidecar review ownership evidence, but they cannot satisfy required verifier or runtime QA/validation lanes.
 
-`thehood fanout <run-id> --items-json <json-array>` runs a bounded group of same-run summons on an existing run. Each item includes `role`, `brief`, and optional `agent`, `kind`, `persona`, `constraints`, and `evidenceRefs`. The runtime hard cap is 8 items and execution is currently sequential so approval gates remain simple and auditable. Fan-out writes a compact `fanout` artifact with item statuses, artifact refs, bounds, and a safety note that the evidence is advisory only. Fan-out responses may populate QA tester or critic sidecar lanes, but they do not satisfy required verifier, runtime QA, approval, or completion gates.
+`thehood fanout <run-id> --items-json <json-array>` runs a bounded group of same-run summons on an existing run. Each item includes `role`, `brief`, and optional `agent`, `kind`, `persona`, `constraints`, and `evidenceRefs`. The runtime hard cap is 8 items, and repo config `defaults.fanoutMaxItems` can lower the per-project policy cap. Execution is currently sequential so approval gates remain simple and auditable. Fan-out writes a compact `fanout` artifact with item statuses, artifact refs, bounds, and a safety note that the evidence is advisory only. Fan-out responses may populate QA tester or critic sidecar lanes, but they do not satisfy required verifier, runtime QA, approval, or completion gates.
 
 `thehood transfer preview <run-id>` reads the latest `transfer_manifest` artifact for a run without sending anything externally. The preview includes destination provider, purpose, source artifacts, byte counts, hashes, risk class, approval phrase, and a bounded content preview.
 

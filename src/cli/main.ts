@@ -18,6 +18,7 @@ import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { runMonitorFromRuns } from "../runtime/runMonitor.js";
 import { summonAgent } from "../runtime/summons.js";
+import { applyTeamPreset, getTeamPreset, listTeamPresets, teamPresetIds } from "../runtime/teamPresets.js";
 import {
   abortRun,
   createRun,
@@ -74,10 +75,12 @@ const helpText = `TheHood local agent runtime
 Usage:
   thehood init [--repo <path>]
   thehood config show [--repo <path>] [--json]
+  thehood config set max-iterations|fanout-max-items <n> [--repo <path>] [--json]
   thehood providers [--repo <path>] [--json]
   thehood doctor [--repo <path>] [--json]
   thehood models [--repo <path>] [--json]
   thehood roster [--repo <path>] [--json]
+  thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
   thehood plan <goal> [--repo <path>] [--json]
@@ -203,6 +206,19 @@ const parsePositiveIntegerOption = (
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== raw.trim()) {
     throw new InputError(`Option --${key} must be a positive integer.`);
+  }
+
+  return parsed;
+};
+
+const parsePositiveIntegerValue = (value: string | undefined, label: string): number => {
+  if (value === undefined) {
+    throw new InputError(`${label} is required.`);
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || String(parsed) !== value.trim()) {
+    throw new InputError(`${label} must be a positive integer.`);
   }
 
   return parsed;
@@ -371,12 +387,49 @@ const handleConfig = async (
 ): Promise<void> => {
   const subcommand = args[0] ?? "show";
 
-  if (subcommand !== "show") {
+  if (subcommand === "show") {
+    const config = await loadConfig(repoFromOptions(options));
+    shouldPrintJson(options) ? printJson(config) : process.stdout.write(`${formatConfig(config)}\n`);
+    return;
+  }
+
+  if (subcommand !== "set") {
     throw new InputError(`Unknown config subcommand "${subcommand}".`);
   }
 
-  const config = await loadConfig(repoFromOptions(options));
-  shouldPrintJson(options) ? printJson(config) : process.stdout.write(`${formatConfig(config)}\n`);
+  const repoPath = repoFromOptions(options);
+  const config = await loadConfig(repoPath);
+  const key = args[1];
+  const value = args[2];
+  let updated = config;
+
+  if (key === "max-iterations") {
+    updated = {
+      ...config,
+      defaults: {
+        ...config.defaults,
+        maxIterations: parsePositiveIntegerValue(value, "max-iterations")
+      }
+    };
+  } else if (key === "fanout-max-items") {
+    const fanoutMaxItems = parsePositiveIntegerValue(value, "fanout-max-items");
+    if (fanoutMaxItems > 8) {
+      throw new InputError("fanout-max-items cannot exceed 8.");
+    }
+
+    updated = {
+      ...config,
+      defaults: {
+        ...config.defaults,
+        fanoutMaxItems
+      }
+    };
+  } else {
+    throw new InputError("Use: thehood config set max-iterations|fanout-max-items <positive-integer>");
+  }
+
+  await writeConfig(repoPath, updated);
+  shouldPrintJson(options) ? printJson(updated) : process.stdout.write(`${formatConfig(updated)}\n`);
 };
 
 const handleProviders = async (options: Record<string, CliOptionValue>): Promise<void> => {
@@ -427,6 +480,47 @@ const handleRoster = async (options: Record<string, CliOptionValue>): Promise<vo
   shouldPrintJson(options)
     ? printJson({ repoPath, roster })
     : process.stdout.write(`${formatRoleRoster(roster, repoPath)}\n`);
+};
+
+const handleTeams = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const subcommand = args[0] ?? "list";
+
+  if (subcommand === "list") {
+    const presets = listTeamPresets();
+    if (shouldPrintJson(options)) {
+      printJson({ presets });
+      return;
+    }
+
+    process.stdout.write(`${presets.map((preset) => `${preset.id}: ${preset.summary}`).join("\n")}\n`);
+    return;
+  }
+
+  if (subcommand !== "apply") {
+    throw new InputError(`Unknown teams subcommand "${subcommand}".`);
+  }
+
+  const presetId = args[1] ?? "";
+  const preset = getTeamPreset(presetId);
+  if (!preset) {
+    throw new InputError(`Unknown team preset "${presetId}". Expected one of: ${teamPresetIds().join(", ")}.`);
+  }
+
+  const repoPath = repoFromOptions(options);
+  const config = await loadConfig(repoPath);
+  const updated = applyTeamPreset(config, preset);
+  assertRoleInvariants(updated.roles);
+  await writeConfig(repoPath, updated);
+
+  if (shouldPrintJson(options)) {
+    printJson({ preset, config: updated });
+    return;
+  }
+
+  process.stdout.write(`Applied team preset ${preset.id}: ${preset.summary}\n${formatRoles(updated.roles)}\n`);
 };
 
 const handleCreateRun = async (
@@ -866,6 +960,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "roster":
       await handleRoster(parsed.options);
+      return;
+    case "teams":
+      await handleTeams(args, parsed.options);
       return;
     case "roles":
       await handleRoles(args, parsed.options);

@@ -106,6 +106,7 @@ export const formatDoctorReport = (report: RuntimeHealthReport): string => [
 export const formatConfig = (config: TheHoodConfig): string => [
   "defaults:",
   `  maxIterations: ${config.defaults.maxIterations}`,
+  `  fanoutMaxItems: ${config.defaults.fanoutMaxItems}`,
   `  editRequiresApproval: ${config.defaults.editRequiresApproval}`,
   `  networkRequiresApproval: ${config.defaults.networkRequiresApproval}`,
   "",

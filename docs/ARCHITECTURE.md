@@ -179,6 +179,8 @@ The runtime contract is the same regardless of access mode. The mode changes the
 
 Repo-local config overlays must not hide newly added built-in provider models or access modes. The runtime merges built-in provider definitions with `.thehood/config.json` so stale local configs can keep user choices while still seeing new built-in capabilities such as `codex-cli:spark` and `stub:qa`.
 
+Team presets are runtime-owned role-map templates, not separate loops. Applying a preset writes normal repo role assignments such as Codex default, ChatGPT Pro orchestrator, or Claude critic; doctor, provider readiness, approval gates, and role invariants still apply exactly as they do for manual role assignment.
+
 Same-run summons use the same provider router and role contracts. CLI and MCP can request a read-only planner, researcher, QA tester, verifier, or critic with a brief and optional one-call provider assignment, but the runtime still builds the directive, records the handoff, enforces approval gates, validates the response, and stores artifacts on the run. Fan-out composes several bounded summons and records a group artifact; it does not move orchestration logic into CLI or MCP.
 
 ### Agent Contracts

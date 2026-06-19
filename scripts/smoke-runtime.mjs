@@ -222,6 +222,26 @@ assert.ok(tunnelConfigText.stdout.includes("installed package tunnel:"));
 assert.ok(tunnelConfigText.stdout.includes("local build tunnel:"));
 assert.ok(tunnelConfigText.stdout.includes("ChatGPT connector:"));
 await runCli(["init", "--repo", repoPath]);
+const initialConfig = JSON.parse((await runCli(["config", "show", "--repo", repoPath, "--json"])).stdout);
+assert.equal(initialConfig.defaults.maxIterations, 8);
+assert.equal(initialConfig.defaults.fanoutMaxItems, 8);
+const initialConfigText = await runCli(["config", "show", "--repo", repoPath]);
+assert.ok(initialConfigText.stdout.includes("fanoutMaxItems: 8"));
+const teamPresets = JSON.parse((await runCli(["teams", "--repo", repoPath, "--json"])).stdout);
+assert.ok(teamPresets.presets.some((preset) => preset.id === "codex-default"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "pro-orchestrator"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "claude-critic"));
+const teamPresetRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-team-preset-smoke-"));
+await runCli(["init", "--repo", teamPresetRepoPath]);
+const appliedTeam = JSON.parse(
+  (await runCli(["teams", "apply", "pro-orchestrator", "--repo", teamPresetRepoPath, "--json"])).stdout
+);
+assert.equal(appliedTeam.preset.id, "pro-orchestrator");
+assert.equal(appliedTeam.config.roles.orchestrator.provider, "chatgpt-web");
+assert.equal(appliedTeam.config.roles.orchestrator.model, "chatgpt-pro");
+assert.equal(appliedTeam.config.roles.implementer.provider, "codex-cli");
+const appliedTeamRoles = JSON.parse((await runCli(["roles", "--repo", teamPresetRepoPath, "--json"])).stdout);
+assert.equal(appliedTeamRoles.orchestrator.provider, "chatgpt-web");
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
@@ -250,6 +270,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
+assert.ok(doctorResult.runtime.capabilities.includes("runtime_team_presets"));
+assert.ok(doctorResult.runtime.capabilities.includes("configurable_budget_envelopes"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("revision_packet_artifacts"));
@@ -632,6 +654,40 @@ assert.equal(fanoutCriticLane.canSatisfyRequired, false);
 const fanoutStatusText = await runCli(["status", fanoutPlan.runId, "--repo", repoPath]);
 assert.ok(fanoutStatusText.stdout.includes("agent fan-out:"));
 assert.ok(fanoutStatusText.stdout.includes("gates: advisory only"));
+const fanoutBudgetRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-fanout-budget-smoke-"));
+await runCli(["init", "--repo", fanoutBudgetRepoPath]);
+const fanoutBudgetConfig = JSON.parse(
+  (await runCli(["config", "set", "fanout-max-items", "1", "--repo", fanoutBudgetRepoPath, "--json"])).stdout
+);
+assert.equal(fanoutBudgetConfig.defaults.fanoutMaxItems, 1);
+await runCli(["config", "set", "fanout-max-items", "9", "--repo", fanoutBudgetRepoPath, "--json"], {
+  expectExitCode: 2
+});
+const fanoutBudgetPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "fanout budget smoke",
+      "--repo",
+      fanoutBudgetRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+await runCli(
+  [
+    "fanout",
+    fanoutBudgetPlan.runId,
+    "--repo",
+    fanoutBudgetRepoPath,
+    "--items-json",
+    fanoutItems,
+    "--json"
+  ],
+  { expectExitCode: 2 }
+);
 
 const qaSidecarRun = JSON.parse(
   (
@@ -2074,23 +2130,10 @@ assert.ok(
 
 const maxIterationRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-max-iterations-smoke-"));
 await runCli(["init", "--repo", maxIterationRepoPath]);
-const maxIterationConfigPath = path.join(maxIterationRepoPath, ".thehood", "config.json");
-const maxIterationConfig = JSON.parse(await fs.readFile(maxIterationConfigPath, "utf8"));
-await fs.writeFile(
-  maxIterationConfigPath,
-  `${JSON.stringify(
-    {
-      ...maxIterationConfig,
-      defaults: {
-        ...maxIterationConfig.defaults,
-        maxIterations: 1
-      }
-    },
-    null,
-    2
-  )}\n`,
-  "utf8"
+const maxIterationConfig = JSON.parse(
+  (await runCli(["config", "set", "max-iterations", "1", "--repo", maxIterationRepoPath, "--json"])).stdout
 );
+assert.equal(maxIterationConfig.defaults.maxIterations, 1);
 const maxIterationRun = JSON.parse(
   (
     await runCli([

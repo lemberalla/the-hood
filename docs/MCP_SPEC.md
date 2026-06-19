@@ -312,7 +312,7 @@ Input:
 }
 ```
 
-Output includes the run summary, `fanout_status`, bounds, the compact `fanout` artifact ref, and one item summary per attempted summon with role, summon kind, status, stop reason, agent, directive artifact, response artifact, and provider status when present. Execution is currently sequential. If a provider invocation or transfer gate blocks one item, the runtime stops before later items and records the group artifact. Fan-out evidence is sidecar-only; it may appear in QA tester or critic lanes, but it cannot satisfy required verifier, runtime QA, approval, or completion gates.
+Output includes the run summary, `fanout_status`, bounds, the compact `fanout` artifact ref, and one item summary per attempted summon with role, summon kind, status, stop reason, agent, directive artifact, response artifact, and provider status when present. Execution is currently sequential. Repo config `defaults.fanoutMaxItems` can lower the item cap, while the runtime hard cap remains 8. If a provider invocation or transfer gate blocks one item, the runtime stops before later items and records the group artifact. Fan-out evidence is sidecar-only; it may appear in QA tester or critic lanes, but it cannot satisfy required verifier, runtime QA, approval, or completion gates.
 
 ### `thehood_continue`
 
