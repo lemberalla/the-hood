@@ -53,7 +53,9 @@ const ontologyTerms = [
   "Validation",
   "VerifierVerdict",
   "ReviewLane",
+  "ReviewOwner",
   "ReviewGate",
+  "SidecarEvidence",
   "QA",
   "Reconciliation",
   "Decision"

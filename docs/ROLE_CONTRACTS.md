@@ -42,6 +42,17 @@ Summons carry:
 
 A summon does not grant edit tools, apply patches, accept work, or rewrite the run's role mapping. Model-backed summon providers still require provider-invocation approval unless autopilot policy auto-approves the bounded gate.
 
+Summon responses can appear as read-only sidecar evidence on review ownership lanes. They are useful for QA, critique, and second opinions, but they cannot satisfy required verifier ownership, replace runtime-captured validation evidence, or advance the main state machine.
+
+## Review Ownership
+
+Review ownership is derived by the runtime from canonical run evidence. A lane records the owner, provider/model assignment when the owner is a role, whether the lane is required, whether its evidence can satisfy required gates, and compact artifact/event refs.
+
+- Verifier ownership is satisfied only by a main verifier response under the runtime loop.
+- QA ownership is satisfied only by runtime-captured validation evidence and command metadata.
+- Critic ownership is advisory unless the runtime explicitly enters a critic-controlled path.
+- Same-run summons are sidecar evidence and remain read-only.
+
 ## Orchestrator
 
 The orchestrator owns the strategy, not the filesystem.

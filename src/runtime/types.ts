@@ -216,7 +216,29 @@ export type ReviewLaneSourceKind =
   | "required_gate"
   | "verifier_response"
   | "critic_response"
-  | "validation_evidence";
+  | "validation_evidence"
+  | "summon_evidence";
+
+export type ReviewLaneOwnerKind = "role" | "runtime";
+
+export interface ReviewLaneOwner {
+  kind: ReviewLaneOwnerKind;
+  label: string;
+  readOnly: boolean;
+  role?: RuntimeRole;
+  provider?: string;
+  model?: string;
+  assignment?: string;
+}
+
+export interface ReviewLaneEvidence {
+  sourceKind: ReviewLaneSourceKind;
+  summary: string;
+  sourceRefs: ProgressPacketSourceRef[];
+  artifactRefs: string[];
+  eventRefs: string[];
+  canSatisfyRequired: boolean;
+}
 
 export interface ReviewLane {
   id: string;
@@ -229,6 +251,10 @@ export interface ReviewLane {
   sourceRefs: ProgressPacketSourceRef[];
   artifactRefs: string[];
   eventRefs: string[];
+  owner: ReviewLaneOwner;
+  canSatisfyRequired: boolean;
+  satisfiesRequired: boolean;
+  sidecarEvidence: ReviewLaneEvidence[];
   role?: RuntimeRole;
 }
 

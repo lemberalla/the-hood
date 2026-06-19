@@ -88,6 +88,14 @@ const phaseLabel = (phase: RunMonitorItem["phase"]): string =>
 const laneStateLabel = (state: ReviewLaneState): string =>
   state.replace(/_/g, " ");
 
+const laneOwnerLabel = (lane: RunMonitorItem["reviewLanes"][number]): string =>
+  lane.owner.assignment ? `${lane.owner.label} (${lane.owner.assignment})` : lane.owner.label;
+
+const laneSatisfactionLabel = (lane: RunMonitorItem["reviewLanes"][number]): string =>
+  lane.required
+    ? lane.satisfiesRequired ? "satisfies" : "missing"
+    : "advisory";
+
 const reviewLaneLines = (run: RunMonitorItem): string[] => {
   if (run.reviewLanes.length === 0) {
     return [];
@@ -96,7 +104,7 @@ const reviewLaneLines = (run: RunMonitorItem): string[] => {
   return [
     "      reviews",
     ...run.reviewLanes.slice(0, 3).map((lane) =>
-      `        ${lane.kind.padEnd(8)} ${laneStateLabel(lane.state).padEnd(14)} ${lane.required ? "required" : "optional"}  ${truncate(lane.label, 72)}`
+      `        ${lane.kind.padEnd(8)} ${laneStateLabel(lane.state).padEnd(14)} ${laneSatisfactionLabel(lane).padEnd(9)} ${truncate(laneOwnerLabel(lane), 72)}`
     )
   ];
 };

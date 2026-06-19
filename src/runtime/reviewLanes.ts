@@ -3,8 +3,9 @@ import type {
   JsonObject,
   ProgressPacketSourceRef,
   ReviewLane,
+  ReviewLaneEvidence,
+  ReviewLaneOwner,
   ReviewLaneState,
-  RoleAssignment,
   RunArtifact,
   RunEvent,
   RunRecord,
@@ -57,13 +58,67 @@ const providerResponseEvents = (run: RunRecord, role: RuntimeRole): RunEvent[] =
 const latestProviderResponseEvent = (run: RunRecord, role: RuntimeRole): RunEvent | undefined =>
   providerResponseEvents(run, role).at(-1);
 
+const summonResponseEvents = (run: RunRecord, role: RuntimeRole): RunEvent[] =>
+  run.events.filter((event) => event.type === "summon_response" && event.data?.role === role);
+
+const latestSummonResponseEvent = (run: RunRecord, role: RuntimeRole): RunEvent | undefined =>
+  summonResponseEvents(run, role).at(-1);
+
 const artifactForEvent = (run: RunRecord, event: RunEvent | undefined): RunArtifact | undefined => {
   const artifactRef = stringField(event?.data?.artifactRef);
   return artifactRef ? run.artifacts.find((artifact) => artifact.ref === artifactRef) : undefined;
 };
 
-const assignmentLabel = (assignment: RoleAssignment | undefined): string | undefined =>
-  assignment ? `${assignment.provider}:${assignment.model}` : undefined;
+const readOnlyOwnerRoles = new Set<RuntimeRole>(["verifier", "critic", "planner", "researcher", "citation"]);
+
+const roleOwner = (run: RunRecord, role: RuntimeRole): ReviewLaneOwner => {
+  const assignment = run.roleMapping[role];
+  const label = roleLaneLabel(role);
+
+  if (!assignment) {
+    return {
+      kind: "role",
+      label,
+      role,
+      readOnly: readOnlyOwnerRoles.has(role)
+    };
+  }
+
+  return {
+    kind: "role",
+    label,
+    role,
+    readOnly: readOnlyOwnerRoles.has(role),
+    provider: assignment.provider,
+    model: assignment.model,
+    assignment: `${assignment.provider}:${assignment.model}`
+  };
+};
+
+const roleOwnerFromEvent = (
+  run: RunRecord,
+  role: RuntimeRole,
+  event: RunEvent | undefined
+): ReviewLaneOwner => {
+  const owner = roleOwner(run, role);
+  const provider = stringField(event?.data?.provider);
+  const model = stringField(event?.data?.model);
+
+  return provider && model
+    ? {
+        ...owner,
+        provider,
+        model,
+        assignment: `${provider}:${model}`
+      }
+    : owner;
+};
+
+const runtimeOwner = (label: string): ReviewLaneOwner => ({
+  kind: "runtime",
+  label,
+  readOnly: true
+});
 
 const implementationReviewRequired = (run: RunRecord): boolean =>
   run.mode === "implement" ||
@@ -123,56 +178,114 @@ const providerLaneSummary = (
 ): string =>
   artifact?.summary ?? event.message ?? fallback;
 
+const summonEvidence = (run: RunRecord, role: RuntimeRole): ReviewLaneEvidence[] =>
+  summonResponseEvents(run, role).slice(-3).map((event) => {
+    const artifact = artifactForEvent(run, event);
+
+    return {
+      sourceKind: "summon_evidence",
+      summary: providerLaneSummary(event, artifact, `Read-only ${role} summon evidence is recorded.`),
+      sourceRefs: providerLaneSourceRefs(run, event, artifact),
+      artifactRefs: artifact ? [artifact.ref] : [],
+      eventRefs: [event.id],
+      canSatisfyRequired: false
+    };
+  });
+
 const verifierLane = (run: RunRecord): ReviewLane | undefined => {
   const event = latestProviderResponseEvent(run, "verifier");
+  const sidecarEvidence = summonEvidence(run, "verifier");
 
-  if (!event && !implementationReviewRequired(run)) {
+  if (!event && !implementationReviewRequired(run) && sidecarEvidence.length === 0) {
     return undefined;
   }
 
   const artifact = artifactForEvent(run, event);
-  const assignment = assignmentLabel(run.roleMapping.verifier);
-  const label = assignment ? `${roleLaneLabel("verifier")} (${assignment})` : roleLaneLabel("verifier");
+  const latestSummon = latestSummonResponseEvent(run, "verifier");
+  const required = implementationReviewRequired(run);
+  const owner = roleOwnerFromEvent(run, "verifier", event ?? (!required ? latestSummon : undefined));
+  const state = event
+    ? verifierLaneState(run, event)
+    : latestSummon && sidecarEvidence.length > 0 && !required
+      ? providerLaneState(latestSummon)
+      : "pending";
+  const sourceKind = event
+    ? "verifier_response"
+    : sidecarEvidence.length > 0 && !required
+      ? "summon_evidence"
+      : "required_gate";
 
   return {
     id: "review-lane-verifier",
-    label,
+    label: owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label,
     kind: "reviewer",
     role: "verifier",
-    state: verifierLaneState(run, event),
-    required: true,
-    sourceKind: event ? "verifier_response" : "required_gate",
+    state,
+    required,
+    sourceKind,
     summary: event
       ? providerLaneSummary(event, artifact, "Verifier review is recorded.")
-      : "Verifier review is required before implementation work can be accepted.",
-    sourceRefs: event ? providerLaneSourceRefs(run, event, artifact) : [runSource(run)],
-    artifactRefs: artifact ? [artifact.ref] : [],
-    eventRefs: event ? [event.id] : []
+      : sidecarEvidence.length > 0 && !required
+        ? "Read-only verifier summon evidence is recorded; it does not replace required verification."
+        : "Verifier review is required before implementation work can be accepted.",
+    sourceRefs: event
+      ? providerLaneSourceRefs(run, event, artifact)
+      : sidecarEvidence.length > 0 && !required
+        ? sidecarEvidence.flatMap((evidence) => evidence.sourceRefs)
+        : [runSource(run)],
+    artifactRefs: event
+      ? artifact ? [artifact.ref] : []
+      : sidecarEvidence.flatMap((evidence) => evidence.artifactRefs),
+    eventRefs: event
+      ? [event.id]
+      : sidecarEvidence.flatMap((evidence) => evidence.eventRefs),
+    owner,
+    canSatisfyRequired: Boolean(event),
+    satisfiesRequired: required && state === "satisfied" && Boolean(event),
+    sidecarEvidence
   };
 };
 
 const criticLane = (run: RunRecord): ReviewLane | undefined => {
   const event = latestProviderResponseEvent(run, "critic");
-  if (!event) {
+  const sidecarEvidence = summonEvidence(run, "critic");
+  if (!event && sidecarEvidence.length === 0) {
     return undefined;
   }
 
   const artifact = artifactForEvent(run, event);
-  const assignment = assignmentLabel(run.roleMapping.critic);
-  const label = assignment ? `${roleLaneLabel("critic")} (${assignment})` : roleLaneLabel("critic");
+  const latestSummon = latestSummonResponseEvent(run, "critic");
+  const owner = roleOwnerFromEvent(run, "critic", event ?? latestSummon);
+  const state = event
+    ? providerLaneState(event)
+    : latestSummon
+      ? providerLaneState(latestSummon)
+      : "pending";
 
   return {
     id: "review-lane-critic",
-    label,
+    label: owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label,
     kind: "critic",
     role: "critic",
-    state: providerLaneState(event),
+    state,
     required: false,
-    sourceKind: "critic_response",
-    summary: providerLaneSummary(event, artifact, "Critic review is recorded."),
-    sourceRefs: providerLaneSourceRefs(run, event, artifact),
-    artifactRefs: artifact ? [artifact.ref] : [],
-    eventRefs: [event.id]
+    sourceKind: event ? "critic_response" : "summon_evidence",
+    summary: event
+      ? providerLaneSummary(event, artifact, "Critic review is recorded.")
+      : "Read-only critic summon evidence is recorded.",
+    sourceRefs: event
+      ? providerLaneSourceRefs(run, event, artifact)
+      : sidecarEvidence.flatMap((evidence) => evidence.sourceRefs),
+    artifactRefs: event
+      ? artifact ? [artifact.ref] : []
+      : sidecarEvidence.flatMap((evidence) => evidence.artifactRefs),
+    eventRefs: event
+      ? [event.id]
+      : sidecarEvidence.flatMap((evidence) => evidence.eventRefs),
+    owner,
+    canSatisfyRequired: false,
+    satisfiesRequired: false,
+    sidecarEvidence
   };
 };
 
@@ -204,6 +317,7 @@ const qaLane = (run: RunRecord): ReviewLane | undefined => {
   }
 
   const failures = validationFailureCount(events, toolEvents);
+  const state = failures > 0 ? "needs_revision" : "satisfied";
   const latestArtifact = artifacts.at(-1);
   const latestEvent = events.at(-1);
   const latestToolEvents = toolEvents.slice(-3);
@@ -220,7 +334,7 @@ const qaLane = (run: RunRecord): ReviewLane | undefined => {
     id: "review-lane-qa",
     label: "Runtime QA / Validation",
     kind: "qa",
-    state: failures > 0 ? "needs_revision" : "satisfied",
+    state,
     required: true,
     sourceKind: "validation_evidence",
     summary: `Runtime validation captured ${executedCount} command(s), ${failures} failed.`,
@@ -229,7 +343,11 @@ const qaLane = (run: RunRecord): ReviewLane | undefined => {
     eventRefs: [
       ...(latestEvent ? [latestEvent.id] : []),
       ...latestToolEvents.map((event) => event.id)
-    ]
+    ],
+    owner: runtimeOwner("Runtime QA / Validation"),
+    canSatisfyRequired: true,
+    satisfiesRequired: state === "satisfied",
+    sidecarEvidence: []
   };
 };
 

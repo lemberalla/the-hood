@@ -368,6 +368,14 @@ assert.ok(
 );
 const summonStatus = JSON.parse((await runCli(["status", summonPlan.runId, "--repo", repoPath, "--json"])).stdout);
 assert.equal(summonStatus.insights.latestAgentResponse.primaryOutputKey, "critiqueResult");
+const summonCriticLane = summonStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-critic");
+assert.ok(summonCriticLane, "summoned critic should appear as review ownership evidence");
+assert.equal(summonCriticLane.sourceKind, "summon_evidence");
+assert.equal(summonCriticLane.canSatisfyRequired, false);
+assert.equal(summonCriticLane.satisfiesRequired, false);
+assert.equal(summonCriticLane.owner.role, "critic");
+assert.equal(summonCriticLane.owner.assignment, "stub:critic");
+assert.ok(summonCriticLane.sidecarEvidence.length > 0, "summon evidence should be marked as sidecar");
 
 await fs.writeFile(path.join(repoPath, "README.md"), "# Smoke Repo\n\nProvider milestone notes.\n", "utf8");
 await fs.mkdir(path.join(repoPath, "src", "providers"), { recursive: true });
@@ -1281,11 +1289,18 @@ assert.equal(finalReportVerifierLane.kind, "reviewer");
 assert.equal(finalReportVerifierLane.role, "verifier");
 assert.equal(finalReportVerifierLane.required, true);
 assert.equal(finalReportVerifierLane.state, "satisfied");
+assert.equal(finalReportVerifierLane.owner.role, "verifier");
+assert.equal(finalReportVerifierLane.owner.assignment, "stub:verifier");
+assert.equal(finalReportVerifierLane.canSatisfyRequired, true);
+assert.equal(finalReportVerifierLane.satisfiesRequired, true);
 const finalReportQaLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-qa");
 assert.ok(finalReportQaLane, "final report should expose QA validation lane");
 assert.equal(finalReportQaLane.kind, "qa");
 assert.equal(finalReportQaLane.required, true);
 assert.equal(finalReportQaLane.state, "satisfied");
+assert.equal(finalReportQaLane.owner.kind, "runtime");
+assert.equal(finalReportQaLane.canSatisfyRequired, true);
+assert.equal(finalReportQaLane.satisfiesRequired, true);
 const validationToolEvent = loopResult.run.toolEvents.find((event) => event.tool === "validation_typecheck");
 assert.ok(validationToolEvent, "verification should capture the selected validation command");
 assert.equal(validationToolEvent.command, "npm");
@@ -1308,13 +1323,23 @@ assert.equal(progressPacket.kind, "progress_packet");
 assert.ok(Array.isArray(progressPacket.reviewLanes.items), "progress packet should expose review lanes");
 assert.ok(
   progressPacket.reviewLanes.items.some(
-    (lane) => lane.id === "review-lane-verifier" && lane.required === true && lane.state === "satisfied"
+    (lane) =>
+      lane.id === "review-lane-verifier" &&
+      lane.required === true &&
+      lane.state === "satisfied" &&
+      lane.owner.assignment === "stub:verifier" &&
+      lane.satisfiesRequired === true
   ),
   "progress packet should expose satisfied verifier lane"
 );
 assert.ok(
   progressPacket.reviewLanes.items.some(
-    (lane) => lane.id === "review-lane-qa" && lane.required === true && lane.state === "satisfied"
+    (lane) =>
+      lane.id === "review-lane-qa" &&
+      lane.required === true &&
+      lane.state === "satisfied" &&
+      lane.owner.kind === "runtime" &&
+      lane.satisfiesRequired === true
   ),
   "progress packet should expose satisfied QA lane"
 );
@@ -1322,6 +1347,8 @@ const verifiedLoopStatusText = await runCli(["status", loopRun.runId, "--repo", 
 assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("reviewer"));
 assert.ok(verifiedLoopStatusText.stdout.includes("qa"));
+assert.ok(verifiedLoopStatusText.stdout.includes("owner=Agent 3 / Verifier (stub:verifier)"));
+assert.ok(verifiedLoopStatusText.stdout.includes("satisfies"));
 const directiveArtifacts = loopResult.run.artifacts.filter((artifact) => artifact.kind === "directive");
 assert.equal(directiveArtifacts.length, 3);
 const verifierDirectiveArtifact = directiveArtifacts.find((artifact) => artifact.summary.startsWith("verifier directive"));

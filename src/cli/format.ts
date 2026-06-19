@@ -132,10 +132,26 @@ const formatMemoryRefLines = (insights: RunInsights): string[] => {
 const formatLaneState = (state: ReviewLaneState): string =>
   state.replace(/_/g, " ");
 
+const formatReviewLaneOwner = (owner: RunInsights["reviewLanes"][number]["owner"]): string =>
+  owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label;
+
 const formatReviewLaneLines = (insights: RunInsights): string[] =>
-  insights.reviewLanes.map((lane) =>
-    `  ${lane.kind.padEnd(8)} ${formatLaneState(lane.state).padEnd(14)} ${lane.required ? "required" : "optional"}  ${lane.label}  ${lane.summary}`
-  );
+  insights.reviewLanes.flatMap((lane) => {
+    const satisfaction = lane.required
+      ? lane.satisfiesRequired ? "satisfies" : "missing"
+      : "advisory";
+    const owner = formatReviewLaneOwner(lane.owner);
+    const source = lane.canSatisfyRequired ? lane.sourceKind : `${lane.sourceKind}/read-only`;
+
+    return [
+      `  ${lane.kind.padEnd(8)} ${formatLaneState(lane.state).padEnd(14)} ${lane.required ? "required" : "optional"}  ${satisfaction}  owner=${owner}  source=${source}`,
+      `    ${lane.summary}`,
+      ...(lane.artifactRefs[0] ? [`    artifact: ${lane.artifactRefs[0]}`] : []),
+      ...(lane.sidecarEvidence.length > 0
+        ? [`    sidecar: ${lane.sidecarEvidence.length} read-only summon evidence item(s); cannot satisfy required gates`]
+        : [])
+    ];
+  });
 
 const handoffEndpoint = (
   label: string | undefined,

@@ -17,6 +17,10 @@ export interface RunMonitorReviewLane {
   state: ReviewLane["state"];
   required: boolean;
   summary: string;
+  owner: ReviewLane["owner"];
+  canSatisfyRequired: boolean;
+  satisfiesRequired: boolean;
+  sidecarEvidenceCount: number;
 }
 
 export interface RunMonitorItem {
@@ -104,7 +108,11 @@ const reviewLanes = (run: RunRecord): RunMonitorReviewLane[] =>
     kind: lane.kind,
     state: lane.state,
     required: lane.required,
-    summary: lane.summary
+    summary: lane.summary,
+    owner: lane.owner,
+    canSatisfyRequired: lane.canSatisfyRequired,
+    satisfiesRequired: lane.satisfiesRequired,
+    sidecarEvidenceCount: lane.sidecarEvidence.length
   }));
 
 const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
