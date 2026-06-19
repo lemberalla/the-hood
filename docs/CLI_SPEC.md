@@ -203,7 +203,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood artifact <run-id> <artifact-ref>` reads a bounded artifact that is already attached to the run. It uses the same safety boundary as `thehood_read_artifact`: refs must stay inside that run's artifact directory and must already be recorded on the run.
 
-`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, the final report artifact when present, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `latestHandoff` and `handoffTimeline`.
+`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, the final report artifact when present, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `latestHandoff`, `handoffTimeline`, and bounded refs-only `canonicalMemory`.
 
 `thehood logs <run-id>` prints stored runtime events and a bounded `handoffs` section. Handoff labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer` are derived from runtime roles and provider assignments; they are display lanes, not policy grants.
 

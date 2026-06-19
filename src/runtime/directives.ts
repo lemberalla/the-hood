@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.js";
+import { buildCanonicalMemory } from "./canonicalMemory.js";
 import { defaultRolePermissions } from "./permissions.js";
 import { formatRoleAssignment } from "./role-assignment.js";
 import type { AgentDirective, AgentOutputContract } from "../providers/types.js";
@@ -111,6 +112,12 @@ const roleInstructions: Record<RuntimeRole, string[]> = {
   ]
 };
 
+const canonicalMemoryInstructions = [
+  "Ignore stale browser, chat, or provider session context unless it is repeated in TheHood canonicalMemory or the current directive context.",
+  "Treat TheHood runtime artifacts, artifact refs, events, and approval records as authoritative.",
+  "Do not infer large artifact bodies from canonicalMemory; it is a bounded refs-only index."
+];
+
 const enabledTools = (permissions: AgentDirective["toolPermissions"]): string[] =>
   Object.entries(permissions)
     .filter(([, enabled]) => enabled)
@@ -130,6 +137,7 @@ export const buildAgentDirective = async (
   const config = await loadConfig(run.repoPath);
   const toolPermissions = defaultRolePermissions[role];
   const outputContract = outputContracts[role];
+  const canonicalMemory = await buildCanonicalMemory(run);
   const outputContractVariables: JsonObject = {
     schemaVersion: outputContract.schemaVersion,
     name: outputContract.name,
@@ -139,7 +147,10 @@ export const buildAgentDirective = async (
   return {
     role,
     objective: roleObjectives[role],
-    instructions: roleInstructions[role],
+    instructions: [
+      ...roleInstructions[role],
+      ...canonicalMemoryInstructions
+    ],
     toolPermissions,
     outputContract,
     variables: {
@@ -179,6 +190,7 @@ export const buildAgentDirective = async (
         disallowedTools: disabledTools(toolPermissions),
         outputContract: outputContractVariables
       },
+      canonicalMemory,
       context
     }
   };

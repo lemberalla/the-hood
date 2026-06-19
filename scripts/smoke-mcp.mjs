@@ -229,6 +229,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("external_transfer_approva
 assert.ok(doctorContent.runtime.capabilities.includes("targeted_repo_context_followups"));
 assert.ok(doctorContent.runtime.capabilities.includes("planner_reconciliation"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_final_report_next_action"));
+assert.ok(doctorContent.runtime.capabilities.includes("canonical_memory_rehydration"));
 assert.ok(doctorContent.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorContent.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
@@ -313,6 +314,14 @@ const reconciliationStatusPath = await runMcp([
 assert.equal(
   reconciliationStatusPath[1].result.structuredContent.insights.latestAgentResponse.artifact.kind,
   "reconciliation"
+);
+assert.equal(
+  reconciliationStatusPath[1].result.structuredContent.insights.latestReconciliation.kind,
+  "reconciliation"
+);
+assert.equal(
+  reconciliationStatusPath[1].result.structuredContent.insights.canonicalMemory.currentRun.artifacts.latestReconciliation.ref,
+  reconciliationResult.reconciliation_artifact.ref
 );
 
 const repoTreePath = await runMcp([
@@ -488,6 +497,9 @@ const consultStatus = consultStatusPath[1].result.structuredContent;
 assert.equal(consultStatus.insights.latestAgentResponse.status, "ok");
 assert.equal(consultStatus.insights.latestAgentResponse.primaryOutputKey, "critiqueResult");
 assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReportArtifact.ref);
+assert.equal(consultStatus.insights.latestProgressPacket.kind, "progress");
+assert.equal(consultStatus.insights.canonicalMemory.kind, "canonical_memory");
+assert.equal(consultStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
 
 const consultAgentArtifact = consultPath[1].result.structuredContent.artifacts.find(
   (artifact) => artifact.kind === "agent"

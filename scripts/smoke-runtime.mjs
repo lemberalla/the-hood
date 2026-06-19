@@ -134,6 +134,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_manifest
 assert.ok(doctorResult.runtime.capabilities.includes("external_transfer_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("targeted_repo_context_followups"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_final_report_next_action"));
+assert.ok(doctorResult.runtime.capabilities.includes("canonical_memory_rehydration"));
 assert.ok(doctorResult.runtime.capabilities.includes("max_iteration_enforcement"));
 assert.ok(doctorResult.runtime.capabilities.includes("validation_command_capture"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
@@ -472,12 +473,24 @@ assert.equal(repoContextStatus.insights.latestAgentResponse.status, "ok");
 assert.equal(repoContextStatus.insights.latestAgentResponse.decision.action, "complete");
 assert.equal(repoContextStatus.insights.latestAgentResponse.primaryOutputKey, "decision");
 assert.equal(repoContextStatus.insights.finalReport.artifact.ref, repoContextFinalReportArtifact.ref);
+assert.equal(repoContextStatus.insights.latestProgressPacket.kind, "progress");
+assert.equal(repoContextStatus.insights.latestRepoContext.ref, contextArtifact.ref);
+assert.equal(repoContextStatus.insights.canonicalMemory.kind, "canonical_memory");
+assert.equal(repoContextStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
+assert.equal(repoContextStatus.insights.canonicalMemory.ignoreProviderSessionContext, true);
 assert.ok(repoContextStatus.insights.handoffTimeline.length > 0);
 assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
+const repoContextDirectiveArtifact = repoContextContinue.run.artifacts.find((artifact) => artifact.kind === "directive");
+assert.ok(repoContextDirectiveArtifact, "provider directives should be stored as artifacts");
+const repoContextDirective = JSON.parse(await fs.readFile(repoContextDirectiveArtifact.ref, "utf8"));
+assert.equal(repoContextDirective.variables.canonicalMemory.kind, "canonical_memory");
+assert.equal(repoContextDirective.variables.canonicalMemory.artifactBodyPolicy, "refs_only");
+assert.equal(repoContextDirective.variables.canonicalMemory.ignoreProviderSessionContext, true);
   const repoContextStatusText = await runCli(["status", repoContextPlan.runId, "--repo", repoPath]);
   assert.ok(repoContextStatusText.stdout.includes("latest agent response:"));
   assert.ok(repoContextStatusText.stdout.includes("action: complete"));
   assert.ok(repoContextStatusText.stdout.includes("final report:"));
+  assert.ok(repoContextStatusText.stdout.includes("canonical memory refs:"));
   assert.ok(repoContextStatusText.stdout.includes("handoff timeline:"));
   const repoContextLogsText = await runCli(["logs", repoContextPlan.runId, "--repo", repoPath]);
   assert.ok(repoContextLogsText.stdout.includes("handoffs:"));
@@ -498,6 +511,11 @@ assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
     (await runCli(["status", repoContextPlan.runId, "--repo", repoPath, "--json"])).stdout
   );
   assert.equal(repoContextReconciledStatus.insights.latestAgentResponse.artifact.kind, "reconciliation");
+  assert.equal(repoContextReconciledStatus.insights.latestReconciliation.kind, "reconciliation");
+  assert.equal(
+    repoContextReconciledStatus.insights.canonicalMemory.currentRun.artifacts.latestReconciliation.ref,
+    repoContextReconcile.reconciliationArtifact.ref
+  );
 
   const roleDelegatePlan = JSON.parse(
     (

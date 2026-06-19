@@ -127,9 +127,13 @@ TheHood's memory is canonical runtime state, not provider session context. Exact
 
 Provider directives should assume that browser and API conversation context may be stale or empty. The runtime rehydrates providers from bounded packets that point back to exact artifacts.
 
+Each provider directive includes a bounded `canonicalMemory` object. It is a refs-only project memory index containing the current run snapshot, recent run summaries, and latest progress packet, reconciliation, repo context, final report, and transfer manifest refs when available. It does not include large artifact bodies. Providers must treat this runtime-owned memory as authoritative and ignore stale provider session context unless that context is repeated in the directive.
+
 ## Final Reports
 
 Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, and approval events. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
+
+Run status insights expose the latest progress packet, reconciliation, repo context, final report, and transfer manifest refs. These are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

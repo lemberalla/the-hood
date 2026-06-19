@@ -121,6 +121,8 @@ Rules:
 - Prefer exact excerpts and artifact refs over summary-only memory packets.
 - Mark superseded or invalidated plan state instead of silently overwriting it.
 - Tell browser-backed providers to ignore stale provider session context and use only TheHood-supplied state.
+- Keep directive-level `canonicalMemory` bounded and refs-only. It may name latest progress, reconciliation, repo context, final report, and transfer manifest artifacts, but it must not inline large artifact bodies.
+- If future work sends larger memory bodies to browser or API providers, treat that as a `memory_packet` external transfer and require a transfer manifest before the data leaves the machine.
 - Keep advanced memory engines pluggable and rebuildable from canonical artifacts.
 
 ## External Transfer Review

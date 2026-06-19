@@ -329,7 +329,7 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, and final report artifact when present, so Codex can show a completed Pro plan without manually reading artifacts first.
+Output includes run fields, events, `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, so Codex can show completed Pro state without manually reading artifacts first.
 
 Input:
 

@@ -1,5 +1,6 @@
 import { readRunArtifact } from "./artifacts.js";
 import { recentAutopilotApprovalsFromRuns } from "./approvalInbox.js";
+import { buildCanonicalMemory, latestCanonicalArtifactRefs } from "./canonicalMemory.js";
 import {
   latestRunHandoff,
   recentRunHandoffSummaries,
@@ -35,6 +36,11 @@ export interface FinalReportInsight {
 export interface RunInsights {
   latestAgentResponse?: LatestAgentResponseInsight;
   finalReport?: FinalReportInsight;
+  latestProgressPacket?: RunArtifactSummary;
+  latestReconciliation?: RunArtifactSummary;
+  latestRepoContext?: RunArtifactSummary;
+  latestTransferManifest?: RunArtifactSummary;
+  canonicalMemory?: JsonObject;
   latestHandoff?: RunHandoffSummary;
   handoffTimeline: RunHandoffSummary[];
   recentAutopilotApprovals: AutopilotApproval[];
@@ -154,6 +160,7 @@ const parseFinalReport = (
 
 export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const issues: string[] = [];
+  const latestRefs = latestCanonicalArtifactRefs(run);
   const latestAgent = latestAgentArtifact(run);
   const latestAgentPayload = latestAgent
     ? await readArtifactJson(run, latestAgent, issues)
@@ -165,6 +172,11 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const latestAgentResponse = latestAgent && latestAgentPayload
     ? parseAgentResponse(latestAgent, latestAgentPayload, issues)
     : undefined;
+  const canonicalMemory = await buildCanonicalMemory(run).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    issues.push(`Could not build canonical memory: ${message}`);
+    return undefined;
+  });
 
   const latestHandoff = latestRunHandoff(run);
   const insights: RunInsights = {
@@ -173,6 +185,26 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
     recentAutopilotApprovals: recentAutopilotApprovalsFromRuns([run]),
     issues
   };
+
+  if (latestRefs.latestProgressPacket) {
+    insights.latestProgressPacket = latestRefs.latestProgressPacket;
+  }
+
+  if (latestRefs.latestReconciliation) {
+    insights.latestReconciliation = latestRefs.latestReconciliation;
+  }
+
+  if (latestRefs.latestRepoContext) {
+    insights.latestRepoContext = latestRefs.latestRepoContext;
+  }
+
+  if (latestRefs.latestTransferManifest) {
+    insights.latestTransferManifest = latestRefs.latestTransferManifest;
+  }
+
+  if (canonicalMemory) {
+    insights.canonicalMemory = canonicalMemory;
+  }
 
   if (latestAgentResponse) {
     insights.latestAgentResponse = latestAgentResponse;

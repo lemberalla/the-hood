@@ -49,6 +49,8 @@ It supports:
 - branded terminal dashboard shell for runtime, role, and browser readiness
 - terminal approval inbox for pending runtime gates
 - run status insights for latest provider output and final reports
+- run status insights for latest progress, reconciliation, repo context, final report, and transfer manifest refs
+- bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths
 - schema-bound planner reconciliation from completed run progress packets

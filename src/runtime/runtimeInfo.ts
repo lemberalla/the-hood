@@ -15,6 +15,7 @@ export const runtimeCapabilities = [
   "external_transfer_approval_policy",
   "targeted_repo_context_followups",
   "planner_reconciliation",
+  "canonical_memory_rehydration",
   "mcp_final_report_next_action",
   "max_iteration_enforcement",
   "validation_command_capture",

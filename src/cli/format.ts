@@ -116,6 +116,19 @@ const formatPrimaryOutputLines = (insights: RunInsights): string[] => {
     .map(([key, value]) => `${key}: ${String(value)}`);
 };
 
+const formatMemoryRefLines = (insights: RunInsights): string[] => {
+  const refs = [
+    ["progress", insights.latestProgressPacket],
+    ["reconciliation", insights.latestReconciliation],
+    ["repoContext", insights.latestRepoContext],
+    ["transferManifest", insights.latestTransferManifest]
+  ] as const;
+
+  return refs.flatMap(([label, artifact]) =>
+    artifact ? [`  ${label}: ${artifact.ref}`] : []
+  );
+};
+
 const handoffEndpoint = (
   label: string | undefined,
   assignment: string | undefined,
@@ -159,6 +172,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const finalReport = insights.finalReport;
   const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
   const handoffTimeline = insights.handoffTimeline.slice(-5);
+  const memoryRefs = formatMemoryRefLines(insights);
 
   return [
     ...(response
@@ -179,6 +193,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           `  artifact: ${finalReport.artifact.ref}`,
           ...(finalReport.stopReason ? [`  stopReason: ${finalReport.stopReason}`] : []),
           `  inspect: thehood artifact ${run.runId} ${quoteArg(finalReport.artifact.ref)} --repo ${quoteArg(run.repoPath)}`
+        ]
+      : []),
+    ...(memoryRefs.length > 0
+      ? [
+          "",
+          "canonical memory refs:",
+          ...memoryRefs
         ]
       : []),
     ...(insights.latestHandoff

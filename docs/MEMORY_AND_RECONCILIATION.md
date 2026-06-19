@@ -130,6 +130,8 @@ The packet may include compact descriptions for navigation, but every important 
 
 Provider directives should tell the model to ignore stale browser or conversation memory and reason only from TheHood-provided state.
 
+Current provider directives include a compact `canonicalMemory` object. This is not a memory engine. It is a bounded runtime-owned index with the current run snapshot, recent run summaries, and latest artifact refs for progress packets, reconciliation, repo context, final reports, and transfer manifests. It intentionally excludes large artifact bodies so browser/API providers can be rehydrated without making ChatGPT conversation history the source of truth.
+
 ## Repo Context Retrieval
 
 Repo context retrieval should behave like an evidence-led repository inspection, not a one-shot dump.
@@ -175,7 +177,7 @@ The planner should answer:
 
 Reconciliation is advisory. The runtime remains responsible for approvals, tool execution, artifact storage, verification gates, and final state.
 
-The current runtime stores `progress` artifacts for completed runs and can reconcile them through the configured planner or orchestrator with `thehood reconcile` or `thehood_reconcile`. Browser and API providers require explicit approval before the progress packet is sent, and successful provider responses are stored as `reconciliation` artifacts.
+The current runtime stores `progress` artifacts for completed runs and can reconcile them through the configured planner or orchestrator with `thehood reconcile` or `thehood_reconcile`. Browser and API providers require explicit approval before the progress packet is sent, and successful provider responses are stored as `reconciliation` artifacts. Future planning and reconciliation directives receive latest reconciliation refs through `canonicalMemory` when available.
 
 ## Risks
 
