@@ -17,6 +17,7 @@ import { buildRoleRoster } from "../runtime/roleRoster.js";
 import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { runMonitorFromRuns } from "../runtime/runMonitor.js";
+import { getProjectPaths } from "../runtime/paths.js";
 import { summonAgent } from "../runtime/summons.js";
 import { applyTeamPreset, getTeamPreset, listTeamPresets, teamPresetIds } from "../runtime/teamPresets.js";
 import {
@@ -67,7 +68,13 @@ import {
   formatSummonAgentResult,
   printJson
 } from "./format.js";
-import { renderApprovalInbox, renderDashboard } from "../tui/dashboard.js";
+import {
+  renderApprovalInbox,
+  renderDashboard,
+  renderSettingsCockpit,
+  settingsPageIds,
+  type SettingsPageId
+} from "../tui/dashboard.js";
 import type { RunArtifact } from "../runtime/types.js";
 
 const helpText = `TheHood local agent runtime
@@ -104,7 +111,7 @@ Usage:
   thehood browser start [--port <n>] [--profile <name>] [--profile-path <path>] [--chrome-path <path>]
   thehood browser status [--port <n>] [--cdp-url <url>] [--profile <name>] [--profile-path <path>] [--json]
   thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
-  thehood ui [approvals] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
+  thehood ui [approvals|settings [page]|overview|crew|providers|presets|budgets|safety|browser|commands|all] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
   thehood mcp
   thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
   thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
@@ -131,6 +138,21 @@ const repoFromOptions = (options: Record<string, CliOptionValue>): string =>
 
 const shouldPrintJson = (options: Record<string, CliOptionValue>): boolean =>
   getBooleanOption(options, "json");
+
+const parseSettingsPage = (value: string | undefined): SettingsPageId => {
+  if (value === undefined) {
+    return "overview";
+  }
+
+  if ((settingsPageIds as readonly string[]).includes(value)) {
+    return value as SettingsPageId;
+  }
+
+  throw new InputError(`Unknown settings page "${value}". Expected one of: ${settingsPageIds.join(", ")}.`);
+};
+
+const isSettingsPage = (value: string | undefined): value is SettingsPageId =>
+  Boolean(value && (settingsPageIds as readonly string[]).includes(value));
 
 const parseMode = (value: string | undefined, fallback: RunMode): RunMode => {
   if (value === undefined) {
@@ -875,8 +897,20 @@ const handleUi = async (
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
   const subcommand = args[0];
-  if (subcommand && subcommand !== "approvals") {
+  const settingsPage = subcommand === "settings"
+    ? parseSettingsPage(args[1])
+    : isSettingsPage(subcommand)
+      ? subcommand
+      : undefined;
+
+  if (subcommand && subcommand !== "approvals" && subcommand !== "settings" && !settingsPage) {
     throw new InputError(`Unknown ui subcommand "${subcommand}".`);
+  }
+  if (subcommand === "settings" && args.length > 2) {
+    throw new InputError("Usage: thehood ui settings [overview|crew|providers|presets|budgets|safety|browser|commands|all].");
+  }
+  if (settingsPage && subcommand !== "settings" && args.length > 1) {
+    throw new InputError("Usage: thehood ui [overview|crew|providers|presets|budgets|safety|browser|commands|all].");
   }
 
   const repoPath = repoFromOptions(options);
@@ -912,6 +946,26 @@ const handleUi = async (
   const health = await inspectRuntimeHealth(config);
   const roleRoster = buildRoleRoster(config, health);
   const browser = await inspectBrowser(browserOptionsFromCli(options));
+
+  if (settingsPage) {
+    const settings = {
+      page: settingsPage,
+      repoPath,
+      configPath: getProjectPaths(repoPath).configPath,
+      config,
+      health,
+      roleRoster,
+      providers: listProviders(config),
+      teamPresets: listTeamPresets(),
+      browser
+    };
+
+    shouldPrintJson(options)
+      ? printJson(settings)
+      : process.stdout.write(`${renderSettingsCockpit(settings, { page: settingsPage })}\n`);
+    return;
+  }
+
   const runs = await listRuns(repoPath);
   const approvalInbox = approvalInboxViewFromRuns(runs);
   const runMonitor = runMonitorFromRuns(runs);

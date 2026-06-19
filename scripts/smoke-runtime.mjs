@@ -404,10 +404,43 @@ assert.equal(browserStatus.chatGptTabFound, true);
 assert.equal(browserStatus.readyForBridge, true);
 const dashboard = await runCli(["ui", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(dashboard.stdout.includes("THEHOOD"));
-assert.ok(dashboard.stdout.includes("Automation"));
-assert.ok(dashboard.stdout.includes("ChatGPT Web"));
-assert.ok(dashboard.stdout.includes("CDP         reachable"));
-assert.ok(dashboard.stdout.includes("Run Monitor"));
+assert.ok(dashboard.stdout.includes("THEHOOD COMMAND CENTER"));
+assert.ok(dashboard.stdout.includes("BROWSER / REMOTE SURFACE"));
+assert.ok(dashboard.stdout.includes("cdp reachable"));
+assert.ok(dashboard.stdout.includes("JOB BOARD"));
+const settingsOverview = await runCli(["ui", "settings", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsOverview.stdout.includes("THEHOOD SETTINGS COCKPIT"));
+assert.ok(settingsOverview.stdout.includes("OPEN A SETTINGS PAGE"));
+assert.ok(settingsOverview.stdout.includes("./dist/cli/main.js ui crew"));
+assert.equal(settingsOverview.stdout.includes("Crew Role Commands"), false);
+const settingsCrew = await runCli(["ui", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsCrew.stdout.includes("CREW ASSIGNMENTS"));
+assert.ok(settingsCrew.stdout.includes("./dist/cli/main.js"));
+const explicitSettingsCrew = await runCli(["ui", "settings", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(explicitSettingsCrew.stdout.includes("CREW ASSIGNMENTS"));
+const settingsProviders = await runCli(["ui", "providers", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsProviders.stdout.includes("PROVIDER BAY"));
+const settingsPresets = await runCli(["ui", "presets", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsPresets.stdout.includes("TEAM PRESETS"));
+const settingsBudgets = await runCli(["ui", "budgets", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsBudgets.stdout.includes("max iterations"));
+assert.ok(settingsBudgets.stdout.includes("fanout max items"));
+const settingsSafety = await runCli(["ui", "safety", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsSafety.stdout.includes("AUTOPILOT / TRANSFERS"));
+assert.ok(settingsSafety.stdout.includes("external transfers"));
+const settingsBrowser = await runCli(["ui", "browser", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsBrowser.stdout.includes("BROWSER BRIDGE"));
+assert.ok(settingsBrowser.stdout.includes("cdp reachable"));
+const settingsCommands = await runCli(["ui", "commands", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsCommands.stdout.includes("Crew Role Commands"));
+const settingsAll = await runCli(["ui", "all", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
+assert.ok(settingsAll.stdout.includes("Editable In Config"));
+const settingsJson = JSON.parse(
+  (await runCli(["ui", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`, "--json"])).stdout
+);
+assert.equal(settingsJson.page, "crew");
+const invalidSettingsPage = await runCli(["ui", "settings", "nope", "--repo", repoPath], { expectExitCode: 2 });
+assert.ok(invalidSettingsPage.stderr.includes("Unknown settings page"));
 await new Promise((resolve, reject) => {
   cdpServer.close((error) => {
     if (error) {
@@ -1161,14 +1194,14 @@ assert.equal(externalInvocationGate.run.approvalRequired, true);
 assert.ok(externalInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
 assert.equal(externalInvocationGate.providerResponses[0].data.decision.action, "request_approval");
 const approvalDashboard = await runCli(["ui", "--repo", repoPath]);
-assert.ok(approvalDashboard.stdout.includes("Run Monitor"));
+assert.ok(approvalDashboard.stdout.includes("JOB BOARD"));
 assert.ok(approvalDashboard.stdout.includes("approval gate"));
-assert.ok(approvalDashboard.stdout.includes("Approval Gates"));
-assert.ok(approvalDashboard.stdout.includes(externalContextPlan.runId));
-assert.ok(approvalDashboard.stdout.includes("I approve invoke chatgpt-web"));
+assert.ok(approvalDashboard.stdout.includes("CHECKPOINTS / APPROVAL GATES"));
+assert.ok(approvalDashboard.stdout.includes(externalContextPlan.runId.slice(0, 12)));
+assert.ok(approvalDashboard.stdout.includes("thehood ui approvals"));
 const approvalInbox = await runCli(["ui", "approvals", "--repo", repoPath]);
-assert.ok(approvalInbox.stdout.includes("Approval Gates"));
-assert.ok(approvalInbox.stdout.includes("[approve]"));
+assert.ok(approvalInbox.stdout.includes("CHECKPOINTS / APPROVAL GATES"));
+assert.ok(approvalInbox.stdout.includes("Exact Checkpoint Commands"));
 assert.ok(approvalInbox.stdout.includes(`--approve ${externalContextPlan.runId}`));
 const approvalInboxJson = JSON.parse((await runCli(["ui", "approvals", "--repo", repoPath, "--json"])).stdout);
 assert.ok(approvalInboxJson.pendingApprovals.some((approval) => approval.runId === externalContextPlan.runId));
@@ -1473,10 +1506,10 @@ assert.ok(
   )
 );
 const autopilotApprovalInboxText = await runCli(["ui", "approvals", "--repo", repoPath]);
-assert.ok(autopilotApprovalInboxText.stdout.includes("Autopilot History"));
+assert.ok(autopilotApprovalInboxText.stdout.includes("AUTOPILOT LEDGER"));
 assert.ok(autopilotApprovalInboxText.stdout.includes("provider_invocation"));
 assert.ok(Array.isArray(autopilotApprovalInbox.recentHandoffs));
-assert.ok(autopilotApprovalInboxText.stdout.includes("Agent Handoffs"));
+assert.ok(autopilotApprovalInboxText.stdout.includes("HANDOFFS"));
 const resetAutoLowRiskPolicy = JSON.parse(
   (
     await runCli([
