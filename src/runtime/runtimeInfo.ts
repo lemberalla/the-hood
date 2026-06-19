@@ -33,6 +33,7 @@ export const runtimeCapabilities = [
   "operator_next_actions",
   "loop_responsibility_schedule",
   "autopilot_approval_policy",
+  "mcp_autopilot_continue_guidance",
   "run_status_insights",
   "same_run_agent_summons",
   "bounded_same_run_fanout",

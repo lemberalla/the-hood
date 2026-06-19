@@ -408,7 +408,7 @@ export const deriveOperatorNextActions = (run: RunRecord): OperatorNextAction[] 
     action(run, {
       action: "continue",
       label: "Continue run",
-      description: "Call thehood_continue to advance this run to the next runtime boundary.",
+      description: "Call thehood_continue with approval=none. Runtime autopilot will auto-approve bounded gates when policy allows and record approval evidence.",
       owner: runtimeOwner("Runtime Loop"),
       required: missingReviewActions.length === 0,
       blocking: missingReviewActions.length > 0,

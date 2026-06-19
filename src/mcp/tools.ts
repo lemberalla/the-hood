@@ -651,7 +651,7 @@ const createContinueTool = (): McpTool => ({
   definition: {
     name: "thehood_continue",
     title: "Continue TheHood Run",
-    description: "Record an optional approval decision and inspect the next runtime state.",
+    description: "Advance a run through the runtime. Use approval=none when no manual gate is active; runtime autopilot may auto-approve bounded provider invocation and non-secret external-transfer gates while recording approval evidence. Use approval=approve/reject/revise only for an active manual approval gate after user authorization.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

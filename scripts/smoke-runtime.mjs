@@ -267,6 +267,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
+assert.ok(doctorResult.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));

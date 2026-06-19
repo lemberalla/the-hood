@@ -139,10 +139,15 @@ const happyPath = await runMcp([
 ]);
 
 assert.equal(happyPath[0].result.protocolVersion, "2025-06-18");
+assert.ok(happyPath[0].result.instructions.includes("approval=none"));
+assert.ok(happyPath[0].result.instructions.includes("autopilot"));
 assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_plan"),
   "tools/list should expose thehood_plan"
 );
+const continueToolDefinition = happyPath[1].result.tools.find((tool) => tool.name === "thehood_continue");
+assert.ok(continueToolDefinition.description.includes("approval=none"));
+assert.ok(continueToolDefinition.description.includes("runtime autopilot"));
 assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_consult"),
   "tools/list should expose thehood_consult"
@@ -177,6 +182,12 @@ assert.ok(
 );
 assert.equal(happyPath[2].result.structuredContent.status, "created");
 assert.equal(happyPath[2].result.structuredContent.mode, "plan");
+const initialContinueAction = happyPath[2].result.structuredContent.next_actions.find(
+  (nextAction) => nextAction.tool === "thehood_continue"
+);
+assert.equal(initialContinueAction.arguments.approval, "none");
+assert.ok(initialContinueAction.description.includes("approval=none"));
+assert.ok(initialContinueAction.description.includes("autopilot"));
 
 const summonPath = await runMcp([
   ...baseMessages,
@@ -281,6 +292,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
+assert.ok(doctorContent.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
