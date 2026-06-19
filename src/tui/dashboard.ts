@@ -1,5 +1,10 @@
 import { formatRoleAssignment } from "../runtime/role-assignment.js";
-import type { ApprovalInboxView, AutopilotApproval, PendingApproval } from "../runtime/approvalInbox.js";
+import type {
+  ApprovalInboxHandoff,
+  ApprovalInboxView,
+  AutopilotApproval,
+  PendingApproval
+} from "../runtime/approvalInbox.js";
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { ApprovalPolicy } from "../runtime/types.js";
@@ -146,6 +151,40 @@ const autopilotApprovalLines = (approval: AutopilotApproval, index: number): str
     : [])
 ];
 
+const handoffEndpoint = (
+  label: string | undefined,
+  assignment: string | undefined,
+  fallback: string
+): string => {
+  const endpoint = label ?? fallback;
+
+  return assignment ? `${endpoint} (${assignment})` : endpoint;
+};
+
+const handoffDestination = (handoff: ApprovalInboxHandoff): string => {
+  if (handoff.toLabel) {
+    return handoffEndpoint(handoff.toLabel, handoff.toAssignment, "Runtime");
+  }
+
+  if (handoff.kind === "approval_gate" || handoff.kind === "approval_auto_approved") {
+    return "Approval Gate";
+  }
+
+  if (handoff.kind === "completion") {
+    return "Completed";
+  }
+
+  return "Runtime";
+};
+
+const handoffLines = (handoff: ApprovalInboxHandoff, index: number): string[] => [
+  `  [${index + 1}] ${handoff.runId}  ${handoff.state}`,
+  `      lane    ${handoffEndpoint(handoff.fromLabel, handoff.fromAssignment, "Runtime")} -> ${handoffDestination(handoff)}`,
+  `      gate    ${handoff.gate ?? handoff.kind}`,
+  `      goal    ${truncate(handoff.goal, 96)}`,
+  `      reason  ${truncate(handoff.reason, 120)}`
+];
+
 export const renderApprovalInbox = (inbox: ApprovalInboxView): string => [
   "Approval Gates",
   "  autopilot still stops for protected test changes, secret-risk transfers, and destructive/dependency/network commands",
@@ -156,7 +195,12 @@ export const renderApprovalInbox = (inbox: ApprovalInboxView): string => [
   "Autopilot History",
   ...(inbox.recentAutopilotApprovals.length > 0
     ? inbox.recentAutopilotApprovals.flatMap(autopilotApprovalLines)
-    : ["  no recent autopilot approvals"])
+    : ["  no recent autopilot approvals"]),
+  "",
+  "Agent Handoffs",
+  ...(inbox.recentHandoffs.length > 0
+    ? inbox.recentHandoffs.flatMap(handoffLines)
+    : ["  no recent handoffs"])
 ].join("\n");
 
 const automationLines = (input: DashboardInput): string[] => {

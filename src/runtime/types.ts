@@ -153,6 +153,26 @@ export interface RunEvent {
   data?: JsonObject;
 }
 
+export type RunHandoffKind = "agent_handoff" | "approval_gate" | "approval_auto_approved" | "completion";
+
+export interface RunHandoffEvent {
+  id: string;
+  createdAt: string;
+  kind: RunHandoffKind;
+  reason: string;
+  stateBefore: RunState;
+  stateAfter: RunState;
+  fromRole?: RuntimeRole;
+  fromProvider?: string;
+  fromModel?: string;
+  toRole?: RuntimeRole;
+  toProvider?: string;
+  toModel?: string;
+  gate?: string;
+  approvalEventId?: string;
+  artifactRefs?: string[];
+}
+
 export interface RunRecord {
   runId: string;
   createdAt: string;
@@ -172,6 +192,7 @@ export interface RunRecord {
   approvalEvents: ApprovalEvent[];
   toolEvents: ToolEvent[];
   events: RunEvent[];
+  handoffs: RunHandoffEvent[];
 }
 
 export type ProgressPacketSourceKind =

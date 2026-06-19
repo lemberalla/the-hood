@@ -14,9 +14,18 @@ export const saveRun = async (run: RunRecord): Promise<void> => {
   await fs.writeFile(path.join(runDir, runFileName), `${JSON.stringify(run, null, 2)}\n`, "utf8");
 };
 
+const hydrateRun = (value: unknown): RunRecord => {
+  const run = value as RunRecord;
+
+  return {
+    ...run,
+    handoffs: Array.isArray(run.handoffs) ? run.handoffs : []
+  };
+};
+
 export const loadRun = async (repoPath: string, runId: string): Promise<RunRecord> => {
   const raw = await fs.readFile(path.join(getRunDir(repoPath, runId), runFileName), "utf8");
-  return JSON.parse(raw) as RunRecord;
+  return hydrateRun(JSON.parse(raw));
 };
 
 export const listRuns = async (repoPath: string): Promise<RunRecord[]> => {
@@ -46,4 +55,3 @@ export const listRuns = async (repoPath: string): Promise<RunRecord[]> => {
     throw error;
   }
 };
-

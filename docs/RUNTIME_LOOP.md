@@ -21,6 +21,8 @@ TheHood runs a bounded agent loop. The loop is stateful, inspectable, and contro
 
 Each provider call is preceded by a runtime-built directive artifact containing role instructions, prompt variables, tool permissions, and the expected output contract. The provider response must satisfy that contract before the runtime advances to the next state.
 
+The runtime also records typed `handoffs` on the run record whenever work crosses a meaningful boundary between roles, an approval gate mediates the next transition, or a run completes. Display labels such as `Agent 1 / Orchestrator`, `Agent 2 / Implementer`, and `Agent 3 / Verifier` are derived from runtime roles and assignments. They are inspectable lane labels, not new permissions or authority.
+
 ## State Machine
 
 ```text
@@ -110,6 +112,7 @@ The runtime captures evidence directly:
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
 - external transfer manifest artifacts before approved provider transfers
+- typed handoff records for role delegation, approval mediation, and completion
 
 Models may summarize evidence, but summaries are not authoritative.
 

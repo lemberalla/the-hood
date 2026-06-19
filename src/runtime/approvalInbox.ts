@@ -1,3 +1,7 @@
+import {
+  recentRunHandoffSummaries,
+  type RunHandoffSummary
+} from "./handoffs.js";
 import type { JsonObject, RunArtifact, RunEvent, RunRecord } from "./types.js";
 
 export interface PendingApprovalArtifact {
@@ -40,6 +44,14 @@ export interface AutopilotApproval {
 export interface ApprovalInboxView {
   pendingApprovals: PendingApproval[];
   recentAutopilotApprovals: AutopilotApproval[];
+  recentHandoffs: ApprovalInboxHandoff[];
+}
+
+export interface ApprovalInboxHandoff extends RunHandoffSummary {
+  runId: string;
+  updatedAt: string;
+  state: RunRecord["state"];
+  goal: string;
 }
 
 const defaultAutopilotApprovalLimit = 8;
@@ -210,10 +222,28 @@ export const recentAutopilotApprovalsFromRuns = (
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, limit);
 
+export const recentHandoffsFromRuns = (
+  runs: RunRecord[],
+  limit = defaultAutopilotApprovalLimit
+): ApprovalInboxHandoff[] =>
+  runs
+    .flatMap((run) =>
+      recentRunHandoffSummaries(run, limit).map((handoff) => ({
+        ...handoff,
+        runId: run.runId,
+        updatedAt: run.updatedAt,
+        state: run.state,
+        goal: run.userGoal
+      }))
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, limit);
+
 export const approvalInboxViewFromRuns = (
   runs: RunRecord[],
   limit = defaultAutopilotApprovalLimit
 ): ApprovalInboxView => ({
   pendingApprovals: pendingApprovalsFromRuns(runs),
-  recentAutopilotApprovals: recentAutopilotApprovalsFromRuns(runs, limit)
+  recentAutopilotApprovals: recentAutopilotApprovalsFromRuns(runs, limit),
+  recentHandoffs: recentHandoffsFromRuns(runs, limit)
 });

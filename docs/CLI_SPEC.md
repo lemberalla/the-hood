@@ -202,7 +202,9 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood artifact <run-id> <artifact-ref>` reads a bounded artifact that is already attached to the run. It uses the same safety boundary as `thehood_read_artifact`: refs must stay inside that run's artifact directory and must already be recorded on the run.
 
-`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, and the final report artifact when present. JSON output preserves the existing run fields and adds an `insights` object.
+`thehood status <run-id>` includes runtime-owned status plus insights from attached artifacts: the latest schema-valid agent response, its primary output such as `decision`, the final report artifact when present, and a bounded handoff timeline. JSON output preserves the existing run fields, including the full `handoffs` array, and adds an `insights` object with `latestHandoff` and `handoffTimeline`.
+
+`thehood logs <run-id>` prints stored runtime events and a bounded `handoffs` section. Handoff labels such as `Agent 1 / Orchestrator` and `Agent 2 / Implementer` are derived from runtime roles and provider assignments; they are display lanes, not policy grants.
 
 `thehood diff <run-id>` reads the latest attached `diff` artifact for a run. This is mainly useful for reviewing isolated worker patches before approval.
 
@@ -248,7 +250,7 @@ It checks:
 
 `thehood ui --repo .` prints the first branded terminal dashboard shell. It reads runtime health, role mapping, and browser readiness from existing runtime APIs; it does not own orchestration logic.
 
-The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints pending manual approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands. It also shows recent autopilot approvals separately so operators can see what was auto-approved, why it qualified, and which artifact or transfer manifest was involved.
+The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints pending manual approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands. It also shows recent autopilot approvals separately so operators can see what was auto-approved, why it qualified, and which artifact or transfer manifest was involved. The same inbox includes recent agent handoffs so operators can see which runtime lane handed work to the next lane or to an approval gate.
 
 Approval actions can be triggered without retyping the required approval phrase:
 

@@ -1,6 +1,7 @@
 import { loadConfig } from "./config.js";
 import { autopilotApprovalReason, autopilotPolicyReason, isAutopilotEnabled } from "./approvalPolicy.js";
 import { InputError } from "./errors.js";
+import { createRunHandoff } from "./handoffs.js";
 import { newId, nowIso } from "./ids.js";
 import { assertRoleInvariants } from "./permissions.js";
 import { getProjectPaths, resolveRepoPath } from "./paths.js";
@@ -135,6 +136,7 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     ],
     approvalEvents: [],
     toolEvents: [],
+    handoffs: [],
     events: [
       createEvent("run_created", `Created ${input.mode} run.`),
       createEvent(
@@ -146,9 +148,21 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
 
   if (initial.reason && isAutopilotEnabled(config)) {
     const approvalReason = autopilotApprovalReason(initial.reason);
+    const approval = createApprovalEvent("approve", approvalReason);
+    const stateBefore = run.state;
     run.state = approvedStateForRun(run);
     run.approvalRequired = false;
-    run.approvalEvents.push(createApprovalEvent("approve", approvalReason));
+    run.approvalEvents.push(approval);
+    run.handoffs.push(createRunHandoff(
+      { ...run, state: stateBefore },
+      {
+        kind: "approval_auto_approved",
+        reason: approvalReason,
+        stateAfter: run.state,
+        gate: "implementation_start",
+        approvalEventId: approval.id
+      }
+    ));
     run.events.push(createEvent("approval_auto_approved", approvalReason, {
       gate: "implementation_start",
       reason: "implementation_start",
@@ -159,6 +173,12 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     }));
   } else if (initial.reason) {
     run.approvalReason = initial.reason;
+    run.handoffs.push(createRunHandoff(run, {
+      kind: "approval_gate",
+      reason: initial.reason,
+      stateAfter: run.state,
+      gate: "implementation_start"
+    }));
     run.events.push(createEvent("approval_required", initial.reason));
   }
 
@@ -198,6 +218,16 @@ export const recordApproval = async (
     state,
     approvalRequired: decision === "revise",
     approvalEvents: [...run.approvalEvents, approval],
+    handoffs: [
+      ...(run.handoffs ?? []),
+      createRunHandoff(run, {
+        kind: "approval_gate",
+        reason,
+        stateAfter: state,
+        gate: `manual_${decision}`,
+        approvalEventId: approval.id
+      })
+    ],
     events: [
       ...run.events,
       createEvent("approval_recorded", `Recorded approval decision: ${decision}.`)

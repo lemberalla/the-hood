@@ -14,6 +14,7 @@ import {
   transferManifestSummary,
   writeExternalTransferManifestArtifact
 } from "./externalTransfer.js";
+import { createRunHandoff } from "./handoffs.js";
 import { captureGitEvidence, parseGitStatusPaths } from "./gitEvidence.js";
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
@@ -35,6 +36,7 @@ import type {
   RoleAssignment,
   RunArtifact,
   RunEvent,
+  RunHandoffEvent,
   RunRecord,
   RunState,
   RuntimeRole,
@@ -75,17 +77,33 @@ const autoApproveGate = async (
     gate: string;
     reason: string;
     state?: RunState;
+    role?: RuntimeRole;
     data?: JsonObject;
+    artifactRefs?: string[];
   }
 ): Promise<RunRecord> => {
   const { approvalReason: _approvalReason, ...base } = run;
   const approvalReason = autopilotApprovalReason(input.reason);
+  const approval = createApprovalEvent(approvalReason);
+  const stateAfter = input.state ?? run.state;
   const updated: RunRecord = {
     ...base,
     updatedAt: nowIso(),
     ...(input.state ? { state: input.state } : {}),
     approvalRequired: false,
-    approvalEvents: [...run.approvalEvents, createApprovalEvent(approvalReason)],
+    approvalEvents: [...run.approvalEvents, approval],
+    handoffs: [
+      ...(run.handoffs ?? []),
+      createRunHandoff(run, {
+        kind: "approval_auto_approved",
+        reason: approvalReason,
+        stateAfter,
+        toRole: input.role,
+        gate: input.gate,
+        approvalEventId: approval.id,
+        artifactRefs: input.artifactRefs
+      })
+    ],
     events: [
       ...run.events,
       createEvent("approval_auto_approved", approvalReason, {
@@ -108,7 +126,9 @@ const autoApproveGateIfEnabled = async (
     gate: string;
     reason: string;
     state?: RunState;
+    role?: RuntimeRole;
     data?: JsonObject;
+    artifactRefs?: string[];
   }
 ): Promise<RunRecord | undefined> => {
   const config = await loadConfig(run.repoPath);
@@ -116,16 +136,67 @@ const autoApproveGateIfEnabled = async (
   return isAutopilotEnabled(config) ? autoApproveGate(run, input) : undefined;
 };
 
+const approvalGateHandoff = (
+  run: RunRecord,
+  input: {
+    reason: string;
+    role?: RuntimeRole;
+    gate: string;
+    artifactRefs?: string[];
+  }
+): RunHandoffEvent =>
+  createRunHandoff(run, {
+    kind: "approval_gate",
+    reason: input.reason,
+    stateAfter: "awaiting_approval",
+    fromRole: input.role,
+    gate: input.gate,
+    artifactRefs: input.artifactRefs
+  });
+
+const agentHandoff = (
+  run: RunRecord,
+  input: {
+    reason: string;
+    stateAfter: RunState;
+    fromRole?: RuntimeRole;
+    toRole?: RuntimeRole;
+    artifactRefs?: string[];
+  }
+): RunHandoffEvent =>
+  createRunHandoff(run, {
+    kind: "agent_handoff",
+    reason: input.reason,
+    stateAfter: input.stateAfter,
+    fromRole: input.fromRole,
+    toRole: input.toRole,
+    artifactRefs: input.artifactRefs
+  });
+
+const completionHandoff = (
+  run: RunRecord,
+  role: RuntimeRole,
+  reason: string
+): RunHandoffEvent =>
+  createRunHandoff(run, {
+    kind: "completion",
+    reason,
+    stateAfter: "completed",
+    fromRole: role
+  });
+
 const updateRun = async (
   run: RunRecord,
   updates: Partial<Pick<RunRecord, "state" | "approvalRequired" | "approvalReason" | "stopReason">>,
-  events: RunEvent[]
+  events: RunEvent[],
+  handoffs: RunHandoffEvent[] = []
 ): Promise<RunRecord> => {
   const { approvalReason: _approvalReason, stopReason: _stopReason, ...base } = run;
   const next: RunRecord = {
     ...base,
     ...updates,
     updatedAt: nowIso(),
+    handoffs: [...(run.handoffs ?? []), ...handoffs],
     events: [...run.events, ...events]
   };
 
@@ -592,7 +663,12 @@ const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRec
         approvalRequired: true,
         approvalReason
       },
-      [createEvent("approval_required", approvalReason)]
+      [createEvent("approval_required", approvalReason)],
+      [approvalGateHandoff(status.run, {
+        reason: approvalReason,
+        role: "integrator",
+        gate: "dirty_checkout_before_patch"
+      })]
     );
 
     return {
@@ -687,7 +763,13 @@ const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRec
           protectedChangeCount: protectedChanges.length,
           protectedChanges: protectedChangesData
         })
-      ]
+      ],
+      [approvalGateHandoff(runWithReport, {
+        reason: approvalReason,
+        role: "integrator",
+        gate: "protected_patch_changes",
+        artifactRefs: [artifact.ref, patchInput.ref]
+      })]
     );
 
     return {
@@ -705,7 +787,14 @@ const applyIsolatedPatchArtifact = async (run: RunRecord): Promise<{ run: RunRec
         patchArtifactRef: patchInput.ref
       }),
       createEvent("state_changed", "Run entered verification.")
-    ]
+    ],
+    [agentHandoff(runWithReport, {
+      reason: "Integrated patch moved to independent verification.",
+      stateAfter: "verifying",
+      fromRole: "integrator",
+      toRole: "verifier",
+      artifactRefs: [artifact.ref, patchInput.ref]
+    })]
   );
 
   return {
@@ -730,6 +819,7 @@ const stopForProviderInvocationApproval = async (
   const autoApproved = await autoApproveGateIfEnabled(run, {
     gate: "provider_invocation",
     reason: approvalReason,
+    role,
     data: {
       role,
       provider: assignment.provider,
@@ -758,7 +848,12 @@ const stopForProviderInvocationApproval = async (
         model: assignment.model,
         reason: "provider_invocation"
       })
-    ]
+    ],
+    [approvalGateHandoff(run, {
+      reason: approvalReason,
+      role,
+      gate: "provider_invocation"
+    })]
   );
 
   return {
@@ -788,7 +883,12 @@ const stopForProviderStatus = async (
         approvalRequired: true,
         approvalReason: stopReason
       },
-      [createEvent("approval_required", stopReason)]
+      [createEvent("approval_required", stopReason)],
+      [approvalGateHandoff(run, {
+        reason: stopReason,
+        role,
+        gate: "provider_blocked"
+      })]
     );
 
     return {
@@ -920,6 +1020,18 @@ const executeReadOnlyRun = async (
         approvalRequired: false,
         artifacts: [...run.artifacts, transfer.artifact],
         approvalEvents: [...run.approvalEvents, approval],
+        handoffs: [
+          ...(run.handoffs ?? []),
+          createRunHandoff(run, {
+            kind: "approval_auto_approved",
+            reason: approval.reason,
+            stateAfter: run.state,
+            toRole: role,
+            gate: "repo_context_external_transfer",
+            approvalEventId: approval.id,
+            artifactRefs: [transfer.artifact.ref, contextArtifact.ref]
+          })
+        ],
         events: [
           ...run.events,
           transferEvent,
@@ -946,6 +1058,15 @@ const executeReadOnlyRun = async (
         approvalRequired: true,
         approvalReason,
         artifacts: [...run.artifacts, transfer.artifact],
+        handoffs: [
+          ...(run.handoffs ?? []),
+          approvalGateHandoff(run, {
+            reason: approvalReason,
+            role,
+            gate: "repo_context_external_transfer",
+            artifactRefs: [transfer.artifact.ref, contextArtifact.ref]
+          })
+        ],
         events: [
           ...run.events,
           transferEvent,
@@ -1016,7 +1137,13 @@ const executeReadOnlyRun = async (
               incompleteCapturedPaths: analysis.incompleteCapturedPaths,
               existingContextArtifactRef: existingContextArtifact.ref
             })
-          ]
+          ],
+          [approvalGateHandoff(result.run, {
+            reason: approvalReason,
+            role,
+            gate: "repeated_repo_context_delegate",
+            artifactRefs: [existingContextArtifact.ref]
+          })]
         );
 
         return {
@@ -1051,7 +1178,12 @@ const executeReadOnlyRun = async (
         approvalRequired: true,
         approvalReason
       },
-      [createEvent("approval_required", approvalReason)]
+      [createEvent("approval_required", approvalReason)],
+      [approvalGateHandoff(result.run, {
+        reason: approvalReason,
+        role,
+        gate: "provider_requested_approval"
+      })]
     );
 
     return {
@@ -1071,7 +1203,8 @@ const executeReadOnlyRun = async (
   const completed = await updateRun(
     runWithFinalReport,
     { state: "completed", stopReason },
-    [createEvent("run_completed", `${role} run completed.`)]
+    [createEvent("run_completed", `${role} run completed.`)],
+    [completionHandoff(runWithFinalReport, role, stopReason)]
   );
   const progress = await writeProgressPacketArtifact(completed);
 
@@ -1115,7 +1248,12 @@ const advanceOneStep = async (
     const planned = await updateRun(
       run,
       { state: "planning" },
-      [createEvent("state_changed", `Run entered ${run.mode} execution with ${role}.`)]
+      [createEvent("state_changed", `Run entered ${run.mode} execution with ${role}.`)],
+      [agentHandoff(run, {
+        reason: `Runtime selected ${role} for ${run.mode} execution.`,
+        stateAfter: "planning",
+        toRole: role
+      })]
     );
     return executeReadOnlyRun(planned, role);
   }
@@ -1142,7 +1280,13 @@ const advanceOneStep = async (
     const next = await updateRun(
       result.run,
       { state: "implementing" },
-      [createEvent("state_changed", "Run entered implementation.")]
+      [createEvent("state_changed", "Run entered implementation.")],
+      [agentHandoff(result.run, {
+        reason: "Orchestrator delegated implementation to the implementer.",
+        stateAfter: "implementing",
+        fromRole: "orchestrator",
+        toRole: "implementer"
+      })]
     );
 
     return {
@@ -1175,6 +1319,8 @@ const advanceOneStep = async (
         gate: "isolated_patch_application",
         reason: approvalReason,
         state: "integrating",
+        role: "integrator",
+        artifactRefs: [patchArtifact.ref],
         data: {
           artifactRef: patchArtifact.ref,
           artifactSummary: patchArtifact.summary
@@ -1203,7 +1349,13 @@ const advanceOneStep = async (
             artifactRef: patchArtifact.ref,
             artifactSummary: patchArtifact.summary
           })
-        ]
+        ],
+        [approvalGateHandoff(result.run, {
+          reason: approvalReason,
+          role: "implementer",
+          gate: "isolated_patch_application",
+          artifactRefs: [patchArtifact.ref]
+        })]
       );
 
       return {
@@ -1217,7 +1369,13 @@ const advanceOneStep = async (
     const next = await updateRun(
       result.run,
       { state: "verifying" },
-      [createEvent("state_changed", "Run entered verification.")]
+      [createEvent("state_changed", "Run entered verification.")],
+      [agentHandoff(result.run, {
+        reason: "Implementer completed work and handed off to verifier.",
+        stateAfter: "verifying",
+        fromRole: "implementer",
+        toRole: "verifier"
+      })]
     );
 
     return {
@@ -1271,7 +1429,8 @@ const advanceOneStep = async (
       const completed = await updateRun(
         runWithFinalReport,
         { state: "completed", stopReason },
-        [createEvent("run_completed", stopReason)]
+        [createEvent("run_completed", stopReason)],
+        [completionHandoff(runWithFinalReport, "verifier", stopReason)]
       );
       const progress = await writeProgressPacketArtifact(completed);
 
@@ -1290,7 +1449,12 @@ const advanceOneStep = async (
         approvalRequired: true,
         approvalReason
       },
-      [createEvent("approval_required", approvalReason)]
+      [createEvent("approval_required", approvalReason)],
+      [approvalGateHandoff(result.run, {
+        reason: approvalReason,
+        role: "verifier",
+        gate: "verifier_verdict"
+      })]
     );
 
     return {

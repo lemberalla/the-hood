@@ -9,6 +9,7 @@ import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RunInsights } from "../runtime/runInsights.js";
+import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
 import type { RoleMap, RunRecord, TheHoodConfig } from "../runtime/types.js";
 
 export const printJson = (value: unknown): void => {
@@ -114,6 +115,40 @@ const formatPrimaryOutputLines = (insights: RunInsights): string[] => {
     .map(([key, value]) => `${key}: ${String(value)}`);
 };
 
+const handoffEndpoint = (
+  label: string | undefined,
+  assignment: string | undefined,
+  fallback: string
+): string => {
+  const endpoint = label ?? fallback;
+
+  return assignment ? `${endpoint} (${assignment})` : endpoint;
+};
+
+const handoffToLabel = (handoff: RunHandoffSummary): string => {
+  if (handoff.toLabel) {
+    return handoffEndpoint(handoff.toLabel, handoff.toAssignment, "Runtime");
+  }
+
+  if (handoff.kind === "approval_gate" || handoff.kind === "approval_auto_approved") {
+    return "Approval Gate";
+  }
+
+  if (handoff.kind === "completion") {
+    return "Completed";
+  }
+
+  return "Runtime";
+};
+
+const formatHandoffSummary = (handoff: RunHandoffSummary): string => {
+  const from = handoffEndpoint(handoff.fromLabel, handoff.fromAssignment, "Runtime");
+  const to = handoffToLabel(handoff);
+  const gate = handoff.gate ? ` gate=${handoff.gate}` : "";
+
+  return `${handoff.createdAt}  ${handoff.kind}${gate}  ${from} -> ${to}  ${handoff.reason}`;
+};
+
 const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => {
   if (!insights) {
     return [];
@@ -122,6 +157,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const response = insights.latestAgentResponse;
   const finalReport = insights.finalReport;
   const autopilotApprovals = insights.recentAutopilotApprovals.slice(0, 5);
+  const handoffTimeline = insights.handoffTimeline.slice(-5);
 
   return [
     ...(response
@@ -142,6 +178,20 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
           `  artifact: ${finalReport.artifact.ref}`,
           ...(finalReport.stopReason ? [`  stopReason: ${finalReport.stopReason}`] : []),
           `  inspect: thehood artifact ${run.runId} ${quoteArg(finalReport.artifact.ref)} --repo ${quoteArg(run.repoPath)}`
+        ]
+      : []),
+    ...(insights.latestHandoff
+      ? [
+          "",
+          "latest handoff:",
+          `  ${formatHandoffSummary(insights.latestHandoff)}`
+        ]
+      : []),
+    ...(handoffTimeline.length > 0
+      ? [
+          "",
+          "handoff timeline:",
+          ...handoffTimeline.map((handoff) => `  ${formatHandoffSummary(handoff)}`)
         ]
       : []),
     ...(autopilotApprovals.length > 0
@@ -198,9 +248,16 @@ export const formatRunList = (runs: RunRecord[]): string => {
 };
 
 export const formatRunEvents = (run: RunRecord): string =>
-  run.events
-    .map((event) => `${event.createdAt}  ${event.type}  ${event.message}`)
-    .join("\n");
+  [
+    ...run.events.map((event) => `${event.createdAt}  ${event.type}  ${event.message}`),
+    ...((run.handoffs ?? []).length > 0
+      ? [
+          "",
+          "handoffs:",
+          ...recentRunHandoffSummaries(run, 10).map((handoff) => formatHandoffSummary(handoff))
+        ]
+      : [])
+  ].join("\n");
 
 export const formatCommandResult = (result: RunCommandResult): string => [
   `command: ${[result.event.command, ...result.event.args].join(" ")}`,

@@ -424,10 +424,15 @@ assert.equal(repoContextStatus.insights.latestAgentResponse.status, "ok");
 assert.equal(repoContextStatus.insights.latestAgentResponse.decision.action, "complete");
 assert.equal(repoContextStatus.insights.latestAgentResponse.primaryOutputKey, "decision");
 assert.equal(repoContextStatus.insights.finalReport.artifact.ref, repoContextFinalReportArtifact.ref);
+assert.ok(repoContextStatus.insights.handoffTimeline.length > 0);
+assert.equal(repoContextStatus.insights.latestHandoff.kind, "completion");
   const repoContextStatusText = await runCli(["status", repoContextPlan.runId, "--repo", repoPath]);
   assert.ok(repoContextStatusText.stdout.includes("latest agent response:"));
   assert.ok(repoContextStatusText.stdout.includes("action: complete"));
   assert.ok(repoContextStatusText.stdout.includes("final report:"));
+  assert.ok(repoContextStatusText.stdout.includes("handoff timeline:"));
+  const repoContextLogsText = await runCli(["logs", repoContextPlan.runId, "--repo", repoPath]);
+  assert.ok(repoContextLogsText.stdout.includes("handoffs:"));
   const repoContextProgressArtifact = repoContextContinue.run.artifacts.find(
     (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
   );
@@ -861,6 +866,8 @@ assert.ok(
 const autopilotApprovalInboxText = await runCli(["ui", "approvals", "--repo", repoPath]);
 assert.ok(autopilotApprovalInboxText.stdout.includes("Autopilot History"));
 assert.ok(autopilotApprovalInboxText.stdout.includes("provider_invocation"));
+assert.ok(Array.isArray(autopilotApprovalInbox.recentHandoffs));
+assert.ok(autopilotApprovalInboxText.stdout.includes("Agent Handoffs"));
 const resetAutoLowRiskPolicy = JSON.parse(
   (
     await runCli([
@@ -1130,6 +1137,22 @@ const loopContinue = await runCli(["continue", loopRun.runId, "--repo", loopRepo
 const loopResult = JSON.parse(loopContinue.stdout);
 assert.equal(loopResult.run.state, "completed");
 assert.equal(loopResult.providerResponses.length, 3);
+assert.ok(
+  loopResult.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "orchestrator" &&
+      handoff.toRole === "implementer"
+  )
+);
+assert.ok(
+  loopResult.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "implementer" &&
+      handoff.toRole === "verifier"
+  )
+);
 const finalReportArtifact = loopResult.run.artifacts.find(
   (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
 );
