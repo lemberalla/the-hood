@@ -2,7 +2,7 @@
 
 TheHood is a local, provider-neutral agent runtime for running serious multi-agent software work from Codex, a CLI, and eventually a small macOS menubar companion.
 
-Status: experimental local runtime. The CLI, MCP server, runtime artifacts, provider role mapping, local Codex/Claude command adapters, ChatGPT Web bridge, same-run summons/fan-out, crew lanes, approval gates, and smoke tests exist today. API provider adapters, hosted/public UI, and native Codex app visual agent cards are planned or partial unless noted in the docs.
+Status: experimental local runtime. The CLI, MCP server, runtime artifacts, provider role mapping, local Codex/Claude command adapters, ChatGPT Web bridge, same-run summons/fan-out, crew lanes, Codex-facing agent board snapshots, renderable dashboard payloads, optional Codex plugin scaffold, approval gates, and smoke tests exist today. API provider adapters, hosted/public UI, and automatic native Codex app visual rendering beyond explicit artifact rendering are planned or partial unless noted in the docs.
 
 The core idea is simple:
 
@@ -26,6 +26,8 @@ It supports:
 - provider and role inspection
 - provider and role health inspection
 - agent roster inspection showing role ownership, readiness, and read/edit authority
+- runtime-derived agent board snapshots and dashboard payloads for Codex card-style agent visibility
+- optional repo-local Codex plugin scaffold for TheHood workflow guidance and MCP setup
 - runtime-owned team presets for Codex default, ChatGPT Pro orchestration, and Claude critic setups
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
@@ -67,6 +69,7 @@ It supports:
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
 - run status insights for latest provider output and final reports
 - run status insights for latest progress, reconciliation, repo context, remote repo context, provider execution, final report, and transfer manifest refs
+- compact MCP host responses that return refs, counts, latest summaries, and bounded lane/card previews by default instead of dumping full run evidence into the Codex session context
 - runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
@@ -95,6 +98,7 @@ npm run smoke:mcp
 node dist/cli/main.js setup --repo .
 node dist/cli/main.js doctor --repo .
 node dist/cli/main.js roster --repo .
+node dist/cli/main.js agent-board --repo . --artifact --json
 ```
 
 The full local CLI surface includes:
@@ -104,12 +108,15 @@ node dist/cli/main.js init --repo .
 node dist/cli/main.js setup --repo .
 node dist/cli/main.js doctor --repo .
 node dist/cli/main.js roster --repo .
+node dist/cli/main.js agent-board --repo .
+node dist/cli/main.js agent-board --repo . --artifact --json
 node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js run "Exercise the full loop" --repo . --loop
 node dist/cli/main.js status --repo .
+node dist/cli/main.js agent-board <run-id> --repo .
 node dist/cli/main.js artifact <run-id> <artifact-ref> --repo .
 node dist/cli/main.js evidence <run-id> --repo .
 node dist/cli/main.js continue <run-id> --repo .
@@ -125,6 +132,15 @@ node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
 node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>
 ```
+
+The optional Codex plugin lives at `plugins/thehood-codex` and is listed by the repo marketplace at `.agents/plugins/marketplace.json`. It is not installed by default because repo-root Codex custom agents and plugin-provided surfaces should appear only when a user opts into them.
+
+```bash
+codex plugin marketplace add /path/to/the-hood
+codex plugin add thehood-codex@thehood
+```
+
+The plugin expects the `thehood` binary to be available on `PATH` for MCP startup. During local development, use `node dist/cli/main.js mcp config` when you want an absolute-path MCP snippet instead.
 
 ## Product Shape
 
@@ -147,6 +163,8 @@ MCP connector mode
 Agents
   orchestrator, planner, researcher, implementer, qa tester, verifier, critic, integrator
 ```
+
+Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHood does not ship repo-root custom agents by default; users can opt into the Codex plugin for TheHood workflow guidance and MCP wiring. TheHood runtime-owned provider calls surface through run status, artifacts, MCP, CLI, TUI, and the agent board.
 
 ## Foundation Rules
 

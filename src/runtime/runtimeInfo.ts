@@ -41,13 +41,16 @@ export const runtimeCapabilities = [
   "autopilot_approval_policy",
   "mcp_autopilot_continue_guidance",
   "run_status_insights",
+  "compact_mcp_host_responses",
   "same_run_agent_summons",
   "bounded_same_run_fanout",
   "runtime_team_presets",
   "configurable_budget_envelopes",
   "provider_access_modes",
   "mcp_repo_gateway_tools",
-  "chatgpt_mcp_connector_mode"
+  "chatgpt_mcp_connector_mode",
+  "codex_agent_board",
+  "codex_agent_board_artifact"
 ] as const;
 
 export type RuntimeCapability = (typeof runtimeCapabilities)[number];

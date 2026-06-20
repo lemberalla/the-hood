@@ -14,6 +14,7 @@ import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RoleRosterItem } from "../runtime/roleRoster.js";
 import type { RunInsights } from "../runtime/runInsights.js";
+import type { AgentBoard } from "../runtime/agentBoard.js";
 import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
 import type {
   LoopResponsibilityStatus,
@@ -91,6 +92,47 @@ export const formatRoleRoster = (roster: RoleRosterItem[], repoPath: string): st
     `    purpose     ${item.responsibility}`,
     `    configure   thehood roles set ${item.role} <provider:model> --repo ${quoteArg(repoPath)}`
   ])
+].join("\n");
+
+const cardStatusLabel = (status: string): string =>
+  status.replace(/_/g, " ");
+
+export const formatAgentBoard = (board: AgentBoard): string => [
+  "Agent Board",
+  `  scope       ${board.scope}${board.runId ? ` ${board.runId}` : ""}`,
+  `  repo        ${board.repoPath}`,
+  ...(board.runState ? [`  run         ${board.runState}${board.runMode ? ` (${board.runMode})` : ""}`] : []),
+  `  summary     ${board.summary.ready}/${board.summary.total} ready  active:${board.summary.active} blocked:${board.summary.blocked} unassigned:${board.summary.unassigned}`,
+  "",
+  ...board.cards.flatMap((card) => [
+    `  ${card.laneLabel}`,
+    `    owner       ${card.assignmentLabel} (${rosterSourceLabel(card.assignmentSource)})`,
+    `    status      ${cardStatusLabel(card.status)}`,
+    `    readiness   ${cardStatusLabel(card.readiness)}`,
+    `    authority   ${card.authority}`,
+    ...(card.run
+      ? [
+          `    lane        ${card.run.currentLane ?? card.role}`,
+          `    laneState   ${cardStatusLabel(card.run.laneStatus ?? "unknown")}${card.run.blocking ? " blocking" : ""}`,
+          ...(card.run.laneSummary ? [`    summary     ${card.run.laneSummary}`] : []),
+          ...(card.run.artifactRefs.length > 0 ? [`    artifacts   ${card.run.artifactRefs.join(", ")}`] : []),
+          ...(card.run.eventRefs.length > 0 ? [`    events      ${card.run.eventRefs.join(", ")}`] : [])
+        ]
+      : []),
+    `    tools       read:${permissionWord(card.permissions.read)} edit:${permissionWord(card.permissions.edit)} shell:${permissionWord(card.permissions.shell)} network:${permissionWord(card.permissions.network)}`,
+    ...(card.issues.length > 0 ? [`    issues      ${card.issues.join(", ")}`] : [])
+  ]),
+  ...(board.actions.length > 0
+    ? [
+        "",
+        "next actions:",
+        ...board.actions.map((action) =>
+          `  ${action.action} ${action.blocking ? "blocking" : "ready"} owner=${action.ownerLabel} ${action.tool ?? action.commandHint ?? action.description}`.trimEnd()
+        )
+      ]
+    : []),
+  "",
+  ...board.notes.map((note) => `  note        ${note}`)
 ].join("\n");
 
 export const formatProviders = (providers: ProviderDescriptor[]): string =>

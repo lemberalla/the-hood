@@ -47,7 +47,9 @@ Current implementation:
 - QA, verifier, or validation risk can cause the runtime to call a read-only critic and attach a `critic_trigger` artifact before continuing to verifier or an approval gate.
 - Fixable QA, critic, or verifier revision findings can cause the runtime to attach a `revision_packet` artifact and delegate a repair pass back to the implementer within the same max-iteration budget.
 - Revision trails link each revision packet to its repair pass, post-repair validation evidence, and review responses when present; they are visibility metadata only.
-- Completed runs and progress packets include derived review lane metadata for verifier, runtime QA/validation, QA tester, and critic evidence when present. They also include loop responsibility schedules and product-facing crew lane trails that summarize planner, implementer, verifier, runtime QA, model-assisted QA tester, critic, reconciliation, integration, approval, and completion ownership from existing evidence. These lanes and schedules summarize existing runtime evidence; they do not schedule new work, grant tools, or replace verifier approval.
+- Completed runs, progress packets, status output, agent board snapshots, and optional dashboard artifact payloads include derived review lane metadata for verifier, runtime QA/validation, QA tester, and critic evidence when present. They also include loop responsibility schedules and product-facing crew lane trails that summarize planner, implementer, verifier, runtime QA, model-assisted QA tester, critic, reconciliation, integration, approval, and completion ownership from existing evidence. These lanes, schedules, board cards, and dashboard cards summarize existing runtime evidence; they do not schedule new work, grant tools, or replace verifier approval.
+- MCP host responses are compact by default and should be tested as refs-only navigation surfaces. Full plans, logs, progress packets, and provider outputs must remain available through artifact reads instead of being mirrored into every MCP status or loop response.
+- Plugin skills, dashboard cards, and Codex-native subagents are delegation or display helpers. Their output is advisory unless it is captured and routed through TheHood runtime evidence, approvals, and verifier policy.
 - Runs fail closed before the next provider call once recorded provider responses reach `maxIterations`.
 
 ### QA Tester
@@ -172,4 +174,7 @@ evidence:
 - A stale pre-revision verifier or validation result is treated as satisfying the post-repair review gate.
 - A risk-routing decision is treated as proof that code behavior is correct without validation and verifier evidence.
 - A crew lane trail is treated as proof that a gate was satisfied without reading the lane's artifact, event, or command evidence.
+- An agent board card is treated as proof that a gate was satisfied without reading the card's artifact, event, handoff, or command evidence.
+- An agent board dashboard card is treated as proof that a gate was satisfied without reading the underlying artifact, event, handoff, or command evidence.
+- A Codex-native subagent appearing in the Subagents panel is treated as satisfying a TheHood runtime lane without runtime evidence and verifier review.
 - A revision trail is treated as proof that the repair is correct without reading the post-repair validation and review refs.

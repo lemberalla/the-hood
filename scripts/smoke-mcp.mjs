@@ -181,6 +181,10 @@ assert.ok(
   "tools/list should expose thehood_doctor"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_agent_board"),
+  "tools/list should expose thehood_agent_board"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_repo_read_file"),
   "tools/list should expose thehood_repo_read_file"
 );
@@ -196,6 +200,35 @@ const initialContinueAction = happyPath[2].result.structuredContent.next_actions
 assert.equal(initialContinueAction.arguments.approval, "none");
 assert.ok(initialContinueAction.description.includes("approval=none"));
 assert.ok(initialContinueAction.description.includes("autopilot"));
+
+const agentBoardPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_agent_board",
+      arguments: {
+        run_id: happyPath[2].result.structuredContent.run_id,
+        repo_path: repoPath,
+        include_artifact: true
+      }
+    }
+  }
+]);
+const agentBoardContent = agentBoardPath[1].result.structuredContent;
+assert.equal(agentBoardContent.kind, "agent_board");
+assert.equal(agentBoardContent.scope, "run");
+assert.equal(agentBoardContent.runId, happyPath[2].result.structuredContent.run_id);
+assert.ok(agentBoardContent.cards.some((card) => card.role === "orchestrator"));
+assert.ok(agentBoardContent.cards.some((card) => card.role === "implementer" && card.permissions.edit === true));
+assert.ok(agentBoardContent.notes.some((note) => note.includes("display guidance only")));
+assert.equal(agentBoardContent.artifact.surface, "dashboard");
+assert.equal(agentBoardContent.artifact.manifest.title, "TheHood Agent Board");
+assert.ok(Array.isArray(agentBoardContent.artifact.manifest.blocks));
+assert.ok(Array.isArray(agentBoardContent.artifact.snapshot.datasets.agent_cards));
+assert.ok(agentBoardContent.artifact.snapshot.datasets.agent_cards.some((row) => row.role === "orchestrator"));
 
 const summonPath = await runMcp([
   ...baseMessages,
@@ -307,6 +340,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
+assert.ok(doctorContent.runtime.capabilities.includes("compact_mcp_host_responses"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
@@ -317,6 +351,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("runtime_revision_delegati
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
+assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board"));
+assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board_artifact"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");
 assert.equal(stubProvider.implemented, true);
 assert.deepEqual(stubProvider.issues, []);
@@ -670,6 +706,12 @@ const consultStatusPath = await runMcp([
   }
 ]);
 const consultStatus = consultStatusPath[1].result.structuredContent;
+assert.equal(consultStatus.agent_board.kind, "agent_board");
+assert.equal(consultStatus.agent_board.scope, "run");
+assert.ok(
+  consultStatus.agent_board.cards.some((card) => card.role === "critic" && card.status === "satisfied"),
+  "MCP status should expose a visual-ready critic card for completed review runs"
+);
 assert.equal(consultStatus.insights.latestAgentResponse.status, "ok");
 assert.equal(consultStatus.insights.latestAgentResponse.primaryOutputKey, "critiqueResult");
 assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReportArtifact.ref);

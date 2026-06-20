@@ -77,6 +77,7 @@ After restart, the TheHood server should expose these tools:
 
 - `thehood_doctor`
 - `thehood_roles`
+- `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
 - `thehood_orchestrate`
@@ -94,12 +95,14 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, and `critic_trigger_artifacts`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, `critic_trigger_artifacts`, `codex_agent_board`, and `codex_agent_board_artifact`, the chat is still connected to an older MCP server process.
+
+Codex can request renderable agent visibility by calling `thehood_agent_board` with `include_artifact: true`. The returned `artifact.manifest` and `artifact.snapshot` are dashboard payloads derived from runtime state and can be passed to an available Codex artifact renderer. Rendering remains a display layer: it does not schedule agents, approve gates, or grant tools.
 
 First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
-2. Call `thehood_roles` or `thehood roster --repo .` and confirm the agent roster shows the intended orchestrator, implementer, QA, verifier, and critic owners.
+2. Call `thehood_roles` or `thehood_agent_board` and confirm the agent roster shows the intended orchestrator, implementer, QA, verifier, and critic owners.
 3. Call `thehood_plan` for a harmless read-only goal.
 4. Call `thehood_continue` with `approval: "none"` for that run. In manual mode, confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default. In autopilot mode, confirm provider invocation is auto-approved and recorded as `approval_auto_approved`.
 5. Approve a provider invocation only when a manual approval gate is active and the user accepts calling the configured provider for the repo, then continue the run and confirm it returns schema-valid JSON.
@@ -107,12 +110,47 @@ First verification sequence from a Codex chat:
 7. Approve the context transfer only when a manual transfer gate is active and the user accepts sending bounded repo evidence, then continue the run.
 8. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
 
+## Optional Codex Plugin
+
+The repo includes an optional Codex plugin scaffold at `plugins/thehood-codex` and a repo-local marketplace at `.agents/plugins/marketplace.json`.
+
+Install it only when you want Codex to load TheHood-specific workflow guidance and MCP wiring:
+
+```bash
+codex plugin marketplace add /path/to/the-hood
+codex plugin add thehood-codex@thehood
+```
+
+Start a new Codex thread after installing or updating the plugin so Codex reloads plugin skills and MCP configuration.
+
+The plugin's MCP server config runs `thehood mcp`, so the `thehood` binary must be available on `PATH`. For local development, either link/install the package after `npm run build` or keep using the explicit local snippet from:
+
+```bash
+node dist/cli/main.js mcp config
+```
+
+## Native Codex Subagents
+
+Codex's native Subagents panel is owned by Codex subagent workflows, not by MCP tool output. TheHood cannot directly register an arbitrary running provider call into that panel through `thehood_agent_board` or another MCP tool.
+
+This repository does not include repo-root `.codex/agents/` custom agents by default because those agents make Codex show a native Subagents surface even when the user did not ask for it.
+
+If a future TheHood plugin version offers opt-in custom agents, use them only when the user explicitly wants Codex-native subagent threads. For example:
+
+```text
+Use TheHood native subagents for this review. Spawn thehood-qa and thehood-critic in parallel, wait for both, and summarize their findings with file references.
+```
+
+Those spawned Codex agents should appear in the native Codex Subagents panel. They inherit the parent session's model, MCP servers, sandbox, and approvals unless Codex is told otherwise. Any custom agents are presentation and delegation helpers for Codex-native workflows; TheHood runtime state, artifacts, approvals, and verifier separation remain authoritative.
+
+Use `thehood_agent_board` with `include_artifact: true` when you want TheHood runtime-owned role visibility rendered as an in-chat dashboard instead of native Codex subagent threads.
+
 ## Recommended First Codex Chat
 
 After Codex can see TheHood tools:
 
 1. Ask Codex to call `thehood_doctor` for the repo.
-2. Ask Codex to call `thehood_roles` and inspect the roster before changing any role owner.
+2. Ask Codex to call `thehood_agent_board` and inspect the visible agent cards before changing any role owner.
 3. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles. When no manual gate is active, Codex should continue with `approval: "none"` and let TheHood autopilot auto-approve bounded provider gates when policy allows.
 4. Use `thehood_orchestrate` for implementation work.
 5. Use `thehood_continue` with explicit approval only for active manual approval gates.

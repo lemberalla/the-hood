@@ -1,4 +1,6 @@
 export * from "./runtime/artifacts.js";
+export * from "./runtime/agentBoard.js";
+export * from "./runtime/agentBoardArtifact.js";
 export * from "./runtime/commandRunner.js";
 export * from "./runtime/commandSafety.js";
 export * from "./runtime/config.js";

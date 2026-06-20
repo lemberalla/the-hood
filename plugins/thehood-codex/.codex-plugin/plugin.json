@@ -1,0 +1,42 @@
+{
+  "name": "thehood-codex",
+  "version": "0.1.0",
+  "description": "Codex integration for TheHood local agent runtime.",
+  "author": {
+    "name": "TheHood"
+  },
+  "homepage": "https://github.com/lemberalla/the-hood",
+  "repository": "https://github.com/lemberalla/the-hood",
+  "license": "MIT",
+  "keywords": [
+    "thehood",
+    "codex",
+    "mcp",
+    "agents",
+    "runtime"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "TheHood",
+    "shortDescription": "Run Codex through TheHood's local runtime",
+    "longDescription": "Adds TheHood workflow guidance and MCP wiring so Codex can inspect runtime roles, agent boards, approvals, artifacts, and run state without owning orchestration.",
+    "developerName": "TheHood",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/lemberalla/the-hood",
+    "privacyPolicyURL": "https://github.com/lemberalla/the-hood/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/lemberalla/the-hood/blob/main/LICENSE",
+    "defaultPrompt": [
+      "Show the TheHood agent board.",
+      "Run this task through TheHood.",
+      "Check TheHood runtime readiness."
+    ],
+    "brandColor": "#111111",
+    "screenshots": []
+  }
+}

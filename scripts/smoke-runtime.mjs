@@ -785,6 +785,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
 assert.ok(doctorResult.runtime.capabilities.includes("run_status_insights"));
+assert.ok(doctorResult.runtime.capabilities.includes("compact_mcp_host_responses"));
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_team_presets"));
@@ -797,6 +798,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("runtime_revision_delegatio
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
+assert.ok(doctorResult.runtime.capabilities.includes("codex_agent_board"));
+assert.ok(doctorResult.runtime.capabilities.includes("codex_agent_board_artifact"));
 const lowRiskRouting = decideReviewRouting({
   changedPaths: ["docs/RUNTIME_LOOP.md"],
   protectedChangeCount: 0,
@@ -881,6 +884,19 @@ assert.equal(verifierRoster.permissions.edit, false);
 assert.equal(verifierRoster.readOnly, true);
 const plannerRoster = roster.find((item) => item.role === "planner");
 assert.equal(plannerRoster.state, "unassigned");
+const repoAgentBoard = JSON.parse((await runCli(["agent-board", "--repo", repoPath, "--json"])).stdout);
+assert.equal(repoAgentBoard.kind, "agent_board");
+assert.equal(repoAgentBoard.scope, "repo");
+assert.ok(repoAgentBoard.cards.some((card) => card.role === "orchestrator" && card.assignmentLabel === "codex-cli:default"));
+assert.ok(repoAgentBoard.cards.some((card) => card.role === "implementer" && card.permissions.edit === true));
+assert.ok(repoAgentBoard.notes.some((note) => note.includes("display guidance only")));
+const repoAgentBoardArtifact = JSON.parse((await runCli(["agent-board", "--repo", repoPath, "--artifact", "--json"])).stdout);
+assert.equal(repoAgentBoardArtifact.board.kind, "agent_board");
+assert.equal(repoAgentBoardArtifact.board.scope, "repo");
+assert.equal(repoAgentBoardArtifact.artifact.surface, "dashboard");
+assert.equal(repoAgentBoardArtifact.artifact.manifest.title, "TheHood Agent Board");
+assert.ok(Array.isArray(repoAgentBoardArtifact.artifact.snapshot.datasets.agent_cards));
+assert.ok(repoAgentBoardArtifact.artifact.snapshot.datasets.agent_cards.some((row) => row.role === "orchestrator"));
 const localAgentRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-local-agent-execution-smoke-"));
 await runCli(["init", "--repo", localAgentRepoPath]);
 await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", localAgentRepoPath]);
@@ -1402,6 +1418,10 @@ assert.equal(
 const fanoutQaTesterLane = fanoutStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
 assert.ok(fanoutQaTesterLane, "fan-out QA item should appear as advisory tester evidence");
 assert.equal(fanoutQaTesterLane.canSatisfyRequired, false);
+assert.ok(
+  fanoutStatus.agentBoard.cards.some((card) => card.role === "qa" && card.run?.sidecarOnly === true),
+  "fan-out status should expose sidecar-only QA card metadata"
+);
 const fanoutCriticLane = fanoutStatus.insights.reviewLanes.find((lane) => lane.id === "review-lane-critic");
 assert.ok(fanoutCriticLane, "fan-out critic item should appear as advisory critic evidence");
 assert.equal(fanoutCriticLane.canSatisfyRequired, false);
@@ -2719,6 +2739,24 @@ assert.ok(
   verifiedLoopStatusJson.insights.crewLanes.lanes.some(
     (lane) => lane.id === "crew-lane-verify" && lane.reviewLaneId === "review-lane-verifier"
   )
+);
+assert.equal(verifiedLoopStatusJson.agentBoard.kind, "agent_board");
+assert.equal(verifiedLoopStatusJson.agentBoard.scope, "run");
+assert.ok(
+  verifiedLoopStatusJson.agentBoard.cards.some(
+    (card) => card.role === "verifier" && card.status === "satisfied" && card.run?.artifactRefs.length > 0
+  ),
+  "status JSON should expose a verifier agent card with evidence refs"
+);
+const verifiedLoopAgentBoard = JSON.parse(
+  (await runCli(["agent-board", loopRun.runId, "--repo", loopRepoPath, "--json"])).stdout
+);
+assert.equal(verifiedLoopAgentBoard.runId, loopRun.runId);
+assert.ok(
+  verifiedLoopAgentBoard.cards.some(
+    (card) => card.role === "qa" && card.readOnly === true && card.run?.artifactRefs.length > 0
+  ),
+  "agent-board should expose QA as a read-only visible card with evidence refs"
 );
 assert.ok(verifiedLoopStatusText.stdout.includes("crew lanes:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));

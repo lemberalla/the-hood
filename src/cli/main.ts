@@ -3,6 +3,8 @@ import path from "node:path";
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectBrowser, startBrowser, stopBrowser, type BrowserManagerOptions } from "../runtime/browserManager.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
+import { buildAgentBoard } from "../runtime/agentBoard.js";
+import { buildAgentBoardArtifact } from "../runtime/agentBoardArtifact.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
@@ -54,6 +56,7 @@ import {
   formatCliSetupReport,
   formatConfig,
   formatAdvanceRunResult,
+  formatAgentBoard,
   formatCommandResult,
   formatDoctorReport,
   formatGitEvidence,
@@ -93,6 +96,7 @@ Usage:
   thehood doctor [--repo <path>] [--json]
   thehood models [--repo <path>] [--json]
   thehood roster [--repo <path>] [--json]
+  thehood agent-board [run-id] [--repo <path>] [--artifact] [--json]
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
@@ -558,6 +562,43 @@ const handleRoster = async (options: Record<string, CliOptionValue>): Promise<vo
     : process.stdout.write(`${formatRoleRoster(roster, repoPath)}\n`);
 };
 
+const buildAgentBoardForCli = async (
+  repoPath: string,
+  runId: string | undefined,
+  existingRun?: Awaited<ReturnType<typeof getRun>>,
+  existingInsights?: Awaited<ReturnType<typeof getRunInsights>>
+) => {
+  const config = await loadConfig(repoPath);
+  const health = await inspectRuntimeHealth(config);
+  const roster = buildRoleRoster(config, health);
+
+  if (!runId) {
+    return buildAgentBoard({ repoPath, roster });
+  }
+
+  const run = existingRun ?? await getRun(repoPath, runId);
+  const insights = existingInsights ?? await getRunInsights(run);
+
+  return buildAgentBoard({ repoPath, roster, run, insights });
+};
+
+const handleAgentBoard = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const board = await buildAgentBoardForCli(repoFromOptions(options), args[0]);
+  const output = getBooleanOption(options, "artifact")
+    ? {
+        board,
+        artifact: buildAgentBoardArtifact(board)
+      }
+    : board;
+
+  shouldPrintJson(options)
+    ? printJson(output)
+    : process.stdout.write(`${formatAgentBoard(board)}\n`);
+};
+
 const handleTeams = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -646,8 +687,9 @@ const handleStatus = async (
 
   const run = await getRun(repoPath, args[0]);
   const insights = await getRunInsights(run);
+  const agentBoard = await buildAgentBoardForCli(repoPath, run.runId, run, insights);
   shouldPrintJson(options)
-    ? printJson({ ...run, insights })
+    ? printJson({ ...run, insights, agentBoard })
     : process.stdout.write(`${formatRunSummary(run, insights)}\n`);
 };
 
@@ -1147,6 +1189,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "roster":
       await handleRoster(parsed.options);
+      return;
+    case "agent-board":
+      await handleAgentBoard(args, parsed.options);
       return;
     case "teams":
       await handleTeams(args, parsed.options);

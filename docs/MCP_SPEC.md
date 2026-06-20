@@ -60,6 +60,7 @@ Implemented tools:
 
 - `thehood_doctor`
 - `thehood_roles`
+- `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
 - `thehood_orchestrate`
@@ -103,6 +104,24 @@ Input:
   "repo_path": "string"
 }
 ```
+
+### `thehood_agent_board`
+
+Return a visual-ready agent board for Codex app card-style visibility. The board is derived from role config, provider health, crew lanes, review lanes, loop responsibilities, handoffs, artifacts, and operator next actions. It is display guidance only: it does not grant tools, schedule agents, satisfy gates, or approve work.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "run_id": "optional string",
+  "include_artifact": "optional boolean"
+}
+```
+
+When `run_id` is omitted, the board is repo-scoped and shows configured agents, readiness, owners, and authority. When `run_id` is present, cards also include current lane state, blocking state, sidecar status, and bounded artifact/event/handoff refs for that run. When `include_artifact` is true, the output also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that a Codex app artifact renderer can display as native card and table UI.
+
+This MCP tool does not create Codex-native subagent threads. Use the optional TheHood Codex plugin only when the user wants TheHood guidance and MCP wiring loaded into Codex; native Codex subagent threads still require Codex-owned subagent workflows.
 
 ### `thehood_assign_roles`
 
@@ -416,13 +435,19 @@ Input:
 
 Inspect a run.
 
-Output includes run fields, events, runtime-derived `next_actions`, and `insights`. Insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, remote repo context, local provider execution, review routing, critic trigger, revision packet, fan-out, and transfer manifest refs when present, plus bounded refs-only `canonicalMemory`, revision trails, crew lane trails, review lanes, loop responsibility schedules, and operator next actions, so Codex can show completed Pro state without manually reading artifacts first. Provider execution insights include the latest local command role, provider/model, command, workspace mode, sandbox or permission mode, exit code, parse status, duration, and artifact ref. Review routing includes the latest risk tier, selected action, required lanes, reasons, compact signals, and artifact ref. Revision trails, crew lanes, and loop responsibilities are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
+Output is compact by default. It includes run state, role mapping, artifact/event/tool counts, latest artifact refs, recent events, compact `next_actions`, compact `agent_board`, and bounded `insights`. The compact response is designed for MCP hosts such as Codex so repeated status checks do not fill the conversation context with full run evidence. Full evidence remains in `.thehood` run records and artifacts.
+
+Set `detail` to `full` only when the caller intentionally needs the legacy verbose payload. Prefer reading a specific artifact with `thehood_read_artifact` when inspecting plans, verifier reports, provider logs, progress packets, or fan-out evidence.
+
+Compact insights expose the latest attached provider response artifact, parsed primary output such as `decision`, final report artifact, latest progress packet, reconciliation, repo context, remote repo context, local provider execution, review routing, critic trigger, revision packet, fan-out, and transfer manifest refs when present, plus refs-only `canonicalMemory`, bounded revision trails, crew lane trails, review lanes, loop responsibility schedules, and operator next actions. Revision trails, crew lanes, loop responsibilities, and agent board cards are derived by the runtime from canonical run evidence and are display guidance only; they do not grant tools or satisfy verifier/runtime QA gates.
 
 Input:
 
 ```json
 {
-  "run_id": "string"
+  "run_id": "string",
+  "repo_path": "string",
+  "detail": "summary | full"
 }
 ```
 
@@ -435,7 +460,8 @@ Input:
 ```json
 {
   "repo_path": "string",
-  "limit": 20
+  "limit": 20,
+  "detail": "summary | full"
 }
 ```
 
@@ -527,6 +553,7 @@ Input:
 
 - Tools return run references and compact summaries.
 - Large logs, diffs, and repo context packs are artifacts, not giant inline payloads.
+- Runtime tool responses are compact by default; use `detail: "full"` sparingly and prefer artifact reads for exact evidence.
 - Tool outputs include approval state.
 - MCP tools do not bypass CLI/runtime policies.
 - MCP tools never expose secrets.

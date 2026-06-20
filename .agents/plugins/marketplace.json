@@ -1,0 +1,20 @@
+{
+  "name": "thehood",
+  "interface": {
+    "displayName": "TheHood"
+  },
+  "plugins": [
+    {
+      "name": "thehood-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/thehood-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

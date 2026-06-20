@@ -5,13 +5,13 @@ This checklist tracks repo-side scaffolding and external GitHub settings require
 ## Must Finish Before Public
 
 - Keep the root MIT `LICENSE` and `package.json` license metadata in sync.
-- Keep `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md` present in the repository and package boundary.
+- Keep `CONTRIBUTING.md`, `SECURITY.md`, `PRIVACY.md`, and `CODE_OF_CONDUCT.md` present in the repository and package boundary.
 - Confirm private vulnerability reporting is enabled for `lemberalla/the-hood`.
 - Keep `.thehood/`, browser profile state, provider logs, local env files, package archives, and generated build output out of git.
 - Keep examples and fixtures synthetic. Do not publish real runtime artifacts or provider transcripts.
 - Verify a fresh clone path: `npm ci`, `npm run build`, `npm run smoke:mcp`, `npm run smoke:codex-config`, and `npm run smoke:runtime`.
 - Verify package contents with `npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json`.
-- Make README claims match current behavior. Mark API adapters, hosted UI, and polished Codex app agent visibility as planned unless implemented.
+- Make README claims match current behavior. Mark API adapters, hosted UI, and automatic Codex app rendering beyond explicit agent board artifact payloads as planned unless implemented.
 - Configure branch protection, required CI checks, secret scanning or push protection, private vulnerability reporting, and issue/PR templates on GitHub. These settings are external to the repository tree and must be verified before public launch.
 
 ## Current Public Surface
@@ -20,7 +20,7 @@ This checklist tracks repo-side scaffolding and external GitHub settings require
 - Codex CLI and Claude Code adapters are implemented through local command providers.
 - ChatGPT Pro works through the user-authenticated ChatGPT Web bridge when configured by the user.
 - OpenAI and Anthropic API provider config exists, but external API adapters are not implemented yet.
-- Agents are visible through CLI, MCP, TUI, status, logs, and artifact surfaces. Native Codex app visual agent cards are a later layer.
+- Agents are visible through CLI, MCP, TUI, status, logs, artifact surfaces, structured agent board snapshots, and renderable dashboard payloads. The optional Codex plugin provides TheHood workflow guidance and MCP wiring, but automatic native Codex app rendering on every TheHood run is still a later integration layer.
 
 ## Package Boundary
 

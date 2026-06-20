@@ -259,6 +259,7 @@ const toolNames = toolsList.result.tools.map((tool) => tool.name);
 for (const expectedTool of [
   "thehood_doctor",
   "thehood_roles",
+  "thehood_agent_board",
   "thehood_assign_roles",
   "thehood_plan",
   "thehood_orchestrate",
@@ -302,7 +303,9 @@ for (const expectedCapability of [
   "mcp_autopilot_continue_guidance",
   "run_status_insights",
   "same_run_agent_summons",
-  "bounded_same_run_fanout"
+  "bounded_same_run_fanout",
+  "codex_agent_board",
+  "codex_agent_board_artifact"
 ]) {
   assert.ok(
     health.runtime.capabilities.includes(expectedCapability),

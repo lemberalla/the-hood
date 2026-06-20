@@ -1,5 +1,7 @@
 import { loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
+import { buildAgentBoard, type AgentBoard, type AgentBoardAction, type AgentBoardCard } from "../runtime/agentBoard.js";
+import { buildAgentBoardArtifact } from "../runtime/agentBoardArtifact.js";
 import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
@@ -20,10 +22,20 @@ import { approvalMessageHint } from "../runtime/approvalInbox.js";
 import { deriveOperatorNextActions } from "../runtime/operatorNextActions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { buildRoleRoster } from "../runtime/roleRoster.js";
-import { getRunInsights } from "../runtime/runInsights.js";
+import { getRunInsights, type RunInsights } from "../runtime/runInsights.js";
 import { summonAgent } from "../runtime/summons.js";
 import type { AgentResponse } from "../providers/types.js";
-import type { ApprovalDecision, JsonObject, JsonValue, RoleMap, RunMode, RunRecord, RuntimeRole } from "../runtime/types.js";
+import type {
+  ApprovalDecision,
+  JsonObject,
+  JsonValue,
+  CrewLane,
+  OperatorNextAction,
+  RoleMap,
+  RunMode,
+  RunRecord,
+  RuntimeRole
+} from "../runtime/types.js";
 import { formatRoleAssignment, parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { errorToolResult, toolResult, type ToolDefinition, type ToolResult } from "./protocol.js";
 import {
@@ -36,6 +48,7 @@ import {
 } from "./validation.js";
 
 type ToolHandler = (argumentsValue: JsonValue | undefined) => Promise<ToolResult>;
+type HostResponseDetail = "summary" | "full";
 
 export interface McpTool {
   definition: ToolDefinition;
@@ -55,7 +68,372 @@ const artifactSummary = (artifact: RunRecord["artifacts"][number]): JsonObject =
   summary: artifact.summary
 });
 
-const runSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
+const compactArtifactLimit = 20;
+const compactEventLimit = 5;
+const compactNextActionLimit = 8;
+const compactBoardCardLimit = 4;
+const compactProviderResponseLimit = 5;
+const compactCycleLimit = 3;
+const compactTextLimit = 600;
+
+const detailProperty = {
+  type: "string",
+  enum: ["summary", "full"],
+  description: "summary is compact and refs-only by default; full returns the legacy verbose payload."
+};
+
+const parseResponseDetail = (args: JsonObject): HostResponseDetail => {
+  const detail = optionalString(args, "detail") ?? "summary";
+
+  if (detail !== "summary" && detail !== "full") {
+    throw new Error("detail must be summary or full when provided.");
+  }
+
+  return detail;
+};
+
+const truncateText = (value: string, maxLength = compactTextLimit): string =>
+  value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 14))}...[truncated]`;
+
+const jsonObjectValue = (value: JsonValue | undefined): JsonObject | undefined =>
+  value !== undefined && value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : undefined;
+
+const latestItems = <T>(items: T[], limit: number): { items: T[]; omitted: number } => {
+  const omitted = Math.max(0, items.length - limit);
+  return {
+    items: items.slice(omitted),
+    omitted
+  };
+};
+
+const artifactCounts = (artifacts: RunRecord["artifacts"]): JsonObject =>
+  artifacts.reduce<JsonObject>((counts, artifact) => {
+    const current = counts[artifact.kind];
+
+    return {
+      ...counts,
+      [artifact.kind]: (typeof current === "number" ? current : 0) + 1
+    };
+  }, {});
+
+const hostArtifactSummaries = (run: RunRecord): RunRecord["artifacts"] => {
+  const evidenceArtifacts = run.artifacts.filter((artifact) => artifact.kind !== "log" && artifact.kind !== "directive");
+  return latestItems(evidenceArtifacts, compactArtifactLimit).items;
+};
+
+const compactRunEvents = (run: RunRecord): JsonObject => {
+  const latest = latestItems(run.events, compactEventLimit);
+
+  return {
+    count: run.events.length,
+    omitted: latest.omitted,
+    latest: latest.items.map((event) => ({
+      id: event.id,
+      created_at: event.createdAt,
+      type: event.type,
+      message: truncateText(event.message)
+    }))
+  };
+};
+
+const compactNextAction = (action: OperatorNextAction): JsonObject => ({
+  action: action.action,
+  label: truncateText(action.label),
+  description: truncateText(action.description),
+  owner: compactOwner(action.owner),
+  owner_label: truncateText(action.owner.label),
+  blocking: action.blocking,
+  required: action.required,
+  state: action.state,
+  reason: truncateText(action.reason),
+  generatedAt: action.generatedAt,
+  ...(action.tool ? { tool: action.tool } : {}),
+  ...(action.mcpToolHint ? { mcp_tool_hint: action.mcpToolHint } : {}),
+  ...(action.arguments ? { arguments: action.arguments } : {}),
+  ...(action.artifact ? { artifact: action.artifact as unknown as JsonObject } : {}),
+  artifactRefs: action.artifactRefs.slice(0, 3),
+  eventRefs: action.eventRefs.slice(0, 3)
+});
+
+const compactNextActions = (run: RunRecord): JsonObject[] =>
+  deriveOperatorNextActions(run)
+    .slice(0, compactNextActionLimit)
+    .map(compactNextAction);
+
+const compactAgentResponse = (response: AgentResponse): JsonObject => ({
+  status: response.status,
+  summary: truncateText(response.summary),
+  data: boundAgentMarkdownPayloads(response.data, 1_000)
+});
+
+const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
+  latestItems(responses, compactProviderResponseLimit).items.map(compactAgentResponse);
+
+const compactProviderExecution = (execution: RunInsights["recentProviderExecutions"][number]): JsonObject => ({
+  artifact: execution.artifact as unknown as JsonObject,
+  ...(execution.role ? { role: execution.role } : {}),
+  ...(execution.provider ? { provider: execution.provider } : {}),
+  ...(execution.model ? { model: execution.model } : {}),
+  ...(execution.commandMode ? { commandMode: execution.commandMode } : {}),
+  ...(execution.workspaceMode ? { workspaceMode: execution.workspaceMode } : {}),
+  ...(execution.sandbox ? { sandbox: execution.sandbox } : {}),
+  ...(execution.permissionMode ? { permissionMode: execution.permissionMode } : {}),
+  ...(execution.exitCode !== undefined ? { exitCode: execution.exitCode } : {}),
+  ...(execution.timedOut !== undefined ? { timedOut: execution.timedOut } : {}),
+  ...(execution.durationMs !== undefined ? { durationMs: execution.durationMs } : {}),
+  ...(execution.stdoutRef ? { stdoutRef: execution.stdoutRef } : {}),
+  ...(execution.stderrRef ? { stderrRef: execution.stderrRef } : {}),
+  ...(execution.responseParsed !== undefined ? { responseParsed: execution.responseParsed } : {}),
+  ...(execution.responseStatus ? { responseStatus: execution.responseStatus } : {})
+});
+
+const compactDecision = (decision: JsonObject): JsonObject => ({
+  ...(typeof decision.action === "string" ? { action: decision.action } : {}),
+  ...(typeof decision.reason === "string" ? { reason: truncateText(decision.reason, 240) } : {}),
+  ...(typeof decision.delegateTo === "string" ? { delegateTo: decision.delegateTo } : {}),
+  ...(typeof decision.nextRole === "string" ? { nextRole: decision.nextRole } : {}),
+  ...(typeof decision.requiresMoreEvidence === "boolean" ? { requiresMoreEvidence: decision.requiresMoreEvidence } : {}),
+  ...(typeof decision.sliceName === "string" ? { sliceName: decision.sliceName } : {}),
+  ...(typeof decision.reasonCode === "string" ? { reasonCode: decision.reasonCode } : {}),
+  ...(typeof decision.callCritic === "boolean" ? { callCritic: decision.callCritic } : {}),
+  ...(Array.isArray(decision.targetPaths) ? { targetPathCount: decision.targetPaths.length } : {}),
+  ...(Array.isArray(decision.requestedPaths) ? { requestedPathCount: decision.requestedPaths.length } : {}),
+  ...(Array.isArray(decision.evidenceRefs) ? { evidenceRefCount: decision.evidenceRefs.length } : {}),
+  ...(Array.isArray(decision.artifactRefs) ? { artifactRefCount: decision.artifactRefs.length } : {}),
+  ...(Array.isArray(decision.sourceRoles) ? { sourceRoles: decision.sourceRoles.slice(0, 5) as JsonValue[] } : {}),
+  ...(Array.isArray(decision.acceptanceCriteria) ? { acceptanceCriteriaCount: decision.acceptanceCriteria.length } : {}),
+  ...(typeof decision.markdownTruncated === "boolean" ? { markdownTruncated: decision.markdownTruncated } : {}),
+  ...(typeof decision.markdownCharLength === "number" ? { markdownCharLength: decision.markdownCharLength } : {})
+});
+
+const compactLatestAgentResponse = (response: RunInsights["latestAgentResponse"]): JsonObject | undefined => {
+  if (!response) {
+    return undefined;
+  }
+
+  return {
+    artifact: response.artifact as unknown as JsonObject,
+    status: response.status,
+    summary: truncateText(response.summary),
+    ...(response.primaryOutputKey ? { primaryOutputKey: response.primaryOutputKey } : {}),
+    ...(response.decision ? { decision: compactDecision(response.decision) } : {}),
+    ...(response.markdown
+      ? {
+          markdown: {
+            field: response.markdown.field,
+            preview: truncateText(response.markdown.preview, 800),
+            truncated: response.markdown.truncated,
+            charLength: response.markdown.charLength
+          }
+        }
+      : {})
+  };
+};
+
+const compactOwner = (owner: {
+  kind: string;
+  label: string;
+  role?: RuntimeRole;
+  provider?: string;
+  model?: string;
+  assignment?: string;
+  readOnly?: boolean;
+}): JsonObject => ({
+  kind: owner.kind,
+  label: truncateText(owner.label),
+  ...(owner.role ? { role: owner.role } : {}),
+  ...(owner.provider ? { provider: owner.provider } : {}),
+  ...(owner.model ? { model: owner.model } : {}),
+  ...(owner.assignment ? { assignment: owner.assignment } : {}),
+  ...(owner.readOnly !== undefined ? { readOnly: owner.readOnly } : {})
+});
+
+const compactCrewLaneStatus = (lane: CrewLane): JsonObject => ({
+  id: lane.id,
+  kind: lane.kind,
+  status: lane.status,
+  required: lane.required,
+  blocking: lane.blocking,
+  ...(lane.reviewLaneId ? { reviewLaneId: lane.reviewLaneId } : {}),
+  ...(lane.sidecarOnly !== undefined ? { sidecarOnly: lane.sidecarOnly } : {})
+});
+
+const compactInsightAction = (action: OperatorNextAction): JsonObject => ({
+  action: action.action,
+  label: truncateText(action.label),
+  ...(action.tool ? { tool: action.tool } : {}),
+  artifactRefs: action.artifactRefs.slice(0, 1)
+});
+
+const compactCanonicalMemory = (memory: JsonObject): JsonObject => {
+  const currentRun = jsonObjectValue(memory.currentRun);
+
+  return {
+    ...(memory.kind === undefined ? {} : { kind: memory.kind }),
+    ...(memory.artifactBodyPolicy === undefined ? {} : { artifactBodyPolicy: memory.artifactBodyPolicy }),
+    ...(memory.ignoreProviderSessionContext === undefined
+      ? {}
+      : { ignoreProviderSessionContext: memory.ignoreProviderSessionContext }),
+    currentRun: currentRun
+      ? {
+          ...(currentRun.runId === undefined ? {} : { runId: currentRun.runId }),
+          ...(currentRun.state === undefined ? {} : { state: currentRun.state }),
+          ...(currentRun.artifacts === undefined ? {} : { artifacts: currentRun.artifacts })
+        } as JsonObject
+      : {}
+  };
+};
+
+const selectCompactCrewLanes = (lanes: CrewLane[]): CrewLane[] => {
+  const selected = lanes.filter((lane) =>
+    lane.blocking ||
+    lane.required ||
+    lane.status === "in_progress" ||
+    lane.status === "satisfied" ||
+    lane.id === "crew-lane-complete"
+  );
+  return (selected.length > 0 ? selected : lanes).slice(0, compactBoardCardLimit);
+};
+
+const compactFanout = (fanout: RunInsights["latestFanout"]): JsonObject | undefined => {
+  if (!fanout) {
+    return undefined;
+  }
+
+  return {
+    artifact: fanout.artifact as unknown as JsonObject,
+    ...(fanout.status ? { status: fanout.status } : {}),
+    ...(fanout.requestedItems !== undefined ? { requestedItems: fanout.requestedItems } : {}),
+    ...(fanout.executedItems !== undefined ? { executedItems: fanout.executedItems } : {}),
+    ...(fanout.maxItems !== undefined ? { maxItems: fanout.maxItems } : {}),
+    sidecarOnly: fanout.sidecarOnly,
+    canSatisfyRequiredGates: fanout.canSatisfyRequiredGates,
+    items: fanout.items.slice(0, compactBoardCardLimit).map((item) => ({ ...item }))
+  };
+};
+
+const compactInsights = (insights: RunInsights): JsonObject => {
+  const latestAgentResponse = compactLatestAgentResponse(insights.latestAgentResponse);
+  const latestFanout = compactFanout(insights.latestFanout);
+
+  return {
+    ...(latestAgentResponse ? { latestAgentResponse } : {}),
+    ...(insights.finalReport ? { finalReport: insights.finalReport as unknown as JsonObject } : {}),
+    ...(insights.latestCriticTrigger ? { latestCriticTrigger: insights.latestCriticTrigger as unknown as JsonObject } : {}),
+    ...(insights.latestRevisionPacket ? { latestRevisionPacket: insights.latestRevisionPacket as unknown as JsonObject } : {}),
+    ...(insights.latestReviewRouting ? { latestReviewRouting: insights.latestReviewRouting as unknown as JsonObject } : {}),
+    ...(insights.latestProviderExecution ? { latestProviderExecution: compactProviderExecution(insights.latestProviderExecution) } : {}),
+    recentProviderExecutionCount: insights.recentProviderExecutions.length,
+    ...(latestFanout ? { latestFanout } : {}),
+    ...(insights.latestProgressPacket ? { latestProgressPacket: insights.latestProgressPacket as unknown as JsonObject } : {}),
+    ...(insights.latestReconciliation ? { latestReconciliation: insights.latestReconciliation as unknown as JsonObject } : {}),
+    ...(insights.latestRepoContext ? { latestRepoContext: insights.latestRepoContext as unknown as JsonObject } : {}),
+    ...(insights.latestRemoteRepoContext ? { latestRemoteRepoContext: insights.latestRemoteRepoContext as unknown as JsonObject } : {}),
+    ...(insights.latestTransferManifest ? { latestTransferManifest: insights.latestTransferManifest as unknown as JsonObject } : {}),
+    ...(insights.canonicalMemory
+      ? {
+          canonicalMemory: compactCanonicalMemory(insights.canonicalMemory)
+        }
+      : {}),
+    crewLanes: {
+      kind: insights.crewLanes.kind,
+      laneCount: insights.crewLanes.lanes.length,
+      blockerCount: insights.crewLanes.blockers.length,
+      lanes: selectCompactCrewLanes(insights.crewLanes.lanes).map(compactCrewLaneStatus)
+    },
+    revisionTrail: {
+      kind: insights.revisionTrail.kind,
+      itemCount: insights.revisionTrail.items.length,
+      items: insights.revisionTrail.items.slice(0, compactBoardCardLimit) as unknown as JsonObject[]
+    },
+    loopResponsibilities: {
+      kind: insights.loopResponsibilities.kind,
+      responsibilityCount: insights.loopResponsibilities.responsibilities.length,
+      blockerCount: insights.loopResponsibilities.blockers.length
+    },
+    reviewLaneCount: insights.reviewLanes.length,
+    operatorNextActionCount: insights.operatorNextActions.length,
+    operatorNextActions: insights.operatorNextActions.slice(0, compactNextActionLimit).map(compactInsightAction),
+    ...(insights.latestHandoff ? { latestHandoff: insights.latestHandoff as unknown as JsonObject } : {}),
+    handoffCount: insights.handoffTimeline.length,
+    recentAutopilotApprovalCount: insights.recentAutopilotApprovals.length,
+    issues: insights.issues.slice(0, 5)
+  };
+};
+
+const compactBoardAction = (action: AgentBoardAction): JsonObject => ({
+  action: action.action,
+  label: truncateText(action.label),
+  ownerLabel: truncateText(action.ownerLabel),
+  blocking: action.blocking,
+  required: action.required,
+  state: action.state,
+  ...(action.tool ? { tool: action.tool } : {}),
+  ...(action.mcpToolHint ? { mcpToolHint: action.mcpToolHint } : {}),
+  artifactRefs: action.artifactRefs.slice(0, 3),
+  eventRefs: action.eventRefs.slice(0, 3)
+});
+
+const compactBoardCard = (card: AgentBoardCard): JsonObject => ({
+  id: card.id,
+  role: card.role,
+  assignmentLabel: card.assignmentLabel,
+  status: card.status,
+  readOnly: card.readOnly,
+  ...(card.provider ? { provider: card.provider } : {}),
+  ...(card.model ? { model: card.model } : {}),
+  ...(card.issues.length > 0 ? { issues: card.issues.slice(0, 3) } : {}),
+  ...(card.run
+    ? {
+        run: {
+          runId: card.run.runId,
+          state: card.run.state,
+          mode: card.run.mode,
+          ...(card.run.currentLane ? { currentLane: card.run.currentLane } : {}),
+          ...(card.run.laneStatus ? { laneStatus: card.run.laneStatus } : {}),
+          ...(card.run.laneSummary ? { laneSummary: truncateText(card.run.laneSummary) } : {}),
+          ...(card.run.required !== undefined ? { required: card.run.required } : {}),
+          ...(card.run.blocking !== undefined ? { blocking: card.run.blocking } : {}),
+          ...(card.run.canSatisfyGate !== undefined ? { canSatisfyGate: card.run.canSatisfyGate } : {}),
+          ...(card.run.satisfiesRequired !== undefined ? { satisfiesRequired: card.run.satisfiesRequired } : {}),
+          ...(card.run.sidecarOnly !== undefined ? { sidecarOnly: card.run.sidecarOnly } : {}),
+          artifactRefs: card.run.artifactRefs.slice(0, 1),
+          eventRefs: card.run.eventRefs.slice(0, 1),
+          handoffRefs: card.run.handoffRefs.slice(0, 1)
+        }
+      }
+    : {})
+});
+
+const compactAgentBoard = (board: AgentBoard): JsonObject => {
+  const visibleCards = board.cards.filter((card) => card.status !== "unassigned" || card.issues.length > 0);
+  const selectedCards = visibleCards.length > 0 ? visibleCards : board.cards;
+  const latestCards = latestItems(selectedCards, compactBoardCardLimit);
+  const latestActions = latestItems(board.actions, compactNextActionLimit);
+
+  return {
+    schemaVersion: board.schemaVersion,
+    kind: board.kind,
+    scope: board.scope,
+    repoPath: board.repoPath,
+    ...(board.runId ? { runId: board.runId } : {}),
+    ...(board.runState ? { runState: board.runState } : {}),
+    ...(board.runMode ? { runMode: board.runMode } : {}),
+    summary: board.summary,
+    cardCount: board.cards.length,
+    visibleCardCount: selectedCards.length,
+    omittedCards: latestCards.omitted,
+    cards: latestCards.items.map(compactBoardCard),
+    actionCount: board.actions.length,
+    omittedActions: latestActions.omitted,
+    actions: latestActions.items.map(compactBoardAction),
+    notes: board.notes.slice(0, 2)
+  };
+};
+
+const fullRunSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
   run_id: run.runId,
   status: run.state,
   mode: run.mode,
@@ -75,27 +453,92 @@ const runSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
   next_actions: deriveOperatorNextActions(run) as unknown as JsonObject[]
 });
 
-const agentResponsesSummary = (responses: AgentResponse[]): JsonObject[] =>
-  responses.map((response) => ({
-    status: response.status,
-    summary: response.summary,
-    data: boundAgentMarkdownPayloads(response.data, 2_000)
-  }));
+const compactRunSummary = (run: RunRecord, insights?: RunInsights): JsonObject => {
+  const compactArtifactsForHost = hostArtifactSummaries(run);
 
-const runLoopSummary = (result: Awaited<ReturnType<typeof runAutopilotLoop>>): JsonObject => ({
-  ...runSummary(result.run),
-  advanced: result.advanced,
-  stop_kind: result.stopKind,
-  stop_reason: result.stopReason,
-  cycles: result.cycles as unknown as JsonObject[],
-  max_cycles: result.maxCycles,
-  max_steps_per_cycle: result.maxStepsPerCycle,
-  provider_response_count: result.providerResponses.length,
-  provider_responses: agentResponsesSummary(result.providerResponses)
-});
+  return {
+    run_id: run.runId,
+    status: run.state,
+    mode: run.mode,
+    preferred_role: run.preferredRole ?? null,
+    repo_path: run.repoPath,
+    goal: truncateText(run.userGoal),
+    roles: roleSummary(run.roleMapping),
+    approval_required: run.approvalRequired,
+    approval_reason: run.approvalReason ? truncateText(run.approvalReason) : null,
+    stop_reason: run.stopReason ? truncateText(run.stopReason) : null,
+    artifact_count: run.artifacts.length,
+    artifact_counts: artifactCounts(run.artifacts),
+    artifacts_omitted: Math.max(0, run.artifacts.filter((artifact) => artifact.kind !== "log" && artifact.kind !== "directive").length - compactArtifactsForHost.length),
+    artifacts: compactArtifactsForHost.map(artifactSummary),
+    event_count: run.events.length,
+    approval_event_count: run.approvalEvents.length,
+    tool_event_count: run.toolEvents.length,
+    events: compactRunEvents(run),
+    ...(insights ? { insights: compactInsights(insights) } : {}),
+    next_actions: compactNextActions(run),
+    host_response: {
+      detail: "summary",
+      artifact_body_policy: "refs_only",
+      full_detail: "Pass detail=full for the legacy verbose payload or read exact artifact refs with thehood_read_artifact."
+    }
+  };
+};
+
+const runSummary = (
+  run: RunRecord,
+  insights?: RunInsights,
+  detail: HostResponseDetail = "summary"
+): JsonObject =>
+  detail === "full" ? fullRunSummary(run, insights ? toJsonObject(insights) : undefined) : compactRunSummary(run, insights);
+
+const runLoopSummary = (
+  result: Awaited<ReturnType<typeof runAutopilotLoop>>,
+  detail: HostResponseDetail = "summary"
+): JsonObject => {
+  const latestCycles = latestItems(result.cycles, compactCycleLimit);
+
+  return {
+    ...runSummary(result.run, undefined, detail),
+    advanced: result.advanced,
+    stop_kind: result.stopKind,
+    stop_reason: result.stopReason,
+    ...(detail === "full"
+      ? { cycles: result.cycles as unknown as JsonObject[] }
+      : {
+          cycle_count: result.cycles.length,
+          cycles_omitted: latestCycles.omitted,
+          cycles: latestCycles.items as unknown as JsonObject[]
+        }),
+    max_cycles: result.maxCycles,
+    max_steps_per_cycle: result.maxStepsPerCycle,
+    provider_response_count: result.providerResponses.length,
+    provider_responses: agentResponsesSummary(result.providerResponses)
+  };
+};
 
 const toJsonObject = (value: unknown): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject;
+
+const agentBoardForRun = async (
+  repoPath: string,
+  runId?: string,
+  existingRun?: Awaited<ReturnType<typeof getRun>>,
+  existingInsights?: Awaited<ReturnType<typeof getRunInsights>>
+): Promise<Awaited<ReturnType<typeof buildAgentBoard>>> => {
+  const config = await loadConfig(repoPath);
+  const health = await inspectRuntimeHealth(config);
+  const roster = buildRoleRoster(config, health);
+
+  if (!runId) {
+    return buildAgentBoard({ repoPath, roster });
+  }
+
+  const run = existingRun ?? await getRun(repoPath, runId);
+  const insights = existingInsights ?? await getRunInsights(run);
+
+  return buildAgentBoard({ repoPath, roster, run, insights });
+};
 
 const consultRoles = new Set(["orchestrator", "planner", "researcher", "qa", "critic"]);
 
@@ -261,13 +704,15 @@ const createPlanTool = (): McpTool => ({
         max_steps_per_cycle: {
           type: "number",
           description: "Optional positive integer for auto_loop. Defaults to 10."
-        }
+        },
+        detail: detailProperty
       },
       required: ["goal", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const run = await createRun({
         repoPath: requiredString(args, "repo_path"),
         goal: requiredString(args, "goal"),
@@ -287,13 +732,13 @@ const createPlanTool = (): McpTool => ({
         });
 
         return {
-          ...runLoopSummary(result),
+          ...runLoopSummary(result, detail),
           summary: "TheHood created the plan run and advanced it through the headless loop."
         };
       }
 
       return {
-        ...runSummary(run)
+        ...runSummary(run, undefined, detail)
       };
     })
 });
@@ -340,13 +785,15 @@ const createOrchestrateTool = (): McpTool => ({
         max_steps_per_cycle: {
           type: "number",
           description: "Optional positive integer for auto_loop. Defaults to 10."
-        }
+        },
+        detail: detailProperty
       },
       required: ["goal", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const run = await createRun({
         repoPath: requiredString(args, "repo_path"),
         goal: requiredString(args, "goal"),
@@ -366,18 +813,17 @@ const createOrchestrateTool = (): McpTool => ({
         });
 
         return {
-          ...runLoopSummary(result),
+          ...runLoopSummary(result, detail),
           summary: "TheHood created the run and advanced it through the headless loop."
         };
       }
 
       return {
-        ...runSummary(run),
+        ...runSummary(run, undefined, detail),
         summary: "TheHood created the run and stopped at the current runtime boundary."
       };
     })
 });
-
 const createDoctorTool = (): McpTool => ({
   definition: {
     name: "thehood_doctor",
@@ -429,6 +875,43 @@ const createRolesTool = (): McpTool => ({
         roles: roleSummary(config.roles),
         roster: toJsonObject(buildRoleRoster(config, health)),
         health: toJsonObject(health)
+      };
+    })
+});
+
+const createAgentBoardTool = (): McpTool => ({
+  definition: {
+    name: "thehood_agent_board",
+    title: "Inspect TheHood Agent Board",
+    description: "Return a visual-ready runtime-derived agent board for Codex app cards. The board is display guidance only and does not grant tools, schedule agents, satisfy gates, or approve work.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        run_id: {
+          type: "string",
+          description: "Optional run id. When present, cards include current lane state and evidence refs for that run."
+        },
+        include_artifact: {
+          type: "boolean",
+          description: "When true, include a renderable dashboard manifest and bounded snapshot for Codex app artifact rendering."
+        }
+      },
+      required: ["repo_path"]
+    },
+    annotations: readOnlyAnnotations()
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const board = await agentBoardForRun(requiredString(args, "repo_path"), optionalString(args, "run_id"));
+      const includeArtifact = optionalBoolean(args, "include_artifact") ?? false;
+
+      return {
+        ...toJsonObject(board),
+        ...(includeArtifact ? { artifact: toJsonObject(buildAgentBoardArtifact(board)) } : {})
       };
     })
 });
@@ -508,13 +991,15 @@ const createConsultTool = (): McpTool => ({
           items: {
             type: "string"
           }
-        }
+        },
+        detail: detailProperty
       },
       required: ["goal", "repo_path", "role", "agent"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const role = parseConsultRole(requiredString(args, "role"));
       const assignment = parseRoleAssignment(requiredString(args, "agent"));
       const run = await createRun({
@@ -533,7 +1018,7 @@ const createConsultTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(advanced.run),
+        ...runSummary(advanced.run, undefined, detail),
         consulted_role: role,
         consulted_agent: formatRoleAssignment(assignment),
         advanced: advanced.advanced,
@@ -588,13 +1073,15 @@ const createSummonTool = (): McpTool => ({
           items: {
             type: "string"
           }
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path", "role", "brief"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const agent = optionalString(args, "agent");
       const kind = optionalString(args, "kind");
       const persona = optionalString(args, "persona");
@@ -611,7 +1098,7 @@ const createSummonTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(result.run),
+        ...runSummary(result.run, undefined, detail),
         summoned_role: result.role,
         summoned_agent: formatRoleAssignment(result.assignment),
         summon_kind: result.summonKind,
@@ -694,13 +1181,15 @@ const createFanoutTool = (): McpTool => ({
             },
             required: ["role", "brief"]
           }
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path", "items"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const maxItems = optionalNumber(args, "max_items");
       const result = await fanoutAgents({
         repoPath: requiredString(args, "repo_path"),
@@ -710,7 +1199,7 @@ const createFanoutTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(result.run),
+        ...runSummary(result.run, undefined, detail),
         fanout_status: result.status,
         bounds: result.bounds as unknown as JsonObject,
         fanout_artifact: artifactSummary(result.artifact),
@@ -751,13 +1240,15 @@ const createContinueTool = (): McpTool => ({
         },
         message: {
           type: "string"
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const approval = optionalString(args, "approval") ?? "none";
       const repoPath = requiredString(args, "repo_path");
       const runId = requiredString(args, "run_id");
@@ -777,7 +1268,7 @@ const createContinueTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(advanced.run),
+        ...runSummary(advanced.run, undefined, detail),
         advanced: advanced.advanced,
         stop_reason: advanced.stopReason,
         provider_response_count: advanced.providerResponses.length,
@@ -808,13 +1299,15 @@ const createLoopTool = (): McpTool => ({
         max_steps_per_cycle: {
           type: "number",
           description: "Optional positive integer. Defaults to 10."
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const maxCycles = optionalPositiveInteger(args, "max_cycles");
       const maxStepsPerCycle = optionalPositiveInteger(args, "max_steps_per_cycle");
       const result = await runAutopilotLoop({
@@ -825,7 +1318,7 @@ const createLoopTool = (): McpTool => ({
       });
 
       return {
-        ...runLoopSummary(result)
+        ...runLoopSummary(result, detail)
       };
     })
 });
@@ -855,13 +1348,15 @@ const createReconcileTool = (): McpTool => ({
         },
         message: {
           type: "string"
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const repoPath = requiredString(args, "repo_path");
       const runId = requiredString(args, "run_id");
       const approval = optionalString(args, "approval") ?? "none";
@@ -884,7 +1379,7 @@ const createReconcileTool = (): McpTool => ({
       });
 
       return {
-        ...runSummary(result.run),
+        ...runSummary(result.run, undefined, detail),
         reconciled_role: result.role,
         advanced: result.advanced,
         stop_reason: result.stopReason,
@@ -910,7 +1405,8 @@ const createTransferPreviewTool = (): McpTool => ({
         },
         repo_path: {
           type: "string"
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
@@ -989,23 +1485,31 @@ const createStatusTool = (): McpTool => ({
         },
         repo_path: {
           type: "string"
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
-      const run = await getRun(requiredString(args, "repo_path"), requiredString(args, "run_id"));
-      const insights = toJsonObject(await getRunInsights(run));
+      const detail = parseResponseDetail(args);
+      const repoPath = requiredString(args, "repo_path");
+      const runId = requiredString(args, "run_id");
+      const run = await getRun(repoPath, runId);
+      const runInsights = await getRunInsights(run);
+      const agentBoard = await agentBoardForRun(repoPath, runId, run, runInsights);
 
       return {
-        ...runSummary(run, insights),
-        events: run.events.map((event) => ({
-          created_at: event.createdAt,
-          type: event.type,
-          message: event.message
-        }))
+        ...runSummary(run, runInsights, detail),
+        agent_board: detail === "full" ? toJsonObject(agentBoard) : compactAgentBoard(agentBoard),
+        events: detail === "full"
+          ? run.events.map((event) => ({
+              created_at: event.createdAt,
+              type: event.type,
+              message: event.message
+            }))
+          : compactRunEvents(run)
       };
     })
 });
@@ -1024,7 +1528,8 @@ const createRunsTool = (): McpTool => ({
         },
         limit: {
           type: "number"
-        }
+        },
+        detail: detailProperty
       },
       required: ["repo_path"]
     }
@@ -1035,10 +1540,11 @@ const createRunsTool = (): McpTool => ({
       const limit = typeof limitValue === "number" && Number.isFinite(limitValue)
         ? Math.max(1, Math.floor(limitValue))
         : 20;
+      const detail = parseResponseDetail(args);
       const runs = await listRuns(requiredString(args, "repo_path"));
 
       return {
-        runs: runs.slice(0, Math.min(limit, 100)).map((run) => runSummary(run))
+        runs: runs.slice(0, Math.min(limit, 100)).map((run) => runSummary(run, undefined, detail))
       };
     })
 });
@@ -1064,23 +1570,26 @@ const createCaptureEvidenceTool = (): McpTool => ({
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const result = await captureGitEvidence(
         requiredString(args, "repo_path"),
         requiredString(args, "run_id")
       );
 
       return {
-        ...runSummary(result.run),
+        ...runSummary(result.run, undefined, detail),
         changed_paths: result.changedPaths,
         protected_changes: result.protectedChanges.map((match) => ({
           path: match.path,
           pattern: match.pattern
         })),
-        artifacts: result.run.artifacts.map((artifact) => ({
-          kind: artifact.kind,
-          ref: artifact.ref,
-          summary: artifact.summary
-        }))
+        artifacts: detail === "full"
+          ? result.run.artifacts.map((artifact) => ({
+              kind: artifact.kind,
+              ref: artifact.ref,
+              summary: artifact.summary
+            }))
+          : latestItems(result.run.artifacts, compactArtifactLimit).items.map(artifactSummary)
       };
     })
 });
@@ -1294,26 +1803,29 @@ const createAbortTool = (): McpTool => ({
         },
         reason: {
           type: "string"
-        }
+        },
+        detail: detailProperty
       },
       required: ["run_id", "repo_path"]
     }
   },
   handle: async (argumentsValue) =>
     executeTool(argumentsValue, async (args) => {
+      const detail = parseResponseDetail(args);
       const run = await abortRun(
         requiredString(args, "repo_path"),
         requiredString(args, "run_id"),
         optionalString(args, "reason") ?? "Aborted through MCP."
       );
 
-      return runSummary(run);
+      return runSummary(run, undefined, detail);
     })
 });
 
 export const mcpTools: McpTool[] = [
   createDoctorTool(),
   createRolesTool(),
+  createAgentBoardTool(),
   createAssignRolesTool(),
   createPlanTool(),
   createOrchestrateTool(),
