@@ -194,6 +194,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Provider Adapters](docs/PROVIDER_ADAPTERS.md)
 - [Testing And Verification](docs/TESTING_AND_VERIFICATION.md)
 - [Security And Privacy](docs/SECURITY_AND_PRIVACY.md)
+- [Product Strategy](docs/product/README.md)
 - [Research Notes](docs/RESEARCH_NOTES.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Glossary](docs/GLOSSARY.md)
