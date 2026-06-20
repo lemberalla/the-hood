@@ -45,6 +45,8 @@ export const runtimeCapabilities = [
   "same_run_agent_summons",
   "bounded_same_run_fanout",
   "runtime_team_presets",
+  "multi_model_team_presets",
+  "provider_model_passthrough",
   "configurable_budget_envelopes",
   "provider_access_modes",
   "mcp_repo_gateway_tools",

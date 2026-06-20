@@ -142,7 +142,7 @@ export const formatProviders = (providers: ProviderDescriptor[]): string =>
       const discovery = provider.modelDiscovery
         ? ` discovery=${provider.modelDiscovery.status}:${provider.modelDiscovery.models.length}`
         : "";
-      return `${provider.id} (${state}, ${provider.defaultAccessMode}${discovery}): ${provider.models.join(", ")} [${provider.accessModes.join(", ")}]`;
+      return `${provider.id} (${state}, ${provider.defaultAccessMode}, models=${provider.modelPolicy}${discovery}): ${provider.models.join(", ")} [${provider.accessModes.join(", ")}]`;
     })
     .join("\n");
 
@@ -157,14 +157,14 @@ export const formatDoctorReport = (report: RuntimeHealthReport): string => [
     const discovery = provider.modelDiscovery
       ? ` modelDiscovery=${provider.modelDiscovery.status}:${provider.modelDiscovery.models.length}`
       : "";
-    return `  ${provider.id}: ${state} modes=${provider.accessModes.join(", ")} default=${provider.defaultAccessMode}${command}${discovery}`;
+    return `  ${provider.id}: ${state} modes=${provider.accessModes.join(", ")} default=${provider.defaultAccessMode} models=${provider.modelPolicy}${command}${discovery}`;
   }),
   "",
   "roles:",
   ...report.roles.map((role) => {
     const state = role.issues.length > 0 ? role.issues.join(", ") : "ready";
     const resolved = role.resolvedModel ? ` resolved=${role.resolvedModel}` : "";
-    return `  ${role.role}: ${formatRoleAssignment(role.assignment)} ${state}${resolved}`;
+    return `  ${role.role}: ${formatRoleAssignment(role.assignment)} ${state} model=${role.modelStatus}${resolved}`;
   })
 ].join("\n");
 

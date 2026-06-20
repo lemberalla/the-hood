@@ -142,6 +142,14 @@ Summon roles:
 
 Fan-out item JSON:
   [{"role":"qa","agent":"stub:qa","brief":"QA sidecar"},{"role":"critic","agent":"stub:critic","brief":"Critique sidecar"}]
+
+Common team presets:
+  codex-default | pro-orchestrator | claude-critic | claude-second-judge
+  spark-plus-sonnet | claude-builder | pro-claude-high-assurance
+
+Model examples:
+  codex-cli:spark | chatgpt-web:chatgpt-pro | chatgpt-web:configured
+  claude-code:sonnet | claude-code:fable | claude-code:mythos
 `;
 
 const repoFromOptions = (options: Record<string, CliOptionValue>): string =>

@@ -28,6 +28,9 @@ const friendlyModelFallbacks: Record<string, string> = {
   spark: "gpt-5.3-codex-spark"
 };
 
+export const codexCliUsesDefaultModel = (model: string): boolean =>
+  model === "default" || model === "configured";
+
 export const codexCliCommand = (): string =>
   process.env.THEHOOD_CODEX_COMMAND ?? "codex";
 
@@ -181,8 +184,8 @@ export const resolveCodexCliModel = (
   model: string,
   discovery = discoverCodexCliModels()
 ): string =>
-  model === "default"
-    ? model
+  codexCliUsesDefaultModel(model)
+    ? "default"
     : resolveCodexCliModelFromCatalog(model, discovery.models) ??
       friendlyModelFallbacks[normalizeModelText(model)] ??
       model;
@@ -191,7 +194,7 @@ export const codexCliModelAvailable = (
   model: string,
   discovery: CodexCliModelDiscovery
 ): boolean | undefined => {
-  if (model === "default") {
+  if (codexCliUsesDefaultModel(model)) {
     return true;
   }
 

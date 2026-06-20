@@ -1,5 +1,5 @@
 import { createLocalCommandProvider } from "./localCommand.js";
-import { codexCliCommand, resolveCodexCliModel } from "./codexCliModels.js";
+import { codexCliCommand, codexCliUsesDefaultModel, resolveCodexCliModel } from "./codexCliModels.js";
 import type { LocalAgentCommandContext } from "./localCommand.js";
 import type { AgentRequest } from "./types.js";
 
@@ -20,7 +20,7 @@ export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentComm
     context.schemaPath
   ];
 
-  if (request.assignment.model !== "default") {
+  if (!codexCliUsesDefaultModel(request.assignment.model)) {
     args.push("--model", resolveCodexCliModel(request.assignment.model));
   }
 

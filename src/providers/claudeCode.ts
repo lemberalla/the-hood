@@ -5,6 +5,9 @@ import type { AgentRequest } from "./types.js";
 const permissionModeForRequest = (request: AgentRequest): string =>
   request.directive.toolPermissions.edit ? "default" : "plan";
 
+const usesDefaultModel = (model: string): boolean =>
+  model === "default" || model === "configured";
+
 const toolsForRequest = (request: AgentRequest): string => {
   if (request.directive.toolPermissions.edit) {
     return "Read,Glob,Grep,Edit,MultiEdit,Write,Bash";
@@ -31,7 +34,7 @@ export const buildClaudeCodeArgs = (request: AgentRequest, context: LocalAgentCo
     toolsForRequest(request)
   ];
 
-  if (request.assignment.model !== "default") {
+  if (!usesDefaultModel(request.assignment.model)) {
     args.push("--model", request.assignment.model);
   }
 

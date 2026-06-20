@@ -5,7 +5,7 @@ import { inspectBrowser } from "./browserManager.js";
 import { listProvidersWithRuntimeModels } from "./providers.js";
 import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
 import { codexCliModelAvailable, resolveCodexCliModel, type CodexCliModelDiscovery } from "../providers/codexCliModels.js";
-import type { ProviderDescriptor } from "./providers.js";
+import type { ProviderDescriptor, ProviderModelPolicy } from "./providers.js";
 import type { ProviderAccessMode, RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
 
 export interface ProviderHealth {
@@ -15,6 +15,7 @@ export interface ProviderHealth {
   models: string[];
   accessModes: ProviderAccessMode[];
   defaultAccessMode: ProviderAccessMode;
+  modelPolicy: ProviderModelPolicy;
   modelDiscovery?: CodexCliModelDiscovery;
   command?: string;
   commandFound?: boolean;
@@ -27,6 +28,8 @@ export interface RoleHealth {
   providerEnabled: boolean;
   providerImplemented: boolean;
   modelConfigured: boolean;
+  modelPolicy: ProviderModelPolicy;
+  modelStatus: "listed" | "passthrough" | "available" | "unavailable" | "unknown";
   modelAvailable?: boolean;
   resolvedModel?: string;
   commandFound?: boolean;
@@ -102,6 +105,34 @@ const modelConfigured = (provider: ProviderDescriptor | undefined, assignment: R
   }
 
   return provider.models.includes(assignment.model) || provider.models.includes("configured");
+};
+
+const modelStatus = (
+  provider: ProviderDescriptor | undefined,
+  assignment: RoleAssignment,
+  available?: boolean
+): RoleHealth["modelStatus"] => {
+  if (!provider || !modelConfigured(provider, assignment)) {
+    return "unavailable";
+  }
+
+  if (provider.id === "codex-cli") {
+    if (available === true) {
+      return "available";
+    }
+
+    if (available === false) {
+      return "unavailable";
+    }
+
+    return "unknown";
+  }
+
+  if (provider.models.includes(assignment.model)) {
+    return "listed";
+  }
+
+  return provider.modelPolicy === "passthrough" ? "passthrough" : "unknown";
 };
 
 const modelAvailability = (
@@ -212,6 +243,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       models: provider.models,
       accessModes: provider.accessModes,
       defaultAccessMode: provider.defaultAccessMode,
+      modelPolicy: provider.modelPolicy,
       ...(provider.modelDiscovery ? { modelDiscovery: provider.modelDiscovery } : {}),
       ...(command ? { command } : {}),
       ...(commandFound === undefined ? {} : { commandFound }),
@@ -229,6 +261,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       const commandFound = commandChecks.get(assignment.provider);
       const providerSpecificIssues = providerIssueChecks.get(assignment.provider) ?? [];
       const availability = modelAvailability(provider, assignment);
+      const status = modelStatus(provider, assignment, availability.available);
 
       return {
         role: role as RuntimeRole,
@@ -236,6 +269,8 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
         providerEnabled: provider?.enabled ?? false,
         providerImplemented: implemented,
         modelConfigured: modelConfigured(provider, assignment),
+        modelPolicy: provider?.modelPolicy ?? "listed",
+        modelStatus: status,
         ...(availability.available === undefined ? {} : { modelAvailable: availability.available }),
         ...(availability.resolvedModel ? { resolvedModel: availability.resolvedModel } : {}),
         ...(commandFound === undefined ? {} : { commandFound }),

@@ -1,7 +1,14 @@
 import { defaultRoles } from "./defaults.js";
 import type { RoleMap, TheHoodConfig } from "./types.js";
 
-export type TeamPresetId = "codex-default" | "pro-orchestrator" | "claude-critic";
+export type TeamPresetId =
+  | "codex-default"
+  | "pro-orchestrator"
+  | "claude-critic"
+  | "claude-second-judge"
+  | "spark-plus-sonnet"
+  | "claude-builder"
+  | "pro-claude-high-assurance";
 
 export interface TeamPreset {
   id: TeamPresetId;
@@ -54,6 +61,98 @@ export const teamPresets: TeamPreset[] = [
     notes: [
       "Useful when the user wants an independent model family for critique.",
       "Claude Code availability is still checked by doctor and provider readiness."
+    ]
+  },
+  {
+    id: "claude-second-judge",
+    label: "Claude Second Judge",
+    summary: "Codex builds and verifies while Claude Code Sonnet challenges the work as critic.",
+    roles: {
+      ...codexDefaultRoles(),
+      critic: {
+        provider: "claude-code",
+        model: "sonnet"
+      }
+    },
+    notes: [
+      "Best when the user wants Claude inside the Codex workflow as an independent second opinion.",
+      "The critic lane stays advisory and read-only; verifier and runtime evidence remain authoritative."
+    ]
+  },
+  {
+    id: "spark-plus-sonnet",
+    label: "Spark Plus Sonnet",
+    summary: "Codex Spark handles implementation and QA while Claude Code Sonnet reviews and verifies.",
+    roles: {
+      ...codexDefaultRoles(),
+      implementer: {
+        provider: "codex-cli",
+        model: "spark"
+      },
+      verifier: {
+        provider: "claude-code",
+        model: "sonnet"
+      },
+      critic: {
+        provider: "claude-code",
+        model: "sonnet"
+      }
+    },
+    notes: [
+      "Useful when Spark is the build lane and Sonnet is the independent review lane.",
+      "The implementer and verifier remain different provider/model assignments."
+    ]
+  },
+  {
+    id: "claude-builder",
+    label: "Claude Builder",
+    summary: "Claude Code Sonnet implements while Codex Spark owns QA, verification, and critique.",
+    roles: {
+      ...codexDefaultRoles(),
+      implementer: {
+        provider: "claude-code",
+        model: "sonnet"
+      },
+      qa: {
+        provider: "codex-cli",
+        model: "spark"
+      },
+      verifier: {
+        provider: "codex-cli",
+        model: "spark"
+      },
+      critic: {
+        provider: "codex-cli",
+        model: "spark"
+      }
+    },
+    notes: [
+      "Useful when the user prefers Claude for code edits but wants Codex to check the result.",
+      "Claude edit output still goes through isolated patch, approval, validation, and verifier gates."
+    ]
+  },
+  {
+    id: "pro-claude-high-assurance",
+    label: "Pro Claude High Assurance",
+    summary: "ChatGPT Pro leads strategy, Codex implements, and Claude Code Sonnet verifies and critiques.",
+    roles: {
+      ...codexDefaultRoles(),
+      orchestrator: {
+        provider: "chatgpt-web",
+        model: "chatgpt-pro"
+      },
+      verifier: {
+        provider: "claude-code",
+        model: "sonnet"
+      },
+      critic: {
+        provider: "claude-code",
+        model: "sonnet"
+      }
+    },
+    notes: [
+      "Best for public, reputational, architectural, or ambiguous work.",
+      "Pro is strategic judgment, Claude is independent review, Codex is implementation, and runtime remains the authority."
     ]
   }
 ];

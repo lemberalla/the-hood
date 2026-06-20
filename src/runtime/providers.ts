@@ -7,11 +7,14 @@ import {
 } from "../providers/codexCliModels.js";
 import type { ProviderAccessMode, ProviderConfig, TheHoodConfig } from "./types.js";
 
+export type ProviderModelPolicy = "listed" | "passthrough" | "discovered";
+
 export interface ProviderDescriptor extends ProviderConfig {
   id: string;
   source: "builtin" | "config";
   accessModes: ProviderAccessMode[];
   defaultAccessMode: ProviderAccessMode;
+  modelPolicy: ProviderModelPolicy;
   modelDiscovery?: CodexCliModelDiscovery;
 }
 
@@ -45,6 +48,14 @@ const normalizeDefaultAccessMode = (
     ? provider.defaultAccessMode
     : accessModes[0] ?? "agent-bridge";
 
+const modelPolicyForProvider = (id: string, provider: ProviderConfig): ProviderModelPolicy => {
+  if (id === "codex-cli") {
+    return "discovered";
+  }
+
+  return provider.models.includes("configured") ? "passthrough" : "listed";
+};
+
 export const listProviders = (config: TheHoodConfig): ProviderDescriptor[] =>
   Object.entries(config.providers)
     .map(([id, provider]) => {
@@ -58,7 +69,8 @@ export const listProviders = (config: TheHoodConfig): ProviderDescriptor[] =>
         ...provider,
         source,
         accessModes,
-        defaultAccessMode: normalizeDefaultAccessMode(provider, accessModes)
+        defaultAccessMode: normalizeDefaultAccessMode(provider, accessModes),
+        modelPolicy: modelPolicyForProvider(id, provider)
       };
     })
     .sort((left, right) => left.id.localeCompare(right.id));

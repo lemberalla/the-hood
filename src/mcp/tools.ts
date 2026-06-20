@@ -1023,7 +1023,7 @@ const createAssignRolesTool = (): McpTool => ({
   definition: {
     name: "thehood_assign_roles",
     title: "Assign TheHood Roles",
-    description: "Persist provider:model assignments for one or more TheHood roles in the repo config.",
+    description: "Persist provider:model assignments for one or more TheHood roles in the repo config, such as Claude as second judge, Sonnet as implementer, Spark as QA, or Pro as strategic orchestrator.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1070,7 +1070,7 @@ const createConsultTool = (): McpTool => ({
   definition: {
     name: "thehood_consult",
     title: "Consult TheHood Guest Agent",
-    description: "Create or advance a single read-only guest role, useful for asking Codex Spark, Pro, Claude, or another agent to plan, research, QA, or critique from Codex chat. Model-backed providers may stop for invocation approval before the provider is called.",
+    description: "Create or advance a single read-only guest role, useful for asking Codex Spark, Pro, Claude, or another agent to plan, research, QA, second-judge, or critique from Codex chat. Model-backed providers may stop for invocation approval before the provider is called.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1087,7 +1087,7 @@ const createConsultTool = (): McpTool => ({
         },
         agent: {
           type: "string",
-          description: "provider:model assignment, for example codex-cli:spark, chatgpt-web:chatgpt-pro, claude-code:sonnet, or stub:critic."
+          description: "provider:model assignment, for example codex-cli:spark, chatgpt-web:chatgpt-pro, chatgpt-web:configured, claude-code:sonnet, claude-code:fable, or stub:critic."
         },
         constraints: {
           type: "array",
@@ -1136,7 +1136,7 @@ const createSummonTool = (): McpTool => ({
   definition: {
     name: "thehood_summon",
     title: "Summon Same-Run TheHood Agent",
-    description: "Summon a read-only role onto an existing run for planning, review, QA, research, or critique. The runtime records the handoff and enforces provider invocation approval before model-backed calls.",
+    description: "Summon a read-only role onto an existing run for planning, review, QA, research, second judgment, or critique. The runtime records the handoff and enforces provider invocation approval before model-backed calls.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1156,7 +1156,7 @@ const createSummonTool = (): McpTool => ({
         },
         agent: {
           type: "string",
-          description: "Optional one-call provider:model assignment, for example claude-code:default or stub:critic."
+          description: "Optional one-call provider:model assignment, for example claude-code:sonnet, claude-code:mythos, codex-cli:spark, or stub:critic."
         },
         kind: {
           type: "string",

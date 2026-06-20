@@ -13,7 +13,7 @@ export const defaultProtectedTestPaths = [
 export const builtinProviders: Record<string, ProviderConfig> = {
   "chatgpt-web": {
     enabled: true,
-    models: ["chatgpt-pro"],
+    models: ["chatgpt-pro", "configured"],
     accessModes: ["agent-bridge", "mcp-connector"],
     defaultAccessMode: "agent-bridge",
     browserProfile: "default"
@@ -27,7 +27,7 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   "anthropic-api": {
     enabled: false,
-    models: ["claude-opus", "claude-sonnet"],
+    models: ["configured", "claude-opus", "claude-sonnet", "claude-haiku", "opus", "sonnet", "haiku", "mythos", "fable"],
     accessModes: ["api-agent"],
     defaultAccessMode: "api-agent",
     apiKeyEnv: "ANTHROPIC_API_KEY"
@@ -40,7 +40,7 @@ export const builtinProviders: Record<string, ProviderConfig> = {
   },
   "claude-code": {
     enabled: true,
-    models: ["default", "configured"],
+    models: ["default", "configured", "sonnet", "opus", "haiku", "mythos", "fable"],
     accessModes: ["agent-bridge"],
     defaultAccessMode: "agent-bridge"
   },
