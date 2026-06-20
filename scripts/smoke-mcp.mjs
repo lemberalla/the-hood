@@ -377,6 +377,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("run_status_insights"));
 assert.ok(doctorContent.runtime.capabilities.includes("compact_mcp_host_responses"));
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
+assert.ok(doctorContent.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorContent.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("revision_packet_artifacts"));
@@ -395,6 +397,10 @@ assert.deepEqual(stubProvider.accessModes, ["agent-bridge"]);
 const chatGptProvider = doctorContent.providers.find((provider) => provider.id === "chatgpt-web");
 assert.ok(chatGptProvider.accessModes.includes("agent-bridge"));
 assert.ok(chatGptProvider.accessModes.includes("mcp-connector"));
+assert.equal(chatGptProvider.modelPolicy, "passthrough");
+const claudeProvider = doctorContent.providers.find((provider) => provider.id === "claude-code");
+assert.equal(claudeProvider.modelPolicy, "passthrough");
+assert.ok(claudeProvider.models.includes("sonnet"));
 
 const mcpLoopRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-loop-smoke-"));
 await runCommand(["init", "--repo", mcpLoopRepoPath]);
@@ -834,7 +840,7 @@ const fakeClaudeConsultGate = await runMcp([
         goal: "ask fake claude through local command adapter",
         repo_path: repoPath,
         role: "critic",
-        agent: "claude-code:default"
+        agent: "claude-code:sonnet"
       }
     }
   }
@@ -845,7 +851,7 @@ const fakeClaudeNextApproval = fakeClaudeConsultGate[1].result.structuredContent
   (action) => action.action === "continue_with_approval"
 );
 assert.equal(fakeClaudeConsultGate[1].result.structuredContent.status, "awaiting_approval");
-assert.equal(fakeClaudeConsultGate[1].result.structuredContent.consulted_agent, "claude-code:default");
+assert.equal(fakeClaudeConsultGate[1].result.structuredContent.consulted_agent, "claude-code:sonnet");
 assert.equal(fakeClaudeNextApproval.tool, "thehood_continue");
 assert.equal(fakeClaudeNextApproval.arguments.run_id, fakeClaudeRunId);
 assert.equal(fakeClaudeNextApproval.arguments.approval, "approve");

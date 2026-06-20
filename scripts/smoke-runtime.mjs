@@ -742,6 +742,10 @@ const teamPresets = JSON.parse((await runCli(["teams", "--repo", repoPath, "--js
 assert.ok(teamPresets.presets.some((preset) => preset.id === "codex-default"));
 assert.ok(teamPresets.presets.some((preset) => preset.id === "pro-orchestrator"));
 assert.ok(teamPresets.presets.some((preset) => preset.id === "claude-critic"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "claude-second-judge"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "spark-plus-sonnet"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "claude-builder"));
+assert.ok(teamPresets.presets.some((preset) => preset.id === "pro-claude-high-assurance"));
 const teamPresetRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-team-preset-smoke-"));
 await runCli(["init", "--repo", teamPresetRepoPath]);
 const appliedTeam = JSON.parse(
@@ -753,6 +757,14 @@ assert.equal(appliedTeam.config.roles.orchestrator.model, "chatgpt-pro");
 assert.equal(appliedTeam.config.roles.implementer.provider, "codex-cli");
 const appliedTeamRoles = JSON.parse((await runCli(["roles", "--repo", teamPresetRepoPath, "--json"])).stdout);
 assert.equal(appliedTeamRoles.orchestrator.provider, "chatgpt-web");
+const appliedSparkSonnetTeam = JSON.parse(
+  (await runCli(["teams", "apply", "spark-plus-sonnet", "--repo", teamPresetRepoPath, "--json"])).stdout
+);
+assert.equal(appliedSparkSonnetTeam.config.roles.implementer.provider, "codex-cli");
+assert.equal(appliedSparkSonnetTeam.config.roles.implementer.model, "spark");
+assert.equal(appliedSparkSonnetTeam.config.roles.verifier.provider, "claude-code");
+assert.equal(appliedSparkSonnetTeam.config.roles.verifier.model, "sonnet");
+assert.equal(appliedSparkSonnetTeam.config.roles.critic.provider, "claude-code");
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
@@ -789,6 +801,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("compact_mcp_host_responses
 assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_team_presets"));
+assert.ok(doctorResult.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorResult.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorResult.runtime.capabilities.includes("configurable_budget_envelopes"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
@@ -838,20 +852,31 @@ assert.deepEqual(stubHealth.accessModes, ["agent-bridge"]);
 const chatGptHealth = doctorResult.providers.find((provider) => provider.id === "chatgpt-web");
 assert.ok(chatGptHealth.accessModes.includes("agent-bridge"));
 assert.ok(chatGptHealth.accessModes.includes("mcp-connector"));
+assert.equal(chatGptHealth.modelPolicy, "passthrough");
 const codexHealth = doctorResult.providers.find((provider) => provider.id === "codex-cli");
+assert.equal(codexHealth.modelPolicy, "discovered");
 assert.equal(codexHealth.modelDiscovery.status, "available");
 assert.ok(codexHealth.models.includes("gpt-5.5"));
 assert.ok(codexHealth.models.includes("gpt-5.3-codex-spark"));
+const claudeHealth = doctorResult.providers.find((provider) => provider.id === "claude-code");
+assert.equal(claudeHealth.modelPolicy, "passthrough");
+assert.ok(claudeHealth.models.includes("sonnet"));
+assert.ok(claudeHealth.models.includes("mythos"));
 const modelsResult = JSON.parse((await runCli(["models", "--repo", repoPath, "--json"])).stdout);
 const codexModelsProvider = modelsResult.find((provider) => provider.id === "codex-cli");
 assert.equal(codexModelsProvider.modelDiscovery.status, "available");
 assert.ok(codexModelsProvider.models.includes("gpt-5.5"));
 assert.ok(codexModelsProvider.models.includes("gpt-5.3-codex-spark"));
+const claudeModelsProvider = modelsResult.find((provider) => provider.id === "claude-code");
+assert.equal(claudeModelsProvider.modelPolicy, "passthrough");
+assert.ok(claudeModelsProvider.models.includes("fable"));
+assert.ok(claudeModelsProvider.models.includes("sonnet"));
 const defaultOrchestratorHealth = doctorResult.roles.find((role) => role.role === "orchestrator");
 assert.equal(defaultOrchestratorHealth.assignment.provider, "codex-cli");
 assert.equal(defaultOrchestratorHealth.assignment.model, "default");
 assert.equal(defaultOrchestratorHealth.providerImplemented, true);
 assert.equal(defaultOrchestratorHealth.modelAvailable, true);
+assert.equal(defaultOrchestratorHealth.modelStatus, "available");
 assert.deepEqual(defaultOrchestratorHealth.issues, []);
 const defaultQaHealth = doctorResult.roles.find((role) => role.role === "qa");
 assert.equal(defaultQaHealth.assignment.provider, "codex-cli");
@@ -859,6 +884,7 @@ assert.equal(defaultQaHealth.assignment.model, "spark");
 assert.equal(defaultQaHealth.providerImplemented, true);
 assert.equal(defaultQaHealth.modelConfigured, true);
 assert.equal(defaultQaHealth.modelAvailable, true);
+assert.equal(defaultQaHealth.modelStatus, "available");
 assert.equal(defaultQaHealth.resolvedModel, "gpt-5.3-codex-spark");
 const defaultVerifierHealth = doctorResult.roles.find((role) => role.role === "verifier");
 assert.equal(defaultVerifierHealth.assignment.provider, "codex-cli");
@@ -1040,10 +1066,12 @@ const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
 const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));
 delete staleConfig.roles.qa;
 staleConfig.providers["codex-cli"].models = ["default"];
+staleConfig.providers["claude-code"].models = ["default"];
 staleConfig.providers.stub.models = ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"];
 await fs.writeFile(staleConfigPath, `${JSON.stringify(staleConfig, null, 2)}\n`, "utf8");
 const staleConfigDoctor = JSON.parse((await runCli(["doctor", "--repo", repoPath, "--json"])).stdout);
 const staleCodexProvider = staleConfigDoctor.providers.find((provider) => provider.id === "codex-cli");
+const staleClaudeProvider = staleConfigDoctor.providers.find((provider) => provider.id === "claude-code");
 const staleStubProvider = staleConfigDoctor.providers.find((provider) => provider.id === "stub");
 const staleQaHealth = staleConfigDoctor.roles.find((role) => role.role === "qa");
 assert.ok(staleCodexProvider.models.includes("spark"), "stale repo config should not hide built-in codex spark model");
@@ -1054,6 +1082,14 @@ assert.ok(
 assert.ok(
   staleCodexProvider.models.includes("configured"),
   "stale repo config should not hide built-in codex configured model passthrough"
+);
+assert.ok(
+  staleClaudeProvider.models.includes("sonnet"),
+  "stale repo config should not hide built-in Claude Sonnet alias"
+);
+assert.ok(
+  staleClaudeProvider.models.includes("fable"),
+  "stale repo config should not hide future-facing Claude Fable alias"
 );
 assert.ok(staleStubProvider.models.includes("qa"), "stale repo config should not hide built-in stub qa model");
 assert.equal(staleQaHealth.assignment.provider, "codex-cli");
@@ -1084,10 +1120,28 @@ const codexMissingModelDoctor = JSON.parse((await runCli(["doctor", "--repo", re
 const codexMissingModelOrchestrator = codexMissingModelDoctor.roles.find((role) => role.role === "orchestrator");
 assert.equal(codexMissingModelOrchestrator.modelConfigured, true);
 assert.equal(codexMissingModelOrchestrator.modelAvailable, false);
+assert.equal(codexMissingModelOrchestrator.modelStatus, "unavailable");
 assert.ok(codexMissingModelOrchestrator.issues.includes("model_not_available:fable"));
+codexFutureModelConfig.roles.critic = {
+  provider: "claude-code",
+  model: "fable"
+};
+await fs.writeFile(codexFutureModelConfigPath, `${JSON.stringify(codexFutureModelConfig, null, 2)}\n`, "utf8");
+const claudeFutureModelDoctor = JSON.parse((await runCli(["doctor", "--repo", repoPath, "--json"])).stdout);
+const claudeFutureModelCritic = claudeFutureModelDoctor.roles.find((role) => role.role === "critic");
+assert.equal(claudeFutureModelCritic.assignment.provider, "claude-code");
+assert.equal(claudeFutureModelCritic.assignment.model, "fable");
+assert.equal(claudeFutureModelCritic.modelConfigured, true);
+assert.equal(claudeFutureModelCritic.modelPolicy, "passthrough");
+assert.equal(claudeFutureModelCritic.modelStatus, "listed");
+assert.deepEqual(claudeFutureModelCritic.issues, []);
 codexFutureModelConfig.roles.orchestrator = {
   provider: "codex-cli",
   model: "default"
+};
+codexFutureModelConfig.roles.critic = {
+  provider: "codex-cli",
+  model: "spark"
 };
 await fs.writeFile(codexFutureModelConfigPath, `${JSON.stringify(codexFutureModelConfig, null, 2)}\n`, "utf8");
 const unconfirmedDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
@@ -3389,6 +3443,7 @@ assert.equal(codexArgs[codexArgs.indexOf("--output-schema") + 1], schemaContext.
 assert.equal(codexArgs.at(-1), "-");
 assert.equal(resolveCodexCliModel("spark"), "gpt-5.3-codex-spark");
 assert.equal(resolveCodexCliModel("gpt-5.4"), "gpt-5.4");
+assert.equal(resolveCodexCliModel("configured"), "default");
 const sparkVerifierRequest = {
   ...fakeVerifierRequest,
   assignment: {
@@ -3398,11 +3453,35 @@ const sparkVerifierRequest = {
 };
 const codexSparkArgs = buildCodexCliArgs(sparkVerifierRequest, schemaContext);
 assert.equal(codexSparkArgs[codexSparkArgs.indexOf("--model") + 1], "gpt-5.3-codex-spark");
+const configuredCodexArgs = buildCodexCliArgs({
+  ...fakeVerifierRequest,
+  assignment: {
+    provider: "codex-cli",
+    model: "configured"
+  }
+}, schemaContext);
+assert.equal(configuredCodexArgs.includes("--model"), false);
 const claudeArgs = buildClaudeCodeArgs(fakeVerifierRequest, schemaContext);
 assert.ok(claudeArgs.includes("--print"));
 assert.equal(claudeArgs.includes("--json-schema"), true);
 assert.ok(claudeArgs.includes("Read,Glob,Grep,Bash"));
 assert.equal(claudeArgs.includes("-"), false);
+const configuredClaudeArgs = buildClaudeCodeArgs({
+  ...fakeVerifierRequest,
+  assignment: {
+    provider: "claude-code",
+    model: "configured"
+  }
+}, schemaContext);
+assert.equal(configuredClaudeArgs.includes("--model"), false);
+const sonnetClaudeArgs = buildClaudeCodeArgs({
+  ...fakeVerifierRequest,
+  assignment: {
+    provider: "claude-code",
+    model: "sonnet"
+  }
+}, schemaContext);
+assert.equal(sonnetClaudeArgs[sonnetClaudeArgs.indexOf("--model") + 1], "sonnet");
 
 const blockedRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-blocked-edit-smoke-"));
 await runCli(["init", "--repo", blockedRepoPath]);
