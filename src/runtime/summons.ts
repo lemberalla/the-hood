@@ -5,6 +5,13 @@ import { createRunHandoff } from "./handoffs.js";
 import { newId, nowIso } from "./ids.js";
 import { defaultRolePermissions } from "./permissions.js";
 import { requiredAssignment, runAgent } from "./agentRunner.js";
+import { latestRepoContextArtifact } from "./repoContext.js";
+import {
+  captureRemoteRepoContext,
+  latestRemoteRepoContextArtifact,
+  readLatestRemoteRepoContext,
+  remoteRepoContextArtifacts
+} from "./remoteRepoContext.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
@@ -351,7 +358,7 @@ const stopForProviderInvocationApproval = async (
   };
 };
 
-const summonContext = (
+const summonContext = async (
   run: RunRecord,
   input: Required<Pick<SummonAgentInput, "role" | "brief">> & {
     summonKind: string;
@@ -359,7 +366,10 @@ const summonContext = (
     constraints: string[];
     evidenceRefs: string[];
   }
-): JsonObject => {
+): Promise<JsonObject> => {
+  const remoteRepoContext = await readLatestRemoteRepoContext(run);
+  const remoteContextArtifact = latestRemoteRepoContextArtifact(run);
+  const remoteContextArtifacts = remoteRepoContextArtifacts(run);
   const summon: JsonObject = {
     schemaVersion: 1,
     kind: input.summonKind,
@@ -378,6 +388,25 @@ const summonContext = (
   return {
     phase: "summon",
     summon,
+    ...(remoteRepoContext ? { remoteRepoContext: remoteRepoContext as unknown as JsonObject } : {}),
+    ...(remoteContextArtifact
+      ? {
+          remoteRepoContextArtifact: {
+            kind: remoteContextArtifact.kind,
+            ref: remoteContextArtifact.ref,
+            summary: remoteContextArtifact.summary
+          }
+        }
+      : {}),
+    ...(remoteContextArtifacts.length > 0
+      ? {
+          remoteRepoContextArtifacts: remoteContextArtifacts.map((artifact) => ({
+            kind: artifact.kind,
+            ref: artifact.ref,
+            summary: artifact.summary
+          }))
+        }
+      : {}),
     runState: {
       runId: run.runId,
       state: run.state,
@@ -459,10 +488,24 @@ export const summonAgent = async (input: SummonAgentInput): Promise<SummonAgentR
     };
   }
 
+  let runForProvider = providerGate.run;
+  if (!latestRepoContextArtifact(runForProvider) && !latestRemoteRepoContextArtifact(runForProvider)) {
+    const remoteContext = await captureRemoteRepoContext(runForProvider, assignment, {
+      action: "inspect_repo",
+      reason: "same_run_summon",
+      role: input.role,
+      summonKind
+    });
+
+    if (remoteContext.selected) {
+      runForProvider = remoteContext.run;
+    }
+  }
+
   const result = await runAgent(
-    providerGate.run,
+    runForProvider,
     input.role,
-    summonContext(providerGate.run, normalizedInput),
+    await summonContext(runForProvider, normalizedInput),
     {
       assignment,
       responseArtifactKind: "agent",

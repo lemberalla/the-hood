@@ -580,12 +580,12 @@ assert.equal(
 );
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_CDP_URL, "http://127.0.0.1:9222");
-assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "600000");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.installed.startupTimeoutSec, 120);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_COMMAND, chatGptBridgePath);
-assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "600000");
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS, "1");
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.local.startupTimeoutSec, 120);
@@ -2023,10 +2023,17 @@ await fs.writeFile(
     "#!/usr/bin/env node",
     "import fs from 'node:fs/promises';",
     "const logPath = process.env.THEHOOD_FAKE_CHATGPT_LOG;",
+    "const schemaArgIndex = process.argv.indexOf('--schema');",
+    "const schemaPath = schemaArgIndex >= 0 ? process.argv[schemaArgIndex + 1] : undefined;",
+    "const schema = schemaPath ? JSON.parse(await fs.readFile(schemaPath, 'utf8')) : {};",
+    "const requiredDataKey = schema.properties?.data?.required?.[0] ?? 'decision';",
     "let input = '';",
     "process.stdin.setEncoding('utf8');",
     "process.stdin.on('data', (chunk) => { input += chunk; });",
     "process.stdin.on('end', async () => {",
+    "  const runId = input.match(/runId\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-run';",
+    "  const nonce = input.match(/nonce\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-nonce';",
+    "  const ack = { runId, nonce, responseField: 'thehoodDirectiveAck' };",
     "  const hasRepoContext = input.includes('\"repoContext\"');",
     "  const hasRemoteRepoContext = input.includes('\"remoteRepoContext\"');",
     "  const hasProgressPacket = input.includes('\"progressPacket\"');",
@@ -2041,49 +2048,70 @@ await fs.writeFile(
     "  if (logPath) {",
     "    await fs.appendFile(logPath, hasProgressPacket ? 'progress\\n' : hasRemoteRepoContext ? 'remote-context\\n' : hasRepoContext ? hasTruncatedInitial && hasTruncatedContinuation ? 'truncated-combined-context\\n' : hasTruncatedContinuation ? 'truncated-continuation-context\\n' : hasTargetedEvidence ? 'targeted-context\\n' : 'context\\n' : 'no-context\\n', 'utf8');",
     "  }",
+    "  const decision = hasProgressPacket ? {",
+    "    action: 'complete',",
+    "    reason: 'Approved progress packet was reconciled.',",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasRemoteRepoContext ? {",
+    "    action: 'complete',",
+    "    reason: 'GitHub connector repo context was enough for a plan.',",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasTruncatedInitial && hasTruncatedContinuation ? {",
+    "    action: 'complete',",
+    "    reason: 'Combined continuation repo context was enough for a plan.',",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasFinalTargetedEvidence ? {",
+    "    action: 'complete',",
+    "    reason: 'Targeted repo context was enough for a plan.',",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasRepoContext && isTruncatedContextSmoke ? {",
+    "    action: 'delegate',",
+    "    reason: 'Need the next chunk of the truncated file before planning.',",
+    "    targetFiles: [truncatedTargetFile],",
+    "    delegate: {",
+    "      role: 'repo_reader',",
+    "      task: `Capture follow-up repo context for ${truncatedTargetFile}.`",
+    "    },",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasRepoContext && isTargetedContextSmoke ? {",
+    "    action: 'delegate',",
+    "    reason: 'Need one targeted follow-up file before planning.',",
+    "    targetFiles,",
+    "    delegate: {",
+    "      role: 'repo_reader',",
+    "      task: `Capture targeted follow-up repo context for ${targetFiles.join(', ')}.`",
+    "    },",
+    "    thehoodDirectiveAck: ack",
+    "  } : hasRepoContext ? {",
+    "    action: 'complete',",
+    "    reason: 'Approved repo context was enough for a plan.',",
+    "    thehoodDirectiveAck: ack",
+    "  } : {",
+    "    action: 'delegate',",
+    "    reason: 'Need bounded repo context before planning.',",
+    "    delegate: {",
+    "      role: 'repo_reader',",
+    "      task: 'Capture bounded repo context for external planning.'",
+    "    },",
+    "    thehoodDirectiveAck: ack",
+    "  };",
+    "  const critiqueResult = {",
+    "    verdict: hasRemoteRepoContext || hasRepoContext || hasProgressPacket ? 'acceptable' : 'unclear',",
+    "    blockingConcerns: hasRemoteRepoContext || hasRepoContext || hasProgressPacket ? [] : ['fake ChatGPT needs repo context'],",
+    "    nonBlockingConcerns: [],",
+    "    thehoodDirectiveAck: ack",
+    "  };",
+    "  const payloads = {",
+    "    decision,",
+    "    critiqueResult,",
+    "    qaResult: { verdict: hasRemoteRepoContext || hasRepoContext ? 'pass' : 'needs_more_evidence', summary: 'fake ChatGPT QA response', suggestedCommands: [], risks: [], thehoodDirectiveAck: ack },",
+    "    verificationResult: { verdict: hasRemoteRepoContext || hasRepoContext ? 'approve' : 'ask_user', summary: 'fake ChatGPT verifier response', failedCriteria: [], risks: [], nextAction: 'complete', thehoodDirectiveAck: ack }",
+    "  };",
     "  process.stdout.write(JSON.stringify({",
     "    status: 'ok',",
     "    summary: hasProgressPacket ? 'fake ChatGPT reconciled progress packet' : hasRemoteRepoContext ? 'fake ChatGPT used GitHub connector repo context' : hasTruncatedInitial && hasTruncatedContinuation ? 'fake ChatGPT received combined truncated repo context' : hasFinalTargetedEvidence ? 'fake ChatGPT received final targeted repo context' : hasRepoContext && isTruncatedContextSmoke ? 'fake ChatGPT requested truncated continuation repo context' : hasRepoContext && isTargetedContextSmoke ? 'fake ChatGPT requested targeted repo context' : hasRepoContext ? 'fake ChatGPT received approved repo context' : 'fake ChatGPT requested repo context',",
     "    data: {",
-    "      decision: hasProgressPacket ? {",
-    "        action: 'complete',",
-    "        reason: 'Approved progress packet was reconciled.'",
-    "      } : hasRemoteRepoContext ? {",
-    "        action: 'complete',",
-    "        reason: 'GitHub connector repo context was enough for a plan.'",
-    "      } : hasTruncatedInitial && hasTruncatedContinuation ? {",
-    "        action: 'complete',",
-    "        reason: 'Combined continuation repo context was enough for a plan.'",
-    "      } : hasFinalTargetedEvidence ? {",
-    "        action: 'complete',",
-    "        reason: 'Targeted repo context was enough for a plan.'",
-    "      } : hasRepoContext && isTruncatedContextSmoke ? {",
-    "        action: 'delegate',",
-    "        reason: 'Need the next chunk of the truncated file before planning.',",
-    "        targetFiles: [truncatedTargetFile],",
-    "        delegate: {",
-    "          role: 'repo_reader',",
-    "          task: `Capture follow-up repo context for ${truncatedTargetFile}.`",
-    "        }",
-    "      } : hasRepoContext && isTargetedContextSmoke ? {",
-    "        action: 'delegate',",
-    "        reason: 'Need one targeted follow-up file before planning.',",
-    "        targetFiles,",
-    "        delegate: {",
-    "          role: 'repo_reader',",
-    "          task: `Capture targeted follow-up repo context for ${targetFiles.join(', ')}.`",
-    "        }",
-    "      } : hasRepoContext ? {",
-    "        action: 'complete',",
-    "        reason: 'Approved repo context was enough for a plan.'",
-    "      } : {",
-    "        action: 'delegate',",
-    "        reason: 'Need bounded repo context before planning.',",
-    "        delegate: {",
-    "          role: 'repo_reader',",
-    "          task: 'Capture bounded repo context for external planning.'",
-    "        }",
-    "      }",
+    "      [requiredDataKey]: payloads[requiredDataKey] ?? decision",
     "    }",
     "  }));",
     "});",
@@ -2157,11 +2185,9 @@ const remoteContextCompleted = JSON.parse(
 );
 assert.equal(remoteContextCompleted.run.state, "completed");
 assert.deepEqual(remoteContextCompleted.providerResponses.map((response) => response.data.decision.action), [
-  "delegate",
   "complete"
 ]);
 assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
-  "no-context",
   "remote-context"
 ]);
 const remoteContextArtifact = remoteContextCompleted.run.artifacts.find((artifact) => artifact.kind === "remote_context");
@@ -2198,6 +2224,73 @@ const remoteDirective = await Promise.all(
 assert.ok(
   remoteDirective.some((directive) => directive.variables.context.remoteRepoContext?.kind === "github_connector_repo_context"),
   "provider directive should include remoteRepoContext for GitHub connector rehydration"
+);
+await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
+const directRemoteReview = JSON.parse(
+  (
+    await runCli(
+      [
+        "run",
+        "direct-remote-review-context-smoke release readiness",
+        "--mode",
+        "review",
+        "--repo",
+        remoteContextRepoPath,
+        "--critic",
+        "chatgpt-web:chatgpt-pro",
+        "--json"
+      ],
+      {
+        env: fakeExternalEnv
+      }
+    )
+  ).stdout
+);
+const directRemoteReviewInvocationGate = JSON.parse(
+  (
+    await runCli(["continue", directRemoteReview.runId, "--repo", remoteContextRepoPath, "--json"], {
+      env: fakeExternalEnv
+    })
+  ).stdout
+);
+assert.equal(directRemoteReviewInvocationGate.run.state, "awaiting_approval");
+assert.ok(directRemoteReviewInvocationGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
+await runCli([
+  "approve",
+  directRemoteReview.runId,
+  "--repo",
+  remoteContextRepoPath,
+  "--reason",
+  "I approve invoke chatgpt-web for direct remote review smoke."
+]);
+const directRemoteReviewCompleted = JSON.parse(
+  (
+    await runCli(["continue", directRemoteReview.runId, "--repo", remoteContextRepoPath, "--json"], {
+      env: fakeExternalEnv
+    })
+  ).stdout
+);
+assert.equal(directRemoteReviewCompleted.run.state, "completed");
+assert.equal(directRemoteReviewCompleted.providerResponses.length, 1);
+assert.equal(directRemoteReviewCompleted.providerResponses[0].data.critiqueResult.verdict, "acceptable");
+assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
+  "remote-context"
+]);
+const directRemoteReviewContextArtifact = directRemoteReviewCompleted.run.artifacts.find(
+  (artifact) => artifact.kind === "remote_context"
+);
+assert.ok(directRemoteReviewContextArtifact, "direct ChatGPT Web review should attach remote_context before provider call");
+const directRemoteReviewDirectiveArtifacts = directRemoteReviewCompleted.run.artifacts.filter(
+  (artifact) => artifact.kind === "directive"
+);
+const directRemoteReviewDirectives = await Promise.all(
+  directRemoteReviewDirectiveArtifacts.map(async (artifact) => JSON.parse(await fs.readFile(artifact.ref, "utf8")))
+);
+assert.ok(
+  directRemoteReviewDirectives.some(
+    (directive) => directive.variables.context.remoteRepoContext?.kind === "github_connector_repo_context"
+  ),
+  "direct ChatGPT Web review directive should include remoteRepoContext on the first provider call"
 );
 await fs.writeFile(fakeExternalBridgeLogPath, "", "utf8");
 const externalContextPlan = JSON.parse(

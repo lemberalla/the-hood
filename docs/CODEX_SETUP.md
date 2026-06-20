@@ -53,7 +53,7 @@ This adds:
 - `THEHOOD_CHATGPT_WEB_COMMAND`
 - `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1`
 - `THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222`
-- `THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000`
+- `THEHOOD_CHATGPT_WEB_TIMEOUT_MS=600000`
 - `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=1`
 
 Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
@@ -230,7 +230,7 @@ Optional bridge settings:
 ```bash
 export THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222
 export THEHOOD_CHATGPT_WEB_FRESH_URL=https://chatgpt.com/
-export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000
+export THEHOOD_CHATGPT_WEB_TIMEOUT_MS=600000
 export THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR="#prompt-textarea,[contenteditable='true'],textarea"
 export THEHOOD_CHATGPT_WEB_SEND_SELECTOR="button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']"
 export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assistant']"

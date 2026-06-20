@@ -1450,7 +1450,6 @@ const executeReadOnlyRun = async (
   role: RuntimeRole
 ): Promise<{ run: RunRecord; response: AgentResponse; advanced: boolean; stopReason?: string }> => {
   const assignment = requiredAssignment(run, role);
-  const contextArtifact = latestRepoContextArtifact(run);
   const invocationGate = await stopForProviderInvocationApproval(run, role, assignment);
 
   if (invocationGate) {
@@ -1464,6 +1463,21 @@ const executeReadOnlyRun = async (
       advanced: true,
       stopReason: invocationGate.stopReason
     };
+  }
+
+  let contextArtifact = latestRepoContextArtifact(run);
+  if (!contextArtifact && !latestRemoteRepoContextArtifact(run)) {
+    const remoteContext = await captureRemoteRepoContext(run, assignment, {
+      action: "inspect_repo",
+      reason: "direct_read_only_run",
+      role,
+      mode: run.mode
+    });
+
+    if (remoteContext.selected) {
+      run = remoteContext.run;
+      contextArtifact = latestRepoContextArtifact(run);
+    }
   }
 
   if (

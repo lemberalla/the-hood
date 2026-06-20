@@ -68,7 +68,7 @@ const defaultOptions: BridgeOptions = {
   schemaPath: "",
   cdpUrl: process.env.THEHOOD_CHATGPT_WEB_CDP_URL ?? "http://127.0.0.1:9222",
   freshUrl: process.env.THEHOOD_CHATGPT_WEB_FRESH_URL ?? "https://chatgpt.com/",
-  timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 300_000),
+  timeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS ?? 600_000),
   commandTimeoutMs: Number(process.env.THEHOOD_CHATGPT_WEB_CDP_COMMAND_TIMEOUT_MS ?? 15_000),
   promptSelector:
     process.env.THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR ?? "#prompt-textarea,[contenteditable='true'],textarea",
