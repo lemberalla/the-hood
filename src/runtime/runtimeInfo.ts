@@ -52,6 +52,7 @@ export const runtimeCapabilities = [
   "mcp_repo_gateway_tools",
   "chatgpt_mcp_connector_mode",
   "pro_access_preflight",
+  "model_access_preflight",
   "codex_agent_board",
   "codex_agent_board_artifact"
 ] as const;

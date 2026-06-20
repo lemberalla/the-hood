@@ -60,6 +60,7 @@ Implemented tools:
 
 - `thehood_doctor`
 - `thehood_roles`
+- `thehood_model_access`
 - `thehood_pro_access`
 - `thehood_agent_board`
 - `thehood_assign_roles`
@@ -105,6 +106,31 @@ Input:
   "repo_path": "string"
 }
 ```
+
+### `thehood_model_access`
+
+Inspect a general external model-access path without calling providers or sending repo context. Use this before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts outside the local TheHood runtime.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "agents": ["claude-code:opus", "codex-cli:gpt-5.5"],
+  "purpose": "optional local-only purpose",
+  "context_kind": "repo_context | progress_packet | no_repo_context | connector_handoff",
+  "constraints": ["optional local-only constraints"]
+}
+```
+
+Output includes current TheHood approval policy, provider/model readiness, repo visibility, a data-boundary summary, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, a compact approval packet, and fallback paths such as no-repo-context prompting, connector mode when supported, or runtime-only evidence inspection.
+
+Repo visibility drives the default UX:
+
+- Dirty or unpushed repos require a user choice: commit and push a checkpoint first, approve bounded local context or diff transfer, use no-repo-context strategy, or cancel.
+- Clean pushed GitHub repos default to remote refs when the provider supports that route. For `chatgpt-web`, TheHood should prefer ChatGPT's GitHub connector at the exact commit instead of sending local file contents through Codex.
+
+If Codex rejects a direct model-backed call as an external disclosure, do not ask the user to type a fresh long approval phrase. Present the model-access approval packet, use its compact approval copy if the user accepts, or switch to no-repo-context or connector mode.
 
 ### `thehood_pro_access`
 
@@ -619,8 +645,9 @@ Input:
 Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
-2. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex or when a previous Pro call was rejected by host policy.
-3. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator, Claude as critic/verifier, Claude as implementer, or Spark plus Sonnet role separation.
-4. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic, QA tester, or Claude second judge; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
-5. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
-6. Call `thehood_continue` with `approval: "approve"`, `approval: "reject"`, or `approval: "revise"` only for an active manual approval gate after the user authorizes that gate.
+2. Call `thehood_model_access` before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, present the user choices from the preflight. If the repo is clean and pushed, use the remote GitHub refs default when the provider supports it. If host policy rejects a direct call, present the compact approval packet or switch to no-repo-context or connector mode.
+3. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex and ChatGPT Web bridge readiness or ChatGPT MCP connector handoff details matter.
+4. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator, Claude as critic/verifier, Claude as implementer, or Spark plus Sonnet role separation.
+5. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic, QA tester, or Claude second judge; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
+6. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
+7. Call `thehood_continue` with `approval: "approve"`, `approval: "reject"`, or `approval: "revise"` only for an active manual approval gate after the user authorizes that gate.

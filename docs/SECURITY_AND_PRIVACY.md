@@ -35,6 +35,7 @@ Rules:
 - Require explicit user approval before invoking model-backed providers for read-only repo work.
 - Require explicit user approval before sending runtime-captured repo context to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.
 - Require explicit user approval before sending runtime-captured progress, memory, or reconciliation packets to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.
+- Treat Codex or tenant external-disclosure gates as outside runtime control. TheHood may provide a local-only model-access preflight packet and compact approval copy, but it must not bypass host policy or repeatedly ask the user to approve the same blocked disclosure in new wording.
 
 ## Browser-Based Providers
 

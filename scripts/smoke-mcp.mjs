@@ -185,6 +185,10 @@ assert.ok(
   "tools/list should expose thehood_pro_access"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_model_access"),
+  "tools/list should expose thehood_model_access"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_agent_board"),
   "tools/list should expose thehood_agent_board"
 );
@@ -234,6 +238,136 @@ assert.ok(
   "pro access preflight should return direct bridge readiness"
 );
 assert.equal(proAccessContent.provider_response_count, undefined);
+
+const modelAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_model_access",
+      arguments: {
+        repo_path: repoPath,
+        agents: ["claude-code:opus", "codex-cli:gpt-5.5"],
+        purpose: "Public-readiness review.",
+        context_kind: "repo_context",
+        constraints: ["local-only preflight"]
+      }
+    }
+  }
+]);
+const modelAccessContent = modelAccessPath[1].result.structuredContent;
+assert.equal(modelAccessContent.kind, "model_access_preflight");
+assert.equal(modelAccessContent.local_only, true);
+assert.equal(modelAccessContent.sends_repo_context, false);
+assert.equal(modelAccessContent.data_boundary.context_kind, "repo_context");
+assert.equal(modelAccessContent.repo_visibility.default_gate, "user_choice_required");
+assert.equal(modelAccessContent.repo_visibility.clean, false);
+assert.ok(
+  modelAccessContent.repo_visibility.user_choices.some(
+    (choice) => choice.id === "commit_push_checkpoint_then_remote" && choice.recommended === true
+  ),
+  "dirty model access preflight should make commit/push the recommended user choice"
+);
+assert.ok(
+  modelAccessContent.repo_visibility.user_choices.some((choice) => choice.id === "cancel_external_model_access"),
+  "dirty model access preflight should include cancel choice"
+);
+assert.equal(modelAccessContent.codex_host_policy_boundary.status, "outside_thehood_runtime_control");
+assert.ok(modelAccessContent.approval_packet.copy.includes("claude-code:opus"));
+assert.ok(modelAccessContent.approval_packet.copy.includes("codex-cli:gpt-5.5"));
+assert.ok(modelAccessContent.approval_packet.copy.includes("repo context"));
+assert.ok(!modelAccessContent.approval_packet.copy.includes(".."));
+assert.ok(
+  modelAccessContent.destinations.some((destination) => destination.assignment === "claude-code:opus"),
+  "model access preflight should include Claude destination"
+);
+assert.ok(
+  modelAccessContent.destinations.every((destination) => typeof destination.model_status === "string"),
+  "model access preflight should report model status for each destination"
+);
+assert.ok(
+  modelAccessContent.destinations.some((destination) => destination.assignment === "codex-cli:gpt-5.5"),
+  "model access preflight should include Codex/GPT destination"
+);
+assert.ok(
+  modelAccessContent.recommended_paths.some((path) => path.id === "approve_packet_then_call_models"),
+  "model access preflight should include compact packet approval path"
+);
+assert.ok(
+  modelAccessContent.recommended_paths.some((path) => path.id === "commit_push_checkpoint_then_remote"),
+  "dirty model access preflight should recommend commit/push before remote review"
+);
+assert.ok(
+  modelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "dirty model access preflight should include explicit local context approval path"
+);
+assert.ok(
+  modelAccessContent.recommended_paths.some((path) => path.id === "abstract_no_repo_context_prompt"),
+  "model access preflight should include no-repo-context fallback"
+);
+assert.equal(modelAccessContent.provider_response_count, undefined);
+
+const remoteReadyRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-remote-ready-"));
+await runRawCommand("git", ["init"], remoteReadyRepoPath);
+await runRawCommand("git", ["branch", "-M", "main"], remoteReadyRepoPath);
+await fs.writeFile(path.join(remoteReadyRepoPath, "README.md"), "# MCP Remote Ready Repo\n", "utf8");
+await runCommand(["init", "--repo", remoteReadyRepoPath]);
+await runRawCommand("git", ["config", "user.name", "TheHood Smoke"], remoteReadyRepoPath);
+await runRawCommand("git", ["config", "user.email", "smoke@example.invalid"], remoteReadyRepoPath);
+await runRawCommand("git", ["add", "README.md"], remoteReadyRepoPath);
+await runRawCommand("git", ["commit", "-m", "init"], remoteReadyRepoPath);
+await runRawCommand("git", ["remote", "add", "origin", "git@github.com:thehood/mcp-remote-ready.git"], remoteReadyRepoPath);
+await runRawCommand("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], remoteReadyRepoPath);
+await runRawCommand("git", ["branch", "--set-upstream-to=origin/main", "main"], remoteReadyRepoPath);
+const remoteModelAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_model_access",
+      arguments: {
+        repo_path: remoteReadyRepoPath,
+        agents: ["chatgpt-web:chatgpt-pro"],
+        purpose: "Remote default review.",
+        context_kind: "repo_context"
+      }
+    }
+  }
+]);
+const remoteModelAccessContent = remoteModelAccessPath[1].result.structuredContent;
+assert.equal(remoteModelAccessContent.repo_visibility.default_gate, "remote_github_refs");
+assert.equal(remoteModelAccessContent.repo_visibility.clean, true);
+assert.equal(remoteModelAccessContent.repo_visibility.pushed, true);
+assert.equal(remoteModelAccessContent.repo_visibility.github_remote.owner, "thehood");
+assert.ok(
+  remoteModelAccessContent.repo_visibility.user_choices.some(
+    (choice) => choice.id === "use_remote_github_refs" && choice.recommended === true
+  ),
+  "clean pushed model access preflight should recommend remote GitHub refs"
+);
+assert.ok(
+  remoteModelAccessContent.recommended_paths.some(
+    (path) => path.id === "use_remote_github_refs" && path.status === "default_for_chatgpt_web"
+  ),
+  "clean pushed ChatGPT Web preflight should default to remote GitHub refs"
+);
+assert.ok(
+  remoteModelAccessContent.destinations.some(
+    (destination) =>
+      destination.assignment === "chatgpt-web:chatgpt-pro" &&
+      destination.remote_repo_access.route === "github_connector" &&
+      destination.remote_repo_access.status === "default"
+  ),
+  "clean pushed ChatGPT Web destination should use GitHub connector by default"
+);
+assert.ok(
+  !remoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "clean pushed remote default should not recommend local context approval by default"
+);
 
 const agentBoardPath = await runMcp([
   ...baseMessages,
@@ -388,6 +522,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
 assert.ok(doctorContent.runtime.capabilities.includes("pro_access_preflight"));
+assert.ok(doctorContent.runtime.capabilities.includes("model_access_preflight"));
 assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board"));
 assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board_artifact"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");

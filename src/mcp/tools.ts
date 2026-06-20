@@ -11,6 +11,7 @@ import { assertRoleInvariants } from "../runtime/permissions.js";
 import { readRunArtifact } from "../runtime/artifacts.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { boundAgentMarkdownPayloads } from "../providers/markdownPayload.js";
+import { codexCliModelAvailable, resolveCodexCliModel } from "../providers/codexCliModels.js";
 import {
   getRepoGitDiff,
   getRepoGitStatus,
@@ -23,6 +24,7 @@ import { deriveOperatorNextActions } from "../runtime/operatorNextActions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { buildRoleRoster } from "../runtime/roleRoster.js";
 import { getRunInsights, type RunInsights } from "../runtime/runInsights.js";
+import { inspectRemoteRepoContext } from "../runtime/remoteRepoContext.js";
 import { summonAgent } from "../runtime/summons.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
@@ -49,6 +51,7 @@ import {
 
 type ToolHandler = (argumentsValue: JsonValue | undefined) => Promise<ToolResult>;
 type HostResponseDetail = "summary" | "full";
+type ModelAccessContextKind = "repo_context" | "progress_packet" | "no_repo_context" | "connector_handoff";
 
 export interface McpTool {
   definition: ToolDefinition;
@@ -94,6 +97,9 @@ const parseResponseDetail = (args: JsonObject): HostResponseDetail => {
 
 const truncateText = (value: string, maxLength = compactTextLimit): string =>
   value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 14))}...[truncated]`;
+
+const trimTerminalPunctuation = (value: string): string =>
+  value.replace(/[.!?]+$/g, "");
 
 const jsonObjectValue = (value: JsonValue | undefined): JsonObject | undefined =>
   value !== undefined && value !== null && typeof value === "object" && !Array.isArray(value)
@@ -875,6 +881,419 @@ const createRolesTool = (): McpTool => ({
         roles: roleSummary(config.roles),
         roster: toJsonObject(buildRoleRoster(config, health)),
         health: toJsonObject(health)
+      };
+    })
+});
+
+const modelAccessContextKinds = new Set<ModelAccessContextKind>([
+  "repo_context",
+  "progress_packet",
+  "no_repo_context",
+  "connector_handoff"
+]);
+
+const parseModelAccessContextKind = (value: string | undefined): ModelAccessContextKind => {
+  const contextKind = value ?? "repo_context";
+
+  if (modelAccessContextKinds.has(contextKind as ModelAccessContextKind)) {
+    return contextKind as ModelAccessContextKind;
+  }
+
+  throw new Error("context_kind must be repo_context, progress_packet, no_repo_context, or connector_handoff.");
+};
+
+const modelAccessContextLabel = (contextKind: ModelAccessContextKind): string => {
+  switch (contextKind) {
+    case "repo_context":
+      return "repo context";
+    case "progress_packet":
+      return "progress packet";
+    case "connector_handoff":
+      return "connector handoff";
+    case "no_repo_context":
+      return "no repo context";
+  }
+};
+
+const modelAccessDisclosure = (contextKind: ModelAccessContextKind): JsonObject => {
+  switch (contextKind) {
+    case "repo_context":
+      return {
+        context_kind: contextKind,
+        may_leave_local_runtime:
+          "Repo path, selected file excerpts, git evidence, run artifacts, and role directives may be disclosed only by a later approved model-backed call.",
+        not_sent_by_this_tool:
+          "This preflight is local-only and does not call external models or include file bodies."
+      };
+    case "progress_packet":
+      return {
+        context_kind: contextKind,
+        may_leave_local_runtime:
+          "Runtime progress, memory, reconciliation, artifact refs, and compact evidence summaries may be disclosed only by a later approved model-backed call.",
+        not_sent_by_this_tool:
+          "This preflight is local-only and does not call external models or include progress packet bodies."
+      };
+    case "connector_handoff":
+      return {
+        context_kind: contextKind,
+        may_leave_local_runtime:
+          "A connected model host may request bounded repo or run evidence through TheHood MCP tools after the user enables that connector.",
+        not_sent_by_this_tool:
+          "This preflight is local-only and does not open a connector or send repo context."
+      };
+    case "no_repo_context":
+      return {
+        context_kind: contextKind,
+        may_leave_local_runtime:
+          "Only the abstract prompt should be sent. Do not include repo path, file excerpts, private run artifacts, memory packets, or progress packets.",
+        not_sent_by_this_tool:
+          "This preflight is local-only and does not call external models."
+      };
+  }
+};
+
+const modelAccessModelInfo = (
+  provider: Awaited<ReturnType<typeof inspectRuntimeHealth>>["providers"][number] | undefined,
+  model: string
+): JsonObject => {
+  if (!provider) {
+    return {
+      model_status: "unavailable",
+      model_available: false
+    };
+  }
+
+  if (provider.id === "codex-cli" && provider.modelDiscovery) {
+    const available = codexCliModelAvailable(model, provider.modelDiscovery);
+    const resolvedModel = provider.modelDiscovery.status === "available"
+      ? resolveCodexCliModel(model, provider.modelDiscovery)
+      : undefined;
+
+    return {
+      model_status: available === true ? "available" : available === false ? "unavailable" : "unknown",
+      ...(available === undefined ? {} : { model_available: available }),
+      ...(resolvedModel ? { resolved_model: resolvedModel } : {}),
+      model_discovery_status: provider.modelDiscovery.status,
+      model_discovery_issues: provider.modelDiscovery.issues
+    };
+  }
+
+  if (provider.models.includes(model)) {
+    return {
+      model_status: "listed",
+      model_available: true
+    };
+  }
+
+  if (provider.modelPolicy === "passthrough") {
+    return {
+      model_status: "passthrough",
+      model_available: null
+    };
+  }
+
+  return {
+    model_status: "unavailable",
+    model_available: false
+  };
+};
+
+const modelAccessRepoVisibility = (
+  inspection: Awaited<ReturnType<typeof inspectRemoteRepoContext>>
+): JsonObject => {
+  const remoteReady = Boolean(inspection.githubRemote && inspection.commit && inspection.clean && inspection.pushed);
+  const userChoices: JsonObject[] = remoteReady
+    ? [
+        {
+          id: "use_remote_github_refs",
+          label: "Use remote GitHub refs",
+          recommended: true
+        },
+        {
+          id: "approve_local_context_transfer",
+          label: "Approve local context only if remote evidence is insufficient",
+          recommended: false
+        },
+        {
+          id: "cancel_external_model_access",
+          label: "Cancel external model access",
+          recommended: false
+        }
+      ]
+    : [
+        {
+          id: "commit_push_checkpoint_then_remote",
+          label: "Commit and push checkpoint, then use remote repo",
+          recommended: true
+        },
+        {
+          id: "approve_local_context_transfer",
+          label: "Approve bounded local context or diff transfer",
+          recommended: false
+        },
+        {
+          id: "abstract_no_repo_context_prompt",
+          label: "Use no-repo-context strategy",
+          recommended: false
+        },
+        {
+          id: "cancel_external_model_access",
+          label: "Cancel external model access",
+          recommended: false
+        }
+      ];
+
+  return {
+    kind: "repo_visibility",
+    repo_path: inspection.repoPath,
+    clean: inspection.clean,
+    pushed: inspection.pushed,
+    status_path_count: inspection.statusPathCount,
+    status_paths: inspection.statusPaths,
+    reasons: inspection.reasons,
+    github_remote: inspection.githubRemote
+      ? {
+          name: inspection.githubRemote.name,
+          owner: inspection.githubRemote.owner,
+          repo: inspection.githubRemote.repo,
+          url: inspection.githubRemote.url,
+          normalized_url: inspection.githubRemote.normalizedUrl
+        }
+      : null,
+    branch: inspection.branch ?? null,
+    commit: inspection.commit ?? null,
+    upstream: inspection.upstream ?? null,
+    upstream_commit: inspection.upstreamCommit ?? null,
+    default_gate: remoteReady ? "remote_github_refs" : "user_choice_required",
+    default_route: remoteReady
+      ? "Use remote GitHub refs at the exact commit when the provider supports it; do not send local file contents through Codex."
+      : "Ask the user to commit and push a checkpoint, explicitly approve local context/diff transfer, use no-repo-context strategy, or cancel.",
+    user_choices: userChoices
+  };
+};
+
+const githubRemoteReady = (repoVisibility: JsonObject): boolean =>
+  repoVisibility.default_gate === "remote_github_refs";
+
+const modelAccessRemoteRepoAccess = (providerId: string, repoVisibility: JsonObject): JsonObject => {
+  if (providerId === "chatgpt-web") {
+    return {
+      route: "github_connector",
+      status: githubRemoteReady(repoVisibility) ? "default" : "available_after_clean_pushed_checkpoint",
+      description: githubRemoteReady(repoVisibility)
+        ? "Use ChatGPT Pro's GitHub connector at the exact remote commit. No local file contents need to be sent through Codex."
+        : "Commit and push the local checkout first, then use ChatGPT Pro's GitHub connector at the exact remote commit."
+    };
+  }
+
+  return {
+    route: "provider_specific_or_local",
+    status: "not_verified_by_thehood",
+    description:
+      "TheHood does not yet have a verified remote GitHub connector route for this provider. Use a provider-specific remote repo workflow if available, or choose explicit local context approval."
+  };
+};
+
+const modelAccessDestination = (
+  assignmentText: string,
+  health: Awaited<ReturnType<typeof inspectRuntimeHealth>>,
+  contextKind: ModelAccessContextKind,
+  repoVisibility: JsonObject
+): JsonObject => {
+  const assignment = parseRoleAssignment(assignmentText);
+  const provider = health.providers.find((candidate) => candidate.id === assignment.provider);
+  const issues = provider?.issues ?? [`provider_not_configured:${assignment.provider}`];
+  const ready = Boolean(provider?.enabled && provider.implemented && issues.length === 0);
+
+  return {
+    assignment: formatRoleAssignment(assignment),
+    provider: assignment.provider,
+    model: assignment.model,
+    status: ready ? "runtime_ready_host_may_still_block" : "not_ready",
+    context_kind: contextKind,
+    enabled: provider?.enabled ?? false,
+    implemented: provider?.implemented ?? false,
+    access_modes: provider?.accessModes ?? [],
+    default_access_mode: provider?.defaultAccessMode ?? null,
+    model_policy: provider?.modelPolicy ?? "unknown",
+    command: provider?.command ?? null,
+    command_found: provider?.commandFound ?? null,
+    ...modelAccessModelInfo(provider, assignment.model),
+    remote_repo_access: modelAccessRemoteRepoAccess(assignment.provider, repoVisibility),
+    issues
+  };
+};
+
+const modelAccessRecommendedPaths = (
+  destinations: JsonObject[],
+  contextKind: ModelAccessContextKind,
+  repoVisibility: JsonObject
+): JsonObject[] => {
+  const allReady = destinations.every((destination) => destination.status === "runtime_ready_host_may_still_block");
+  const hasChatGptWeb = destinations.some((destination) => destination.provider === "chatgpt-web");
+  const remoteReady = githubRemoteReady(repoVisibility);
+  const paths: JsonObject[] = [
+    ...(remoteReady
+      ? [
+          {
+            id: "use_remote_github_refs",
+            status: hasChatGptWeb ? "default_for_chatgpt_web" : "available_if_provider_can_inspect_remote",
+            description:
+              "Use the clean pushed GitHub repo at the exact commit. Do not send local file contents through Codex."
+          }
+        ]
+      : [
+          {
+            id: "commit_push_checkpoint_then_remote",
+            status: "recommended_before_external_code_review",
+            description:
+              "Commit and push the local checkout first so remote-capable providers can inspect the exact repo state without Codex sending local file contents."
+          },
+          {
+            id: "approve_local_context_transfer",
+            status: "requires_user_decision",
+            description:
+              "Approve sending bounded local repo context, diff, or progress evidence to the selected model provider when the user does not want to checkpoint and push first."
+          }
+        ]),
+    {
+      id: "approve_packet_then_call_models",
+      status: remoteReady && hasChatGptWeb ? "not_needed_for_chatgpt_web_remote_default" : allReady ? "runtime_ready_host_may_still_block" : "not_ready",
+      description:
+        "Use the approval packet copy once, then run the model-backed TheHood consult, fan-out, or orchestration call. Do not invent a new long approval sentence after a host-policy rejection."
+    },
+    {
+      id: "abstract_no_repo_context_prompt",
+      status: contextKind === "no_repo_context" ? "preferred" : "safe_when_repo_context_is_not_needed",
+      description:
+        "Ask the strategic question without repo path, file excerpts, run artifacts, memory packets, progress packets, or private project context."
+    },
+    {
+      id: "runtime_only_status",
+      status: "always_available",
+      description:
+        "Use TheHood doctor, status, artifact, repo gateway, and agent-board tools to inspect local evidence without calling external model providers."
+    },
+    {
+      id: "cancel_external_model_access",
+      status: "always_available",
+      description:
+        "Do not call external model providers for this request."
+    }
+  ];
+
+  if (hasChatGptWeb) {
+    paths.splice(1, 0, {
+      id: "chatgpt_mcp_connector",
+      status: "recommended_when_codex_blocks_chatgpt_web_disclosure",
+      description:
+        "Open ChatGPT with TheHood as an MCP connector so ChatGPT requests bounded repo/run evidence through TheHood tools instead of Codex sending a prebuilt repo context."
+    });
+  }
+
+  return paths;
+};
+
+const createModelAccessTool = (): McpTool => ({
+  definition: {
+    name: "thehood_model_access",
+    title: "Inspect TheHood Model Access Packet",
+    description:
+      "Local-only preflight for external model-backed TheHood calls. This does not call providers or send repo context; it reports repo visibility, remote GitHub readiness, a compact approval packet, and fallback paths when Codex host policy may block disclosure.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        agents: {
+          type: "array",
+          items: {
+            type: "string",
+            description: "Provider:model assignment, for example claude-code:opus or codex-cli:gpt-5.5."
+          }
+        },
+        purpose: {
+          type: "string",
+          description: "Optional local-only purpose to include in the approval packet."
+        },
+        context_kind: {
+          type: "string",
+          enum: ["repo_context", "progress_packet", "no_repo_context", "connector_handoff"],
+          description: "The disclosure shape expected for the later model-backed call."
+        },
+        constraints: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        }
+      },
+      required: ["repo_path", "agents"]
+    },
+    annotations: readOnlyAnnotations()
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const repoPath = requiredString(args, "repo_path");
+      const agents = optionalStringList(args, "agents");
+
+      if (agents.length === 0) {
+        throw new Error("agents must include at least one provider:model assignment.");
+      }
+
+      const config = await loadConfig(repoPath);
+      const health = await inspectRuntimeHealth(config);
+      const purpose = optionalString(args, "purpose");
+      const constraints = optionalStringList(args, "constraints");
+      const contextKind = parseModelAccessContextKind(optionalString(args, "context_kind"));
+      const repoVisibility = modelAccessRepoVisibility(
+        await inspectRemoteRepoContext(repoPath, {
+          provider: "chatgpt-web",
+          model: "chatgpt-pro"
+        })
+      );
+      const destinations = agents.map((agent) => modelAccessDestination(agent, health, contextKind, repoVisibility));
+      const subject = destinations.map((destination) => destination.assignment).join(" + ");
+      const purposeSuffix = purpose ? `: ${trimTerminalPunctuation(truncateText(purpose, 90))}` : "";
+      const approvalCopy =
+        contextKind === "no_repo_context"
+          ? `I approve TheHood model access without repo context for ${subject}${purposeSuffix}.`
+          : `I approve TheHood model access with ${modelAccessContextLabel(contextKind)} for ${subject}${purposeSuffix}.`;
+
+      return {
+        kind: "model_access_preflight",
+        repo_path: repoPath,
+        local_only: true,
+        sends_repo_context: false,
+        purpose: purpose ?? null,
+        constraints,
+        runtime_policy: {
+          approval_mode: config.approvalPolicy.mode,
+          external_transfers: config.approvalPolicy.externalTransfers.mode,
+          max_auto_approve_bytes: config.approvalPolicy.externalTransfers.maxAutoApproveBytes,
+          autopilot_allows_bounded_external_transfers:
+            config.approvalPolicy.mode === "autopilot" ||
+            config.approvalPolicy.externalTransfers.mode === "auto_low_risk"
+        },
+        data_boundary: modelAccessDisclosure(contextKind),
+        repo_visibility: repoVisibility,
+        destinations,
+        approval_packet: {
+          id: "thehood_model_access",
+          copy: approvalCopy,
+          summary:
+            "Approve this packet once if the host requires explicit disclosure approval; otherwise use a no-repo-context or connector handoff path."
+        },
+        codex_host_policy_boundary: {
+          status: "outside_thehood_runtime_control",
+          summary:
+            "TheHood autopilot can approve TheHood runtime gates, but it cannot override Codex or tenant host policy before an external model-backed call starts.",
+          retry_guidance:
+            "If Codex rejects the direct call, do not ask the user to type a fresh long disclosure phrase. Present this packet, use its compact approval copy, or switch to a no-repo-context or connector path."
+        },
+        recommended_paths: modelAccessRecommendedPaths(destinations, contextKind, repoVisibility)
       };
     })
 });
@@ -1928,6 +2347,7 @@ const createAbortTool = (): McpTool => ({
 export const mcpTools: McpTool[] = [
   createDoctorTool(),
   createRolesTool(),
+  createModelAccessTool(),
   createProAccessTool(),
   createAgentBoardTool(),
   createAssignRolesTool(),

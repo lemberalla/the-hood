@@ -77,6 +77,7 @@ After restart, the TheHood server should expose these tools:
 
 - `thehood_doctor`
 - `thehood_roles`
+- `thehood_model_access`
 - `thehood_pro_access`
 - `thehood_agent_board`
 - `thehood_assign_roles`
@@ -96,9 +97,11 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `multi_model_team_presets`, `provider_model_passthrough`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, `critic_trigger_artifacts`, `pro_access_preflight`, `codex_agent_board`, and `codex_agent_board_artifact`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `multi_model_team_presets`, `provider_model_passthrough`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, `critic_trigger_artifacts`, `pro_access_preflight`, `model_access_preflight`, `codex_agent_board`, and `codex_agent_board_artifact`, the chat is still connected to an older MCP server process.
 
 Codex can request renderable agent visibility by calling `thehood_agent_board` with `include_artifact: true`. The returned `artifact.manifest` and `artifact.snapshot` are dashboard payloads derived from runtime state and can be passed to an available Codex artifact renderer. Rendering remains a display layer: it does not schedule agents, approve gates, or grant tools.
+
+Codex can inspect the general model-access path by calling `thehood_model_access`. This is a local-only preflight: it does not call Claude, Codex CLI, ChatGPT, or API providers and does not send repo context externally. Use it before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. Dirty or unpushed repos should show the user choices returned by the preflight: commit and push a checkpoint, approve bounded local context/diff transfer, use no-repo-context strategy, or cancel. Clean pushed GitHub repos should default to remote refs when the provider supports that route. If host policy blocks the direct call, present the returned compact approval packet or switch to no-repo-context or connector mode.
 
 Codex can inspect the Pro access path by calling `thehood_pro_access`. This is a local-only preflight: it does not call ChatGPT Pro and does not send repo context externally. Use it when a direct `chatgpt-web` consult is rejected by Codex host policy, when bridge readiness is unclear, or when the right answer is to switch to ChatGPT MCP connector mode instead of asking for the same approval again.
 
@@ -106,13 +109,14 @@ First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
 2. Call `thehood_roles` or `thehood_agent_board` and confirm the agent roster shows the intended orchestrator, implementer, QA, verifier, and critic owners.
-3. Call `thehood_pro_access` before direct Pro consults from Codex. If Codex host policy blocks external disclosure, use the returned connector-mode handoff and do not repeat the same approval request.
-4. Call `thehood_plan` for a harmless read-only goal.
-5. Call `thehood_continue` with `approval: "none"` for that run. In manual mode, confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default. In autopilot mode, confirm provider invocation is auto-approved and recorded as `approval_auto_approved`.
-6. Approve a provider invocation only when a manual approval gate is active and the user accepts calling the configured provider for the repo, then continue the run and confirm it returns schema-valid JSON.
-7. If a ChatGPT Web or API provider is configured and delegates repo inspection, confirm the runtime creates a bounded `context` artifact. In manual mode it should stop for explicit approval before sending that context back to the provider; in autopilot or auto-low-risk transfer mode it may auto-approve a bounded non-secret manifest and record the transfer approval.
-8. Approve the context transfer only when a manual transfer gate is active and the user accepts sending bounded repo evidence, then continue the run.
-9. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
+3. Call `thehood_model_access` before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned user choices. If the repo is clean and pushed, use the remote GitHub refs default when supported. If Codex host policy blocks external disclosure, use the returned compact approval packet or switch to no-repo-context or connector mode.
+4. Call `thehood_pro_access` before direct Pro consults from Codex when ChatGPT Web bridge readiness or connector-mode handoff details matter.
+5. Call `thehood_plan` for a harmless read-only goal.
+6. Call `thehood_continue` with `approval: "none"` for that run. In manual mode, confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default. In autopilot mode, confirm provider invocation is auto-approved and recorded as `approval_auto_approved`.
+7. Approve a provider invocation only when a manual approval gate is active and the user accepts calling the configured provider for the repo, then continue the run and confirm it returns schema-valid JSON.
+8. If a ChatGPT Web or API provider is configured and delegates repo inspection, confirm the runtime creates a bounded `context` artifact. In manual mode it should stop for explicit approval before sending that context back to the provider; in autopilot or auto-low-risk transfer mode it may auto-approve a bounded non-secret manifest and record the transfer approval.
+9. Approve the context transfer only when a manual transfer gate is active and the user accepts sending bounded repo evidence, then continue the run.
+10. For implementation testing, call `thehood_orchestrate` in `implement` mode and confirm it stops for approval before edit-capable execution.
 
 ## Optional Codex Plugin
 
@@ -155,10 +159,11 @@ After Codex can see TheHood tools:
 
 1. Ask Codex to call `thehood_doctor` for the repo.
 2. Ask Codex to call `thehood_agent_board` and inspect the visible agent cards before changing any role owner.
-3. Ask Codex to call `thehood_pro_access` before Pro consults. If Codex host policy rejects direct external disclosure to ChatGPT Web, use the connector-mode handoff instead of repeating the rejected request.
-4. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles. When no manual gate is active, Codex should continue with `approval: "none"` and let TheHood autopilot auto-approve bounded provider gates when policy allows.
-5. Use `thehood_orchestrate` for implementation work.
-6. Use `thehood_continue` with explicit approval only for active manual approval gates.
+3. Ask Codex to call `thehood_model_access` before Claude/Codex/GPT/Pro consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned choices. If the repo is clean and pushed, use the remote GitHub refs default when supported. If Codex host policy rejects direct external disclosure, use the returned compact approval packet, no-repo-context fallback, or connector-mode handoff instead of repeating a long custom approval sentence.
+4. Ask Codex to call `thehood_pro_access` before direct ChatGPT Pro consults when you need ChatGPT Web bridge readiness or ChatGPT MCP connector handoff details.
+5. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles. When no manual gate is active, Codex should continue with `approval: "none"` and let TheHood autopilot auto-approve bounded provider gates when policy allows.
+6. Use `thehood_orchestrate` for implementation work.
+7. Use `thehood_continue` with explicit approval only for active manual approval gates.
 
 Example guest critic:
 

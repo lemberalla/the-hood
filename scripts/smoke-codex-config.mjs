@@ -259,6 +259,7 @@ const toolNames = toolsList.result.tools.map((tool) => tool.name);
 for (const expectedTool of [
   "thehood_doctor",
   "thehood_roles",
+  "thehood_model_access",
   "thehood_pro_access",
   "thehood_agent_board",
   "thehood_assign_roles",
@@ -306,6 +307,7 @@ for (const expectedCapability of [
   "same_run_agent_summons",
   "bounded_same_run_fanout",
   "pro_access_preflight",
+  "model_access_preflight",
   "codex_agent_board",
   "codex_agent_board_artifact"
 ]) {
