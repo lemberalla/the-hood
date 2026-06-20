@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
@@ -9,18 +10,173 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
 const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
+const baseEnv = () => ({
+  ...process.env,
+  THEHOOD_CHATGPT_WEB_COMMAND: "",
+  THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
+  THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0",
+  THEHOOD_CHATGPT_WEB_CDP_URL: "http://127.0.0.1:9"
+});
 const { chooseRepoContextRoute, parseGitHubRemoteUrl } = await import(
   pathToFileURL(path.join(root, "dist", "runtime", "remoteRepoContext.js")).href
 );
 const { decideReviewRouting } = await import(
   pathToFileURL(path.join(root, "dist", "runtime", "reviewRouting.js")).href
 );
+const { classifyChatGptPageSnapshot } = await import(
+  pathToFileURL(path.join(root, "dist", "runtime", "chatGptPageReadiness.js")).href
+);
+
+const encodeWebSocketText = (value) => {
+  const payload = Buffer.from(value);
+  if (payload.length < 126) {
+    return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
+  }
+
+  if (payload.length < 65536) {
+    const header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 126;
+    header.writeUInt16BE(payload.length, 2);
+    return Buffer.concat([header, payload]);
+  }
+
+  const header = Buffer.alloc(10);
+  header[0] = 0x81;
+  header[1] = 127;
+  header.writeBigUInt64BE(BigInt(payload.length), 2);
+  return Buffer.concat([header, payload]);
+};
+
+const decodeWebSocketTextFrames = (buffer) => {
+  const messages = [];
+  let closeReceived = false;
+  let offset = 0;
+
+  while (offset + 2 <= buffer.length) {
+    const frameStart = offset;
+    const first = buffer[offset];
+    const second = buffer[offset + 1];
+    offset += 2;
+
+    let length = second & 0x7f;
+    if (length === 126) {
+      if (offset + 2 > buffer.length) {
+        return { messages, closeReceived, remaining: buffer.subarray(frameStart) };
+      }
+      length = buffer.readUInt16BE(offset);
+      offset += 2;
+    } else if (length === 127) {
+      if (offset + 8 > buffer.length) {
+        return { messages, closeReceived, remaining: buffer.subarray(frameStart) };
+      }
+      length = Number(buffer.readBigUInt64BE(offset));
+      offset += 8;
+    }
+
+    const masked = Boolean(second & 0x80);
+    if (masked && offset + 4 > buffer.length) {
+      return { messages, closeReceived, remaining: buffer.subarray(frameStart) };
+    }
+
+    const mask = masked ? buffer.subarray(offset, offset + 4) : undefined;
+    offset += masked ? 4 : 0;
+
+    if (offset + length > buffer.length) {
+      return { messages, closeReceived, remaining: buffer.subarray(frameStart) };
+    }
+
+    const payload = Buffer.from(buffer.subarray(offset, offset + length));
+    offset += length;
+
+    if (mask) {
+      for (let index = 0; index < payload.length; index += 1) {
+        payload[index] ^= mask[index % 4];
+      }
+    }
+
+    const opcode = first & 0x0f;
+    if (opcode === 1) {
+      messages.push(payload.toString("utf8"));
+    } else if (opcode === 8) {
+      closeReceived = true;
+    }
+  }
+
+  return { messages, closeReceived, remaining: buffer.subarray(offset) };
+};
+
+const createCdpSmokeServer = (snapshot) => {
+  const server = http.createServer((request, response) => {
+    if (request.url === "/json/list") {
+      response.writeHead(200, {
+        "content-type": "application/json"
+      });
+      response.end(JSON.stringify([
+        {
+          url: snapshot.url,
+          title: snapshot.title ?? "ChatGPT",
+          webSocketDebuggerUrl: `ws://${request.headers.host}/devtools/page/smoke`
+        }
+      ]));
+      return;
+    }
+
+    response.writeHead(404);
+    response.end();
+  });
+
+  server.on("upgrade", (request, socket) => {
+    const key = request.headers["sec-websocket-key"];
+    if (typeof key !== "string") {
+      socket.destroy();
+      return;
+    }
+
+    const accept = crypto
+      .createHash("sha1")
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64");
+    socket.write([
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${accept}`,
+      "",
+      ""
+    ].join("\r\n"));
+
+    let buffered = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      buffered = Buffer.concat([buffered, chunk]);
+      const decoded = decodeWebSocketTextFrames(buffered);
+      buffered = decoded.remaining;
+      if (decoded.closeReceived) {
+        socket.end();
+        return;
+      }
+
+      for (const message of decoded.messages) {
+        const requestMessage = JSON.parse(message);
+        const result = requestMessage.method === "Runtime.evaluate"
+          ? { result: { value: snapshot } }
+          : {};
+        socket.write(encodeWebSocketText(JSON.stringify({
+          id: requestMessage.id,
+          result
+        })));
+      }
+    });
+  });
+
+  return server;
+};
 
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
     cwd: root,
     env: {
-      ...process.env,
+      ...baseEnv(),
       ...(options.env ?? {})
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -55,6 +211,10 @@ const runCli = async (args, options = {}) => {
 const runNodeScript = async (scriptPath, args, stdin = "", options = {}) => {
   const child = spawn(process.execPath, [scriptPath, ...args], {
     cwd: root,
+    env: {
+      ...baseEnv(),
+      ...(options.env ?? {})
+    },
     stdio: ["pipe", "pipe", "pipe"]
   });
 
@@ -126,6 +286,28 @@ assert.deepEqual(parseGitHubRemoteUrl("ssh://git@github.com/owner/repo.git"), {
   normalizedUrl: "https://github.com/owner/repo"
 });
 assert.equal(parseGitHubRemoteUrl("https://example.com/owner/repo.git"), undefined);
+assert.deepEqual(classifyChatGptPageSnapshot({
+  url: "https://chatgpt.com/",
+  authSignal: null,
+  composerPresent: true
+}), {
+  authRequired: false,
+  authenticated: true,
+  composerReady: true,
+  ready: true,
+  issues: []
+});
+assert.deepEqual(classifyChatGptPageSnapshot({
+  url: "https://chatgpt.com/",
+  text: "Welcome back. Continue with Google.",
+  composerPresent: false
+}), {
+  authRequired: true,
+  authenticated: false,
+  composerReady: false,
+  ready: false,
+  issues: ["chatgpt_auth_required"]
+});
 assert.equal(
   chooseRepoContextRoute({
     provider: "chatgpt-web",
@@ -293,6 +475,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("local_agent_execution_arti
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_session_isolation"));
+assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_web_auth_readiness"));
 assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
@@ -488,22 +671,11 @@ const unconfirmedDoctorResult = JSON.parse(unconfirmedDoctor.stdout);
 const unconfirmedChatGptProvider = unconfirmedDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
 assert.equal(unconfirmedChatGptProvider.commandFound, true);
 assert.deepEqual(unconfirmedChatGptProvider.issues, ["model_not_confirmed"]);
-const cdpServer = http.createServer((request, response) => {
-  if (request.url === "/json/list") {
-    response.writeHead(200, {
-      "content-type": "application/json"
-    });
-    response.end(JSON.stringify([
-      {
-        url: "https://chatgpt.com/",
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/smoke"
-      }
-    ]));
-    return;
-  }
-
-  response.writeHead(404);
-  response.end();
+const cdpServer = createCdpSmokeServer({
+  url: "https://chatgpt.com/",
+  title: "ChatGPT",
+  authSignal: null,
+  composerPresent: true
 });
 await new Promise((resolve) => cdpServer.listen(0, "127.0.0.1", resolve));
 const cdpAddress = cdpServer.address();
@@ -521,6 +693,9 @@ const browserStatus = JSON.parse(
 assert.equal(browserStatus.provider, "chatgpt-web");
 assert.equal(browserStatus.cdpReachable, true);
 assert.equal(browserStatus.chatGptTabFound, true);
+assert.equal(browserStatus.chatGptPageInspected, true);
+assert.equal(browserStatus.chatGptAuthenticated, true);
+assert.equal(browserStatus.chatGptComposerReady, true);
 assert.equal(browserStatus.readyForBridge, true);
 const dashboard = await runCli(["ui", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(dashboard.stdout.includes("THEHOOD"));
@@ -611,6 +786,44 @@ const readyChatGptProvider = readyDoctorResult.providers.find((provider) => prov
 const readyOrchestrator = readyDoctorResult.roles.find((role) => role.role === "orchestrator");
 assert.deepEqual(readyChatGptProvider.issues, []);
 assert.deepEqual(readyOrchestrator.issues, []);
+const authCdpServer = createCdpSmokeServer({
+  url: "https://chatgpt.com/",
+  title: "ChatGPT",
+  authSignal: "continue with google",
+  composerPresent: false
+});
+await new Promise((resolve) => authCdpServer.listen(0, "127.0.0.1", resolve));
+const authCdpAddress = authCdpServer.address();
+assert.ok(authCdpAddress && typeof authCdpAddress === "object");
+const authBrowserStatus = JSON.parse(
+  (await runCli(["browser", "status", "--cdp-url", `http://127.0.0.1:${authCdpAddress.port}`, "--json"])).stdout
+);
+assert.equal(authBrowserStatus.cdpReachable, true);
+assert.equal(authBrowserStatus.chatGptTabFound, true);
+assert.equal(authBrowserStatus.chatGptPageInspected, true);
+assert.equal(authBrowserStatus.chatGptAuthenticated, false);
+assert.equal(authBrowserStatus.chatGptComposerReady, false);
+assert.equal(authBrowserStatus.readyForBridge, false);
+assert.deepEqual(authBrowserStatus.issues, ["chatgpt_auth_required"]);
+const authDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
+  env: {
+    THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
+    THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
+    THEHOOD_CHATGPT_WEB_CDP_URL: `http://127.0.0.1:${authCdpAddress.port}`
+  }
+});
+const authDoctorResult = JSON.parse(authDoctor.stdout);
+const authChatGptProvider = authDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
+assert.deepEqual(authChatGptProvider.issues, ["chatgpt_auth_required"]);
+await new Promise((resolve, reject) => {
+  authCdpServer.close((error) => {
+    if (error) {
+      reject(error);
+      return;
+    }
+    resolve(undefined);
+  });
+});
 const blockedChatGptPlan = JSON.parse(
   (
     await runCli([

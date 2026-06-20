@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import type { AgentResponse } from "../providers/types.js";
+import { classifyChatGptPageSnapshot, chatGptPageSnapshotExpression } from "../runtime/chatGptPageReadiness.js";
 import type { JsonObject } from "../runtime/types.js";
+import type { ChatGptPageReadiness, ChatGptPageSnapshot } from "../runtime/chatGptPageReadiness.js";
 
 declare const WebSocket: {
   new (url: string): {
@@ -853,6 +855,9 @@ const clickNewChatExpression = (newChatSelector: string): string => `
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+const loginRequiredMessage =
+  "ChatGPT Web session requires login in the TheHood-managed browser profile. Run thehood browser start, sign in to ChatGPT in that window, then retry.";
+
 const waitForPromptEditor = async (
   client: CdpClient,
   promptSelector: string,
@@ -873,6 +878,31 @@ const waitForPromptEditor = async (
   }
 
   return false;
+};
+
+const waitForChatGptPageReadiness = async (
+  client: CdpClient,
+  promptSelector: string,
+  timeoutMs: number
+): Promise<ChatGptPageReadiness | undefined> => {
+  const deadline = Date.now() + timeoutMs;
+  let latest: ChatGptPageReadiness | undefined;
+
+  while (Date.now() < deadline) {
+    try {
+      const snapshot = await client.evaluate<ChatGptPageSnapshot>(chatGptPageSnapshotExpression(promptSelector));
+      latest = classifyChatGptPageSnapshot(snapshot);
+      if (latest.authRequired || latest.composerReady) {
+        return latest;
+      }
+    } catch {
+      // Navigation can briefly invalidate the execution context.
+    }
+
+    await sleep(500);
+  }
+
+  return latest;
 };
 
 const assistantCount = async (client: CdpClient, responseSelector: string): Promise<number> =>
@@ -1062,7 +1092,18 @@ const run = async (): Promise<AgentResponse> => {
   try {
     if (!options.reuseChat) {
       await client.navigate(options.freshUrl);
+    }
 
+    const readiness = await waitForChatGptPageReadiness(
+      client,
+      options.promptSelector,
+      Math.min(options.timeoutMs, 10_000)
+    );
+    if (readiness?.authRequired) {
+      return fallback(requiredDataKey, loginRequiredMessage, "blocked", expectedAck);
+    }
+
+    if (!options.reuseChat) {
       const freshness = await ensureFreshComposer(
         client,
         options.promptSelector,
@@ -1071,6 +1112,11 @@ const run = async (): Promise<AgentResponse> => {
         options.timeoutMs
       );
       if (!freshness.ok) {
+        const latestReadiness = await waitForChatGptPageReadiness(client, options.promptSelector, 1_000);
+        if (latestReadiness?.authRequired) {
+          return fallback(requiredDataKey, loginRequiredMessage, "blocked", expectedAck);
+        }
+
         return fallback(requiredDataKey, freshness.reason, "blocked", expectedAck);
       }
     }

@@ -333,6 +333,10 @@ const nextActions = (browser: BrowserStatus): string[] => {
     actions.push("thehood browser start");
   } else if (!browser.chatGptTabFound) {
     actions.push("open ChatGPT in the TheHood browser profile");
+  } else if (browser.issues.includes("chatgpt_auth_required")) {
+    actions.push("sign in to ChatGPT in the TheHood browser profile");
+  } else if (!browser.chatGptComposerReady) {
+    actions.push("open a ready ChatGPT composer in the TheHood browser profile");
   }
 
   actions.push("thehood doctor --repo <repo>");
@@ -724,7 +728,8 @@ const browserLines = (input: DashboardInput, width: number): string[] => [
   "BROWSER / REMOTE SURFACE",
   `cdp ${input.browser.cdpReachable ? "reachable" : "unreachable"} ${truncateEnd(input.browser.cdpUrl, Math.max(10, width - 18))}`,
   `profile ${truncateMiddle(input.browser.profilePath, Math.max(10, width - 10))}`,
-  `tab ${input.browser.chatGptTabFound ? "found" : "not found"}  provider ${truncateEnd(providerState(input.health, "chatgpt-web"), Math.max(8, width - 30))}`
+  `tab ${input.browser.chatGptTabFound ? "found" : "not found"}  auth ${input.browser.chatGptAuthenticated ? "ready" : "not ready"}`,
+  `composer ${input.browser.chatGptComposerReady ? "ready" : "not ready"}  provider ${truncateEnd(providerState(input.health, "chatgpt-web"), Math.max(8, width - 35))}`
 ];
 
 const statusRail = (view: DashboardView, width: number, useColor: boolean): string => {
@@ -991,6 +996,7 @@ const settingsBrowserLines = (input: SettingsInput, width: number): string[] => 
   `cdp ${input.browser.cdpReachable ? "reachable" : "unreachable"} ${truncateEnd(input.browser.cdpUrl, Math.max(10, width - 18))}`,
   `profile ${truncateMiddle(input.browser.profilePath, Math.max(10, width - 10))}`,
   `tab ${input.browser.chatGptTabFound ? "found" : "not found"}`,
+  `auth ${input.browser.chatGptAuthenticated ? "ready" : "not ready"}  composer ${input.browser.chatGptComposerReady ? "ready" : "not ready"}`,
   `start ${truncateEnd(browserCommand("start"), Math.max(10, width - 7))}`,
   `status ${truncateEnd(browserCommand("status"), Math.max(10, width - 8))}`,
   `stop ${truncateEnd(browserCommand("stop"), Math.max(10, width - 6))}`

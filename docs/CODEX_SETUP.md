@@ -64,7 +64,7 @@ node dist/cli/main.js doctor --repo /path/to/repo --json
 npm run smoke:codex-config -- --config ~/.codex/config.toml --repo /path/to/repo
 ```
 
-For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, and a ChatGPT tab is visible. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, and `chatgpt_tab_not_found`.
+For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, a ChatGPT tab is visible, the page is authenticated, and the composer is ready. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, `chatgpt_tab_not_found`, `chatgpt_auth_required`, `chatgpt_composer_not_ready`, and `chatgpt_page_uninspectable`.
 
 ## Actual Codex App Verification
 
@@ -91,7 +91,7 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, and `critic_trigger_artifacts`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, and `critic_trigger_artifacts`, the chat is still connected to an older MCP server process.
 
 First verification sequence from a Codex chat:
 

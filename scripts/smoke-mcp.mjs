@@ -6,6 +6,10 @@ import path from "node:path";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
+process.env.THEHOOD_CHATGPT_WEB_COMMAND = "";
+process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED = "0";
+process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL = "0";
+process.env.THEHOOD_CHATGPT_WEB_CDP_URL = "http://127.0.0.1:9";
 
 const runCommand = async (args) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
@@ -294,6 +298,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("local_agent_execution_art
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_browser_manager"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_bridge_fail_fast"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_session_isolation"));
+assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_auth_readiness"));
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));

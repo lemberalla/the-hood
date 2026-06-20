@@ -120,7 +120,7 @@ Current implementation:
 - Provider id: `chatgpt-web`
 - Default model: `chatgpt-pro`
 - Requires `THEHOOD_CHATGPT_WEB_COMMAND`
-- `thehood doctor` checks command executability, explicit model confirmation, Chrome DevTools reachability, and whether a ChatGPT tab is visible.
+- `thehood doctor` checks command executability, explicit model confirmation, Chrome DevTools reachability, whether a ChatGPT tab is visible, and whether the page is authenticated with a ready composer.
 - Sends the runtime directive as stdin.
 - Passes `--model <model>` and `--schema <schema-path>` to the bridge command.
 - Expects stdout to contain the normalized `AgentResponse` JSON envelope.
@@ -133,6 +133,7 @@ Included bridge:
 - Source: `src/bridges/chatgptWebBridge.ts`
 - Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
+- Fails fast with a blocked response when the visible ChatGPT page requires login.
 - Creates a dedicated ChatGPT target by default, verifies that the composer is empty before sending the prompt, and closes the created target unless `THEHOOD_CHATGPT_WEB_KEEP_TARGET=1` is set.
 - Requires ChatGPT responses to echo the current directive acknowledgement in the role payload, so schema-valid answers from stale browser/project context fail closed.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
@@ -145,6 +146,7 @@ Rules:
 - Do not rely on hidden chain-of-thought.
 - Prefer structured visible outputs.
 - Fail closed when the requested model cannot be confirmed.
+- Fail closed when the authenticated ChatGPT page or composer cannot be verified.
 - Fail closed when a fresh composer cannot be verified or when the response does not acknowledge the current directive.
 - The bridge must not log cookies, local storage, tokens, or private browser profile data.
 - When the directive includes `context.remoteRepoContext`, use ChatGPT Web's GitHub connector for the named owner, repo, branch, and commit instead of asking TheHood to send local file excerpts. If the connector cannot access the repo or commit, ask TheHood for bounded local repo context.

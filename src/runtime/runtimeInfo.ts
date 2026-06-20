@@ -7,6 +7,7 @@ export const runtimeCapabilities = [
   "chatgpt_web_bridge",
   "chatgpt_web_bridge_fail_fast",
   "chatgpt_web_session_isolation",
+  "chatgpt_web_auth_readiness",
   "chatgpt_browser_manager",
   "cli_artifact_reads",
   "approval_phrase_enforcement",

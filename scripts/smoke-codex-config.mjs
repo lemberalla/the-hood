@@ -5,6 +5,13 @@ import os from "node:os";
 import path from "node:path";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
+const baseEnv = {
+  ...process.env,
+  THEHOOD_CHATGPT_WEB_COMMAND: "",
+  THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
+  THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0",
+  THEHOOD_CHATGPT_WEB_CDP_URL: "http://127.0.0.1:9"
+};
 
 const readOption = (name, fallback) => {
   const index = process.argv.indexOf(name);
@@ -164,7 +171,7 @@ const runMcp = async (launch, messages) => {
   const child = spawn(launch.command, launch.args, {
     cwd: root,
     env: {
-      ...process.env,
+      ...baseEnv,
       ...launch.env
     },
     stdio: ["pipe", "pipe", "pipe"]
@@ -285,6 +292,7 @@ for (const expectedCapability of [
   "chatgpt_browser_manager",
   "chatgpt_web_bridge_fail_fast",
   "chatgpt_web_session_isolation",
+  "chatgpt_web_auth_readiness",
   "branded_tui_shell",
   "operator_next_actions",
   "runtime_loop_runner",

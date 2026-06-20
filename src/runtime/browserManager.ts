@@ -3,7 +3,19 @@ import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { classifyChatGptPageSnapshot, chatGptPageSnapshotExpression, type ChatGptPageSnapshot } from "./chatGptPageReadiness.js";
 import { InputError } from "./errors.js";
+
+declare const WebSocket: {
+  new (url: string): {
+    addEventListener(event: "open", listener: () => void): void;
+    addEventListener(event: "message", listener: (event: { data: unknown }) => void): void;
+    addEventListener(event: "error", listener: () => void): void;
+    addEventListener(event: "close", listener: () => void): void;
+    send(data: string): void;
+    close(): void;
+  };
+};
 
 export interface BrowserManagerOptions {
   port?: number;
@@ -22,6 +34,9 @@ export interface BrowserStatus {
   pid?: number;
   cdpReachable: boolean;
   chatGptTabFound: boolean;
+  chatGptPageInspected: boolean;
+  chatGptAuthenticated: boolean;
+  chatGptComposerReady: boolean;
   readyForBridge: boolean;
   targetCount: number;
   issues: string[];
@@ -48,12 +63,14 @@ interface BrowserState {
 
 interface ChromeTarget {
   url?: string;
+  title?: string;
   webSocketDebuggerUrl?: string;
 }
 
 const defaultPort = 9222;
 const defaultProfile = "chatgpt-web";
 const defaultUrl = "https://chatgpt.com/";
+const defaultPromptSelector = "#prompt-textarea,[contenteditable='true'],textarea";
 const stateFileName = ".thehood-browser.json";
 
 const sanitizeProfileName = (value: string): string =>
@@ -165,6 +182,161 @@ const chatGptTargetFound = (targets: ChromeTarget[]): boolean =>
     return Boolean(target.webSocketDebuggerUrl) && (url.includes("chatgpt.com") || url.includes("chat.openai.com"));
   });
 
+const chatGptTarget = (targets: ChromeTarget[]): ChromeTarget | undefined =>
+  targets.find((target) => {
+    const url = target.url ?? "";
+    return Boolean(target.webSocketDebuggerUrl) && (url.includes("chatgpt.com") || url.includes("chat.openai.com"));
+  });
+
+const evaluateChromeTarget = async <T>(
+  webSocketUrl: string,
+  expression: string,
+  timeoutMs: number
+): Promise<T> => {
+  if (typeof WebSocket === "undefined") {
+    throw new Error("websocket_unavailable");
+  }
+
+  const socket = new WebSocket(webSocketUrl);
+  const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
+  let nextId = 1;
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error(`connect_timeout_${timeoutMs}`));
+    }, timeoutMs);
+    socket.addEventListener("open", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timer);
+      reject(new Error("connect_failed"));
+    });
+  });
+
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data)) as {
+      id?: number;
+      result?: unknown;
+      error?: { message?: string };
+    };
+
+    if (!message.id) {
+      return;
+    }
+
+    const callbacks = pending.get(message.id);
+    if (!callbacks) {
+      return;
+    }
+
+    pending.delete(message.id);
+    clearTimeout(callbacks.timer);
+
+    if (message.error) {
+      callbacks.reject(new Error(message.error.message ?? "Chrome DevTools command failed."));
+      return;
+    }
+
+    callbacks.resolve(message.result);
+  });
+
+  socket.addEventListener("close", () => {
+    for (const callbacks of pending.values()) {
+      clearTimeout(callbacks.timer);
+      callbacks.reject(new Error("Chrome DevTools websocket closed."));
+    }
+    pending.clear();
+  });
+
+  const send = (method: string, params: Record<string, unknown>): Promise<unknown> => {
+    const id = nextId;
+    nextId += 1;
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        socket.close();
+        reject(new Error(`command_timeout_${timeoutMs}`));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+
+      try {
+        socket.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        pending.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  };
+
+  try {
+    const result = await send("Runtime.evaluate", {
+      expression,
+      awaitPromise: true,
+      returnByValue: true
+    }) as {
+      result?: { value?: T };
+      exceptionDetails?: { text?: string };
+    };
+
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.text ?? "Browser evaluation failed.");
+    }
+
+    return result.result?.value as T;
+  } finally {
+    socket.close();
+  }
+};
+
+const inspectChatGptPage = async (target: ChromeTarget): Promise<{
+  pageInspected: boolean;
+  authenticated: boolean;
+  composerReady: boolean;
+  issues: string[];
+}> => {
+  const targetReadiness = classifyChatGptPageSnapshot({
+    ...(target.url ? { url: target.url } : {}),
+    ...(target.title ? { title: target.title } : {})
+  });
+
+  if (targetReadiness.authRequired || !target.webSocketDebuggerUrl) {
+    return {
+      pageInspected: false,
+      authenticated: false,
+      composerReady: false,
+      issues: targetReadiness.authRequired ? targetReadiness.issues : ["chatgpt_page_uninspectable"]
+    };
+  }
+
+  try {
+    const snapshot = await evaluateChromeTarget<ChatGptPageSnapshot>(
+      target.webSocketDebuggerUrl,
+      chatGptPageSnapshotExpression(defaultPromptSelector),
+      1_500
+    );
+    const readiness = classifyChatGptPageSnapshot(snapshot);
+
+    return {
+      pageInspected: true,
+      authenticated: readiness.authenticated,
+      composerReady: readiness.composerReady,
+      issues: readiness.issues
+    };
+  } catch {
+    return {
+      pageInspected: false,
+      authenticated: false,
+      composerReady: false,
+      issues: ["chatgpt_page_uninspectable"]
+    };
+  }
+};
+
 export const inspectBrowser = async (options: BrowserManagerOptions = {}): Promise<BrowserStatus> => {
   const cdpUrl = browserCdpUrl(options);
   const profilePath = browserProfilePath(options);
@@ -172,6 +344,9 @@ export const inspectBrowser = async (options: BrowserManagerOptions = {}): Promi
   const issues: string[] = [];
   let cdpReachable = false;
   let chatGptTabFound = false;
+  let chatGptPageInspected = false;
+  let chatGptAuthenticated = false;
+  let chatGptComposerReady = false;
   let targetCount = 0;
 
   try {
@@ -186,8 +361,15 @@ export const inspectBrowser = async (options: BrowserManagerOptions = {}): Promi
       cdpReachable = true;
       targetCount = targets.length;
       chatGptTabFound = chatGptTargetFound(targets);
-      if (!chatGptTabFound) {
+      const target = chatGptTarget(targets);
+      if (!target) {
         issues.push("chatgpt_tab_not_found");
+      } else {
+        const page = await inspectChatGptPage(target);
+        chatGptPageInspected = page.pageInspected;
+        chatGptAuthenticated = page.authenticated;
+        chatGptComposerReady = page.composerReady;
+        issues.push(...page.issues);
       }
     }
   } catch {
@@ -202,16 +384,19 @@ export const inspectBrowser = async (options: BrowserManagerOptions = {}): Promi
     ...(state?.pid ? { pid: state.pid } : {}),
     cdpReachable,
     chatGptTabFound,
-    readyForBridge: cdpReachable && chatGptTabFound,
+    chatGptPageInspected,
+    chatGptAuthenticated,
+    chatGptComposerReady,
+    readyForBridge: cdpReachable && chatGptTabFound && chatGptAuthenticated && chatGptComposerReady,
     targetCount,
-    issues
+    issues: Array.from(new Set(issues))
   };
 };
 
 const waitForBrowser = async (options: BrowserManagerOptions): Promise<BrowserStatus> => {
   let latest = await inspectBrowser(options);
 
-  for (let attempt = 0; attempt < 20 && !latest.cdpReachable; attempt += 1) {
+  for (let attempt = 0; attempt < 20 && !latest.readyForBridge && !latest.issues.includes("chatgpt_auth_required"); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     latest = await inspectBrowser(options);
   }

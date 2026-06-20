@@ -296,14 +296,14 @@ It checks:
 - whether the provider adapter is implemented
 - provider access modes such as `agent-bridge`, `api-agent`, and `mcp-connector`
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
-- whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, and ChatGPT tab are ready when `chatgpt-web` is configured
+- whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, ChatGPT tab, authenticated page, and composer are ready when `chatgpt-web` is configured
 - whether configured role models are listed for their providers
 
 ## Browser Manager Commands
 
 `thehood browser start` launches a persistent isolated Chrome profile for ChatGPT Web at the default CDP endpoint `http://127.0.0.1:9222`.
 
-`thehood browser status` reports CDP reachability, profile path, ChatGPT tab presence, and whether the bridge is ready.
+`thehood browser status` reports CDP reachability, profile path, ChatGPT tab presence, authenticated page readiness, composer readiness, and whether the bridge is ready.
 
 `thehood browser stop` stops the Chrome process only when it can verify that the recorded process belongs to the TheHood-managed profile.
 

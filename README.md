@@ -59,6 +59,7 @@ It supports:
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
 - provider access-mode metadata for agent bridges, API agents, and MCP connectors
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
+- ChatGPT Web auth and composer readiness checks before bridge calls are marked ready
 - branded terminal dashboard shell for runtime, role, and browser readiness
 - terminal approval inbox for pending runtime gates
 - terminal run monitor for provider wait, approval/transfer gates, and review ownership lanes
