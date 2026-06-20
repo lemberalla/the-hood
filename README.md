@@ -10,7 +10,7 @@ The core idea is simple:
 - The runtime enforces.
 - Users stay in control.
 
-TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into ChatGPT Pro, Claude Code, OpenAI API, Anthropic API, or local models for any role.
+TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into GPT, ChatGPT Pro, Claude Code, OpenAI API, Anthropic API, or local models for any role. Codex becomes the governed workbench; Claude can second-judge or build; Pro can approve strategy when the stakes justify it.
 
 The first product surface is a CLI plus an MCP server. The macOS menubar app should remain a thin trigger and status surface over the same local runtime.
 
@@ -28,7 +28,7 @@ It supports:
 - agent roster inspection showing role ownership, readiness, and read/edit authority
 - runtime-derived agent board snapshots and dashboard payloads for Codex card-style agent visibility
 - optional repo-local Codex plugin scaffold for TheHood workflow guidance and MCP setup
-- runtime-owned team presets for Codex default, ChatGPT Pro orchestration, and Claude critic setups
+- runtime-owned team presets for Codex default, ChatGPT Pro orchestration, Claude second-judge, Spark plus Sonnet, Claude builder, and high-assurance Pro plus Claude setups
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
 - local-only Pro access preflight so Codex can distinguish runtime autopilot, direct bridge readiness, host-policy blocks, and ChatGPT MCP connector handoff paths
@@ -53,7 +53,7 @@ It supports:
 - read-only model-assisted QA tester lane for missed cases and validation suggestions
 - runtime-owned critic trigger artifacts when QA, verifier, or validation evidence indicates risk
 - runtime-owned revision packet artifacts that route fixable QA, critic, or verifier findings back to the implementer
-- provider config merging that preserves newly added built-in models in stale repo-local configs
+- provider config merging that preserves newly added built-in models and future-facing model aliases in stale repo-local configs
 - deterministic `stub` provider for local loop smoke tests
 - `continue` advances runs through orchestrator, implementer, evidence capture, and verifier phases
 - `loop` keeps advancing a run until terminal state, manual gate, no progress, or a cycle cap
@@ -80,7 +80,17 @@ It supports:
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 - read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
 
-ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet, though OpenAI and Anthropic API key env names are represented in provider config for future adapters. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses. Codex CLI and Claude Code model names support a config passthrough so users can select newly available CLI model aliases without waiting for a TheHood release.
+ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet, though OpenAI and Anthropic API key env names are represented in provider config for future adapters. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses. Codex CLI discovers live model slugs, while ChatGPT Web and Claude Code expose configured/custom model passthrough so users can select newly available model aliases without waiting for a TheHood release.
+
+Users can choose model owners per role:
+
+```bash
+node dist/cli/main.js roles set implementer claude-code:sonnet --repo .
+node dist/cli/main.js roles set verifier codex-cli:spark --repo .
+node dist/cli/main.js roles set critic claude-code:fable --repo .
+node dist/cli/main.js teams apply spark-plus-sonnet --repo .
+node dist/cli/main.js teams apply pro-claude-high-assurance --repo .
+```
 
 Users can choose between two ChatGPT Pro paths:
 
@@ -195,6 +205,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Testing And Verification](docs/TESTING_AND_VERIFICATION.md)
 - [Security And Privacy](docs/SECURITY_AND_PRIVACY.md)
 - [Product Strategy](docs/product/README.md)
+- [Model Selection](docs/product/model-selection.md)
 - [Research Notes](docs/RESEARCH_NOTES.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Glossary](docs/GLOSSARY.md)

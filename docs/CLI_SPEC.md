@@ -20,9 +20,16 @@ thehood agent-board
 thehood agent-board --artifact --json
 thehood teams
 thehood teams apply pro-orchestrator
+thehood teams apply claude-second-judge
+thehood teams apply spark-plus-sonnet
+thehood teams apply claude-builder
+thehood teams apply pro-claude-high-assurance
 thehood roles
 thehood roles set orchestrator codex-cli:default
 thehood roles set orchestrator chatgpt-web:chatgpt-pro
+thehood roles set implementer claude-code:sonnet
+thehood roles set verifier claude-code:sonnet
+thehood roles set critic claude-code:fable
 thehood run "Implement the requested change" --repo .
 thehood run "Implement the requested change" --repo . --loop
 thehood plan "Design the feature" --repo .
@@ -85,7 +92,7 @@ Role mapping can be set globally, per repo, or per run.
 
 `thehood agent-board [run-id] --repo .` prints a runtime-derived agent board for Codex card-style visibility. Without a run id, the board is a repo-scope view over the configured roster and health. With a run id, each card can include the current crew/review/responsibility lane, blocking state, sidecar status, and bounded artifact/event/handoff refs for that run. Add `--artifact --json` to return `{ "board": ..., "artifact": ... }`, where `artifact` is a bounded dashboard manifest and snapshot suitable for Codex app artifact rendering. The board and dashboard payload are display guidance only: they do not grant tools, schedule agents, satisfy gates, or approve work.
 
-`thehood teams --repo .` lists runtime-owned role presets. `thehood teams apply codex-default|pro-orchestrator|claude-critic --repo .` writes that preset into repo config through the same role invariants as manual role assignment. Presets are convenience maps, not new authority: provider readiness, invocation approvals, transfer gates, and verifier separation still apply.
+`thehood teams --repo .` lists runtime-owned role presets. `thehood teams apply codex-default|pro-orchestrator|claude-critic|claude-second-judge|spark-plus-sonnet|claude-builder|pro-claude-high-assurance --repo .` writes that preset into repo config through the same role invariants as manual role assignment. Presets are convenience maps, not new authority: provider readiness, invocation approvals, transfer gates, and verifier separation still apply.
 
 Codex is the product default:
 
@@ -97,7 +104,7 @@ thehood roles set verifier codex-cli:spark --repo .
 thehood roles set critic codex-cli:spark --repo .
 ```
 
-Users can tune every role, including orchestrator. The Codex CLI adapter discovers the current catalog with `codex debug models`; for example, `codex-cli:gpt-5.5` can be used when that slug is available in the user's Codex CLI.
+Users can tune every role, including orchestrator. The Codex CLI adapter discovers the current catalog with `codex debug models`; for example, `codex-cli:gpt-5.5` can be used when that slug is available in the user's Codex CLI. Claude Code and ChatGPT Web support configured/custom model passthrough, so users can choose aliases such as `claude-code:sonnet`, `claude-code:fable`, `claude-code:mythos`, or `chatgpt-web:configured` when those models are available through the user's local provider setup.
 
 ```bash
 thehood run "Add export flow" \
@@ -154,7 +161,7 @@ Initial config shape:
   "providers": {
     "chatgpt-web": {
       "enabled": true,
-      "models": ["chatgpt-pro"],
+      "models": ["chatgpt-pro", "configured"],
       "accessModes": ["agent-bridge", "mcp-connector"],
       "defaultAccessMode": "agent-bridge",
       "browserProfile": "default"
@@ -168,7 +175,7 @@ Initial config shape:
     },
     "anthropic-api": {
       "enabled": false,
-      "models": ["claude-opus", "claude-sonnet"],
+      "models": ["configured", "claude-opus", "claude-sonnet", "claude-haiku", "opus", "sonnet", "haiku", "mythos", "fable"],
       "accessModes": ["api-agent"],
       "defaultAccessMode": "api-agent",
       "apiKeyEnv": "ANTHROPIC_API_KEY"
@@ -181,7 +188,7 @@ Initial config shape:
     },
     "claude-code": {
       "enabled": true,
-      "models": ["default", "configured"],
+      "models": ["default", "configured", "sonnet", "opus", "haiku", "mythos", "fable"],
       "accessModes": ["agent-bridge"],
       "defaultAccessMode": "agent-bridge"
     },
@@ -287,7 +294,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. When `chatgpt-web` is the provider and local git reports a clean GitHub checkout whose `HEAD` matches the tracked upstream ref, the runtime can attach a refs-only `remote_context` artifact and direct ChatGPT Web to use its GitHub connector at that exact commit. Otherwise, the runtime captures a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact before local repo context bodies are sent back to the provider. Manual policy pauses at an approval gate; `auto-low-risk` and `autopilot` may auto-approve bounded non-secret manifests and record the approval event before sending. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
-When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. After the command exits, TheHood writes redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact so status can show which local role command actually ran and where to inspect its output. `codex-cli` models are discovered from `codex debug models`; friendly names such as `spark` resolve against that live catalog, and `doctor` reports `model_not_available:<model>` when a custom assignment is not supported by the current CLI/account.
+When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. After the command exits, TheHood writes redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact so status can show which local role command actually ran and where to inspect its output. `codex-cli` models are discovered from `codex debug models`; friendly names such as `spark` resolve against that live catalog, and `doctor` reports `model_not_available:<model>` when a custom assignment is not supported by the current CLI/account. `claude-code` model names such as `sonnet`, `fable`, and `mythos` are passthrough aliases; TheHood records them and passes explicit non-default names to the user's local Claude CLI. `configured` uses the local CLI default for Codex and Claude and is not sent as a literal model name.
 
 OpenAI and Anthropic API provider configs include `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` env names for future API adapters. Those providers are disabled and not implemented until their adapters are wired; use Codex CLI, ChatGPT Web, Claude Code, or `stub` for current runs.
 
@@ -304,6 +311,7 @@ It checks:
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
 - whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, ChatGPT tab, authenticated page, and composer are ready when `chatgpt-web` is configured
 - whether configured role models are listed for their providers and, for `codex-cli`, whether the live `codex debug models` catalog can resolve them
+- provider model policy: `listed`, `discovered`, or `passthrough`
 
 ## Browser Manager Commands
 
@@ -338,7 +346,7 @@ thehood approvals policy set mode manual|auto-low-risk|autopilot --repo .
 thehood approvals policy set external-transfers manual|auto-low-risk --repo .
 thehood config set max-iterations 8 --repo .
 thehood config set fanout-max-items 4 --repo .
-thehood teams apply codex-default|pro-orchestrator|claude-critic --repo .
+thehood teams apply codex-default|pro-orchestrator|claude-critic|claude-second-judge|spark-plus-sonnet|claude-builder|pro-claude-high-assurance --repo .
 thehood roles set verifier codex-cli:spark --repo .
 thehood browser status
 thehood browser start

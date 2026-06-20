@@ -84,7 +84,7 @@ Implemented tools:
 ### `thehood_doctor`
 
 Inspect provider and role readiness without invoking model calls.
-The output includes `runtime.capabilities` so Codex can detect stale MCP server processes after local development builds.
+The output includes `runtime.capabilities` so Codex can detect stale MCP server processes after local development builds. Provider entries include model policy, such as `listed`, `discovered`, or `passthrough`, so Codex can tell whether a model name came from a fixed list, a live catalog, or a user-configured provider passthrough.
 
 Input:
 
@@ -159,6 +159,32 @@ Input:
     "qa": "provider:model",
     "verifier": "provider:model",
     "critic": "provider:model"
+  }
+}
+```
+
+Examples:
+
+```json
+{
+  "repo_path": "/path/to/repo",
+  "role_mapping": {
+    "implementer": "claude-code:sonnet",
+    "qa": "codex-cli:spark",
+    "verifier": "claude-code:sonnet",
+    "critic": "claude-code:fable"
+  }
+}
+```
+
+```json
+{
+  "repo_path": "/path/to/repo",
+  "role_mapping": {
+    "orchestrator": "chatgpt-web:chatgpt-pro",
+    "implementer": "codex-cli:default",
+    "verifier": "claude-code:sonnet",
+    "critic": "claude-code:sonnet"
   }
 }
 ```
@@ -242,7 +268,7 @@ When `auto_loop` is true, the created run is immediately advanced through the he
 
 ### `thehood_consult`
 
-Run one read-only guest role immediately. This is the fast path for Codex chat to bring in Codex Spark, Pro, Claude, or another agent for planning, research, QA, or critique.
+Run one read-only guest role immediately. This is the fast path for Codex chat to bring in Codex Spark, Pro, Claude, or another agent for planning, research, QA, second judgment, or critique.
 
 Input:
 
@@ -286,6 +312,17 @@ QA tester example:
   "repo_path": "/path/to/repo",
   "role": "qa",
   "agent": "codex-cli:spark"
+}
+```
+
+Claude second-judge example:
+
+```json
+{
+  "goal": "Challenge the current implementation plan and call out risks before we build.",
+  "repo_path": "/path/to/repo",
+  "role": "critic",
+  "agent": "claude-code:sonnet"
 }
 ```
 
@@ -583,7 +620,7 @@ Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
 2. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex or when a previous Pro call was rejected by host policy.
-3. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator or Claude as critic/verifier.
-4. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic or QA tester; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
+3. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator, Claude as critic/verifier, Claude as implementer, or Spark plus Sonnet role separation.
+4. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic, QA tester, or Claude second judge; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
 5. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
 6. Call `thehood_continue` with `approval: "approve"`, `approval: "reject"`, or `approval: "revise"` only for an active manual approval gate after the user authorizes that gate.

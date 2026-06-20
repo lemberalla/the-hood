@@ -66,6 +66,16 @@ When the runtime supplies `context.criticTrigger` to a critic, the provider shou
 
 The product default is Codex-first: `codex-cli:default` for orchestration and implementation, and `codex-cli:spark` for QA, verification, and critique. Users can replace any role assignment, including orchestrator, with ChatGPT Web, Claude Code, API providers once implemented, or future CLI model aliases.
 
+Provider model policy is visible in `doctor` and `models` output:
+
+| Policy | Meaning |
+| --- | --- |
+| `listed` | The provider accepts only configured model names. |
+| `discovered` | The provider exposes a live model catalog and the runtime can mark unavailable aliases. |
+| `passthrough` | The provider accepts custom model names because the user's local CLI, bridge, connector, or API account owns model availability. |
+
+The `configured` model means "use the provider's configured or default selection" for local CLI providers. Explicit non-default names such as `sonnet`, `fable`, `mythos`, or a live Codex model slug remain role assignments and are passed to the provider when supported.
+
 ## Local Command Runner
 
 The local command runner is shared by CLI-backed adapters.
@@ -119,6 +129,7 @@ Current implementation:
 
 - Provider id: `chatgpt-web`
 - Default model: `chatgpt-pro`
+- Model policy: `passthrough`
 - Requires `THEHOOD_CHATGPT_WEB_COMMAND`
 - `thehood doctor` checks command executability, explicit model confirmation, Chrome DevTools reachability, whether a ChatGPT tab is visible, and whether the page is authenticated with a ready composer.
 - Sends the runtime directive as stdin.
@@ -212,6 +223,7 @@ Best roles:
 Notes:
 
 - Current implementation status: provider config exists, but the adapter is not wired yet.
+- Model policy: `passthrough`, but unavailable until the adapter is implemented and enabled.
 - Default API key env name: `OPENAI_API_KEY`.
 - Prefer structured output features when available.
 - Keep raw provider responses out of public logs if they contain sensitive context.
@@ -232,6 +244,7 @@ Best roles:
 Notes:
 
 - Current implementation status: provider config exists, but the adapter is not wired yet.
+- Model policy: `passthrough`, but unavailable until the adapter is implemented and enabled.
 - Default API key env name: `ANTHROPIC_API_KEY`.
 - Claude can be especially useful as an independent reviewer because it brings a different model family into the loop.
 - It still must obey the same runtime permissions.
@@ -264,6 +277,7 @@ Rules:
 - Write redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact after the local command exits so status can show the role, provider/model, command args, workspace mode, sandbox, exit code, timeout state, output refs, parse status, and isolated patch ref when present.
 - Do not pass dangerous sandbox bypass flags.
 - Built-in friendly assignments are `default`, `spark`, and `configured`, but the active Codex model catalog comes from `codex debug models`. The runtime stores only a sanitized catalog with model slugs, display names, visibility, and reasoning/speed metadata. Friendly assignments such as `spark` resolve against the live catalog before TheHood passes `--model` to Codex CLI; unsupported custom strings are reported by `doctor` before a run.
+- Model policy: `discovered`. `configured` uses the local Codex CLI default and is not passed as a literal model name.
 
 ## Claude Code Adapter
 
@@ -286,7 +300,8 @@ Rules:
 - Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--json-schema`.
 - Do not pass permission bypass flags.
-- Built-in models are `default` and `configured`. `configured` is a wildcard for user-selected Claude Code aliases such as Sonnet or Opus when available in the user's local Claude CLI.
+- Model policy: `passthrough`.
+- Built-in models are `default`, `configured`, `sonnet`, `opus`, `haiku`, `mythos`, and `fable`. `configured` uses the local Claude CLI default and is not passed as a literal model name. Explicit aliases such as `sonnet`, `fable`, or `mythos` are passed through to the user's local Claude CLI.
 
 ## Local Model Adapter
 

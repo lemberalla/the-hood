@@ -55,15 +55,16 @@ Open question:
 
 - should reconciliation attach to the original plan run, create a child run, or both?
 
-## First Provider Adapters
+## Remaining Provider Adapters
 
-Recommended order:
+Current status:
 
-1. Codex CLI adapter
-2. Anthropic API adapter
-3. OpenAI API adapter
-4. ChatGPT Web adapter as experimental
-5. Claude Code adapter
+1. Codex CLI adapter is implemented through the local command runner.
+2. Claude Code adapter is implemented through the local command runner.
+3. ChatGPT Web adapter is implemented as an experimental user-authenticated bridge.
+4. OpenAI API adapter remains future work.
+5. Anthropic API adapter remains future work.
+6. Local model adapter remains future work.
 
 ## First Runtime Validation Strategy
 

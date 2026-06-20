@@ -165,7 +165,15 @@ roles:
     model: spark
 ```
 
-This is the product default. Users can tune any role, including orchestrator, through repo config or CLI role assignment. For example, a user may choose `chatgpt-web:chatgpt-pro` for Pro planning, `claude-code:sonnet` for critique, or a future Codex alias such as `codex-cli:fable` when that model is available in their local CLI.
+This is the product default. Users can tune any role, including orchestrator, through repo config or CLI role assignment. For example, a user may choose `chatgpt-web:chatgpt-pro` for Pro planning, `claude-code:sonnet` for critique, `claude-code:fable` for a future Claude Code alias, or a future Codex alias such as `codex-cli:fable` when that model is available in their local CLI.
+
+Provider model policy is explicit:
+
+- `listed` providers accept only configured model names.
+- `discovered` providers expose live catalogs when the local tool supports discovery.
+- `passthrough` providers allow custom model names because the user's bridge, CLI, connector, or API account is the source of truth.
+
+This keeps TheHood from hardcoding stale model menus while still letting `doctor` flag unsupported live-discovered models such as a missing Codex alias.
 
 Providers can expose multiple access modes:
 
@@ -179,7 +187,7 @@ The runtime contract is the same regardless of access mode. The mode changes the
 
 Repo-local config overlays must not hide newly added built-in provider models or access modes. The runtime merges built-in provider definitions with `.thehood/config.json` so stale local configs can keep user choices while still seeing new built-in capabilities such as `codex-cli:spark` and `stub:qa`.
 
-Team presets are runtime-owned role-map templates, not separate loops. Applying a preset writes normal repo role assignments such as Codex default, ChatGPT Pro orchestrator, or Claude critic; doctor, provider readiness, approval gates, and role invariants still apply exactly as they do for manual role assignment.
+Team presets are runtime-owned role-map templates, not separate loops. Applying a preset writes normal repo role assignments such as Codex default, ChatGPT Pro orchestrator, Claude second judge, Spark plus Sonnet, Claude builder, or Pro plus Claude high assurance; doctor, provider readiness, approval gates, and role invariants still apply exactly as they do for manual role assignment.
 
 Same-run summons use the same provider router and role contracts. CLI and MCP can request a read-only planner, researcher, QA tester, verifier, or critic with a brief and optional one-call provider assignment, but the runtime still builds the directive, records the handoff, enforces approval gates, validates the response, and stores artifacts on the run. Fan-out composes several bounded summons and records a group artifact; it does not move orchestration logic into CLI or MCP.
 

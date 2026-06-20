@@ -31,6 +31,7 @@ Rules:
 - Do not include secrets in model context.
 - Redact environment variables by default.
 - Store provider credentials using OS keychain or provider CLI config when possible.
+- Treat custom provider:model aliases as user preference only; they do not bypass provider access controls, command readiness, approval gates, or external transfer review.
 - Require explicit user approval before invoking model-backed providers for read-only repo work.
 - Require explicit user approval before sending runtime-captured repo context to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.
 - Require explicit user approval before sending runtime-captured progress, memory, or reconciliation packets to browser or API model providers unless the user-configured external transfer policy auto-approves a bounded non-secret-risk manifest.

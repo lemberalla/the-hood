@@ -6,16 +6,18 @@ Configuration changes how TheHood chooses providers and when it escalates. It do
 
 Users and repos may configure:
 
-- default Pro usage mode
+- default agent usage mode
 - role-to-provider assignments
-- Pro escalation thresholds
-- automatic Pro call budget, frequency, and context size
-- phases that can use Pro automatically
+- model aliases and passthrough model names for supported providers
+- Claude second-judge, Claude builder, Pro-led, or high-assurance team presets
+- Pro and Claude escalation thresholds
+- automatic provider call budget, frequency, and context size
+- phases that can use Claude or Pro automatically
 - evidence redaction preferences
 - path sensitivity labels
 - external transfer policy within runtime limits
-- user-facing verbosity for Pro explanations
-- whether Pro usage appears as a banner, timeline event, or compact audit entry
+- user-facing verbosity for model-use explanations
+- whether provider usage appears as a banner, timeline event, or compact audit entry
 
 ## Non-Configurable Runtime Enforcement
 
@@ -31,12 +33,12 @@ These are runtime invariants:
 - Implementer and verifier authority remain separate.
 - Runtime-captured command evidence beats model summaries.
 - Provider choice cannot make a protected path unprotected.
+- Model preference cannot let an agent verify its own implementation.
 - Pro cannot bypass Codex or tenant host policy.
 - Connector mode is a safe handoff path, not a host-policy bypass.
 
 ## Final Approval Boundary
 
-Pro can be configured as the final strategic approver for a product or architecture slice. That means Pro gives the last model-backed judgment on direction and quality.
+Pro can be configured as the final strategic approver for a product or architecture slice. Claude can be configured as the independent second judge or verifier before that final strategic approval. That means the selected model gives the last model-backed judgment for its assigned role.
 
 Final strategic approval is not final runtime authority. The runtime still decides whether required gates are satisfied and whether evidence is complete.
-

@@ -48,11 +48,11 @@ The roadmap is documentation-first, runtime-second, UI-last.
 
 ## Phase 4: Provider Adapters
 
+- Codex CLI adapter with live model discovery
+- Claude Code adapter with configured/custom model passthrough
+- ChatGPT Web adapter as experimental
 - OpenAI API adapter
 - Anthropic API adapter
-- Codex CLI adapter
-- Claude Code adapter
-- ChatGPT Web adapter as experimental
 - Local model adapter
 
 ## Phase 5: Worktree And Verification Gates
