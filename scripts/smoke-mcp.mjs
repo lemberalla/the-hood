@@ -278,6 +278,10 @@ assert.equal(modelAccessContent.codex_host_policy_boundary.status, "outside_theh
 assert.ok(modelAccessContent.approval_packet.copy.includes("claude-code:opus"));
 assert.ok(modelAccessContent.approval_packet.copy.includes("codex-cli:gpt-5.5"));
 assert.ok(modelAccessContent.approval_packet.copy.includes("repo context"));
+assert.ok(modelAccessContent.approval_packet.copyable_text_block.startsWith("```text\n"));
+assert.ok(modelAccessContent.approval_packet.copyable_text_block.includes(modelAccessContent.approval_packet.copy));
+assert.ok(modelAccessContent.approval_packet.copyable_text_block.endsWith("\n```"));
+assert.ok(modelAccessContent.approval_packet.display_hint.includes("fenced text block"));
 assert.ok(!modelAccessContent.approval_packet.copy.includes(".."));
 assert.ok(
   modelAccessContent.destinations.some((destination) => destination.assignment === "claude-code:opus"),

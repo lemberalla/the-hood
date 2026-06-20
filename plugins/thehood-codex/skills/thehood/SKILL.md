@@ -33,7 +33,7 @@ TheHood is a local runtime. Models and Codex plugin skills may suggest work, but
 - Do not give verifier or critic roles edit tools.
 - Do not treat an agent board card as proof that validation, review, or approval passed. Read the referenced artifacts, events, handoffs, and command evidence.
 - Do not send secrets, browser profiles, provider tokens, private run logs, or unrelated repo content outside the local runtime.
-- If Codex rejects a direct model-backed call as an external disclosure, do not ask the user to type a fresh long approval phrase. Present the `thehood_model_access` packet approval copy, or switch to no-repo-context or connector mode.
+- If Codex rejects a direct model-backed call as an external disclosure, do not ask the user to type a fresh long approval phrase. Present the `thehood_model_access` packet approval copy in a fenced `text` block, preferably using `approval_packet.copyable_text_block`, or switch to no-repo-context or connector mode.
 - If Codex rejects a direct `chatgpt-web` call as an external disclosure, do not ask for the same approval again and do not try to route around the host policy. Call `thehood_pro_access` and use ChatGPT MCP connector mode or an abstract no-repo-context prompt.
 
 ## Installation Guidance

@@ -101,6 +101,9 @@ const truncateText = (value: string, maxLength = compactTextLimit): string =>
 const trimTerminalPunctuation = (value: string): string =>
   value.replace(/[.!?]+$/g, "");
 
+const copyableTextBlock = (value: string): string =>
+  `\`\`\`text\n${value}\n\`\`\``;
+
 const jsonObjectValue = (value: JsonValue | undefined): JsonObject | undefined =>
   value !== undefined && value !== null && typeof value === "object" && !Array.isArray(value)
     ? value
@@ -1283,6 +1286,9 @@ const createModelAccessTool = (): McpTool => ({
         approval_packet: {
           id: "thehood_model_access",
           copy: approvalCopy,
+          copyable_text_block: copyableTextBlock(approvalCopy),
+          display_hint:
+            "When asking the user for this approval in Codex chat, render copyable_text_block as a fenced text block instead of inline prose.",
           summary:
             "Approve this packet once if the host requires explicit disclosure approval; otherwise use a no-repo-context or connector handoff path."
         },
