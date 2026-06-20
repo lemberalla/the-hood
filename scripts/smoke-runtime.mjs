@@ -504,7 +504,7 @@ await fs.writeFile(
     "  const nonce = input.match(/nonce\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-nonce';",
     "  const ack = { runId, nonce, responseField: 'thehoodDirectiveAck' };",
     "  const payloads = {",
-    "    decision: { action: 'complete', reason: 'fake codex smoke response', thehoodDirectiveAck: ack },",
+    "    decision: { action: 'complete', reason: 'fake codex smoke response', evidenceRefs: ['smoke-evidence-ref'], artifactRefs: ['smoke-artifact-ref'], thehoodDirectiveAck: ack },",
     "    critiqueResult: { verdict: 'acceptable', blockingConcerns: [], nonBlockingConcerns: ['fake codex review path exercised'], thehoodDirectiveAck: ack },",
     "    verificationResult: { verdict: 'approve', summary: 'fake codex verified', failedCriteria: [], risks: [], nextAction: 'complete', thehoodDirectiveAck: ack },",
     "    qaResult: { verdict: 'pass', summary: 'fake codex QA passed', suggestedCommands: [], risks: [], thehoodDirectiveAck: ack }",
@@ -974,6 +974,67 @@ assert.ok(localAgentStatusText.stdout.includes("local agent executions:"));
 assert.ok(localAgentStatusText.stdout.includes("critic codex-cli:default"));
 assert.ok(localAgentStatusText.stdout.includes("stdout="));
 assert.ok(localAgentStatusText.stdout.includes("stderr="));
+
+const implementCompleteRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-implement-complete-smoke-"));
+await runCli(["init", "--repo", implementCompleteRepoPath]);
+const implementCompleteRun = JSON.parse(
+  (await runCli([
+    "run",
+    "exercise implementation completion from orchestrator evidence",
+    "--repo",
+    implementCompleteRepoPath,
+    "--orchestrator",
+    "codex-cli:default",
+    "--implementer",
+    "stub:implementer",
+    "--qa",
+    "stub:qa",
+    "--verifier",
+    "stub:verifier",
+    "--critic",
+    "stub:critic",
+    "--json"
+  ])).stdout
+);
+assert.equal(implementCompleteRun.state, "awaiting_approval");
+await runCli([
+  "approve",
+  implementCompleteRun.runId,
+  "--repo",
+  implementCompleteRepoPath,
+  "--reason",
+  "smoke-approved"
+]);
+const implementCompleteContinue = JSON.parse(
+  (await runCli(["continue", implementCompleteRun.runId, "--repo", implementCompleteRepoPath, "--json"])).stdout
+);
+assert.equal(implementCompleteContinue.run.state, "completed");
+assert.equal(implementCompleteContinue.providerResponses.length, 3);
+assert.equal(implementCompleteContinue.providerResponses[0].data.decision.action, "complete");
+assert.ok(
+  !implementCompleteContinue.run.handoffs.some(
+    (handoff) => handoff.kind === "agent_handoff" && handoff.toRole === "implementer"
+  ),
+  "orchestrator completion with evidence should not enter the implementer lane"
+);
+assert.ok(
+  implementCompleteContinue.run.handoffs.some(
+    (handoff) =>
+      handoff.kind === "agent_handoff" &&
+      handoff.fromRole === "orchestrator" &&
+      handoff.toRole === "verifier"
+  ),
+  "orchestrator completion with evidence should hand off to verifier"
+);
+const implementCompleteFinalReportArtifact = implementCompleteContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+);
+assert.ok(implementCompleteFinalReportArtifact, "orchestrator-completed implementation run should attach a final report");
+const implementCompleteFinalReport = JSON.parse(
+  await fs.readFile(implementCompleteFinalReportArtifact.ref, "utf8")
+);
+assert.equal(implementCompleteFinalReport.completedBy.role, "verifier");
+
 await runCli(["roles", "set", "verifier", "codex-cli:default", "--repo", repoPath], { expectExitCode: 6 });
 const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
 const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));

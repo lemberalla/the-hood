@@ -306,6 +306,11 @@ const decisionBooleanField = (decision: JsonObject | undefined, field: string): 
   return typeof value === "boolean" ? value : undefined;
 };
 
+const decisionStringArrayField = (decision: JsonObject | undefined, field: string): string[] => {
+  const value = decision?.[field];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+};
+
 const runtimeRoleFromDecisionField = (
   decision: JsonObject | undefined,
   field: string
@@ -1929,6 +1934,123 @@ const advanceOneStep = async (
         response: result.response,
         advanced: true,
         stopReason: stopped.stopReason
+      };
+    }
+
+    const decision = decisionFromResponse(result.response);
+    const action = actionFromResponse(result.response);
+
+    if (action === "complete") {
+      const evidenceRefs = [
+        ...decisionStringArrayField(decision, "evidenceRefs"),
+        ...decisionStringArrayField(decision, "artifactRefs")
+      ];
+
+      if (evidenceRefs.length === 0) {
+        const approvalReason = "Orchestrator requested implementation completion without evidence refs.";
+        const gated = await updateRun(
+          result.run,
+          {
+            state: "awaiting_approval",
+            approvalRequired: true,
+            approvalReason
+          },
+          [
+            createEvent("approval_required", approvalReason, {
+              role: "orchestrator",
+              reason: "orchestrator_complete_without_evidence"
+            })
+          ],
+          [approvalGateHandoff(result.run, {
+            reason: approvalReason,
+            role: "orchestrator",
+            gate: "orchestrator_complete_without_evidence"
+          })]
+        );
+
+        return {
+          run: gated,
+          response: result.response,
+          advanced: true,
+          stopReason: approvalReason
+        };
+      }
+
+      const next = await updateRun(
+        result.run,
+        { state: "verifying" },
+        [
+          createEvent("state_changed", "Run entered verification from orchestrator completion.", {
+            reason: "orchestrator_complete",
+            evidenceRefCount: evidenceRefs.length
+          })
+        ],
+        [agentHandoff(result.run, {
+          reason: "Orchestrator completed implementation orchestration with evidence refs.",
+          stateAfter: "verifying",
+          fromRole: "orchestrator",
+          toRole: "verifier"
+        })]
+      );
+
+      return {
+        run: next,
+        response: result.response,
+        advanced: true,
+        stopReason: "Orchestrator completed implementation orchestration with evidence refs; entering verification."
+      };
+    }
+
+    if (action === "request_approval") {
+      const approvalReason =
+        typeof decision?.reason === "string" ? decision.reason : "Orchestrator requested approval.";
+      const gated = await updateRun(
+        result.run,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [createEvent("approval_required", approvalReason, {
+          role: "orchestrator",
+          reason: "provider_requested_approval"
+        })],
+        [approvalGateHandoff(result.run, {
+          reason: approvalReason,
+          role: "orchestrator",
+          gate: "provider_requested_approval"
+        })]
+      );
+
+      return {
+        run: gated,
+        response: result.response,
+        advanced: true,
+        stopReason: approvalReason
+      };
+    }
+
+    if (action === "abort") {
+      const stopReason =
+        typeof decision?.reason === "string" ? decision.reason : "Orchestrator aborted implementation orchestration.";
+      const aborted = await updateRun(
+        result.run,
+        {
+          state: "aborted",
+          approvalRequired: false,
+          stopReason
+        },
+        [createEvent("run_aborted", stopReason, {
+          role: "orchestrator",
+          reason: "orchestrator_abort"
+        })]
+      );
+
+      return {
+        run: aborted,
+        response: result.response,
+        advanced: true,
+        stopReason
       };
     }
 
