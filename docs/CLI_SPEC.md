@@ -91,7 +91,7 @@ thehood roles set verifier codex-cli:spark --repo .
 thehood roles set critic codex-cli:spark --repo .
 ```
 
-Users can tune every role, including orchestrator. Provider model strings are passed to CLI-backed adapters; for example, `codex-cli:fable` can be used if that alias is available in the user's Codex CLI.
+Users can tune every role, including orchestrator. The Codex CLI adapter discovers the current catalog with `codex debug models`; for example, `codex-cli:gpt-5.5` can be used when that slug is available in the user's Codex CLI.
 
 ```bash
 thehood run "Add export flow" \
@@ -281,7 +281,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 For read-only `plan`, `research`, and `review` runs, an orchestrator or planner can request `action: "delegate"` before enough repo evidence exists. When `chatgpt-web` is the provider and local git reports a clean GitHub checkout whose `HEAD` matches the tracked upstream ref, the runtime can attach a refs-only `remote_context` artifact and direct ChatGPT Web to use its GitHub connector at that exact commit. Otherwise, the runtime captures a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact before local repo context bodies are sent back to the provider. Manual policy pauses at an approval gate; `auto-low-risk` and `autopilot` may auto-approve bounded non-secret manifests and record the approval event before sending. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
-When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. After the command exits, TheHood writes redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact so status can show which local role command actually ran and where to inspect its output. CLI-backed providers list `configured` as a model wildcard, so `thehood doctor` accepts custom model aliases and the provider CLI remains responsible for rejecting unavailable models at execution time.
+When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. After the command exits, TheHood writes redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact so status can show which local role command actually ran and where to inspect its output. `codex-cli` models are discovered from `codex debug models`; friendly names such as `spark` resolve against that live catalog, and `doctor` reports `model_not_available:<model>` when a custom assignment is not supported by the current CLI/account.
 
 OpenAI and Anthropic API provider configs include `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` env names for future API adapters. Those providers are disabled and not implemented until their adapters are wired; use Codex CLI, ChatGPT Web, Claude Code, or `stub` for current runs.
 
@@ -297,7 +297,7 @@ It checks:
 - provider access modes such as `agent-bridge`, `api-agent`, and `mcp-connector`
 - whether local CLI commands such as `codex` and `claude` are available on `PATH`
 - whether the ChatGPT Web bridge command, model confirmation guard, Chrome DevTools endpoint, ChatGPT tab, authenticated page, and composer are ready when `chatgpt-web` is configured
-- whether configured role models are listed for their providers
+- whether configured role models are listed for their providers and, for `codex-cli`, whether the live `codex debug models` catalog can resolve them
 
 ## Browser Manager Commands
 

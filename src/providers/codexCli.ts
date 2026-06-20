@@ -1,4 +1,5 @@
 import { createLocalCommandProvider } from "./localCommand.js";
+import { codexCliCommand, resolveCodexCliModel } from "./codexCliModels.js";
 import type { LocalAgentCommandContext } from "./localCommand.js";
 import type { AgentRequest } from "./types.js";
 
@@ -20,7 +21,7 @@ export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentComm
   ];
 
   if (request.assignment.model !== "default") {
-    args.push("--model", request.assignment.model);
+    args.push("--model", resolveCodexCliModel(request.assignment.model));
   }
 
   args.push("-");
@@ -29,6 +30,8 @@ export const buildCodexCliArgs = (request: AgentRequest, context: LocalAgentComm
 
 export const codexCliProvider = createLocalCommandProvider(
   "codex-cli",
-  process.env.THEHOOD_CODEX_COMMAND ?? "codex",
+  codexCliCommand(),
   buildCodexCliArgs
 );
+
+export { resolveCodexCliModel };

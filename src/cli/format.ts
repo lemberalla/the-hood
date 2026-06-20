@@ -97,7 +97,10 @@ export const formatProviders = (providers: ProviderDescriptor[]): string =>
   providers
     .map((provider) => {
       const state = provider.enabled ? "enabled" : "disabled";
-      return `${provider.id} (${state}, ${provider.defaultAccessMode}): ${provider.models.join(", ")} [${provider.accessModes.join(", ")}]`;
+      const discovery = provider.modelDiscovery
+        ? ` discovery=${provider.modelDiscovery.status}:${provider.modelDiscovery.models.length}`
+        : "";
+      return `${provider.id} (${state}, ${provider.defaultAccessMode}${discovery}): ${provider.models.join(", ")} [${provider.accessModes.join(", ")}]`;
     })
     .join("\n");
 
@@ -109,13 +112,17 @@ export const formatDoctorReport = (report: RuntimeHealthReport): string => [
   ...report.providers.map((provider) => {
     const state = provider.issues.length > 0 ? provider.issues.join(", ") : "ready";
     const command = provider.command ? ` command=${provider.command}` : "";
-    return `  ${provider.id}: ${state} modes=${provider.accessModes.join(", ")} default=${provider.defaultAccessMode}${command}`;
+    const discovery = provider.modelDiscovery
+      ? ` modelDiscovery=${provider.modelDiscovery.status}:${provider.modelDiscovery.models.length}`
+      : "";
+    return `  ${provider.id}: ${state} modes=${provider.accessModes.join(", ")} default=${provider.defaultAccessMode}${command}${discovery}`;
   }),
   "",
   "roles:",
   ...report.roles.map((role) => {
     const state = role.issues.length > 0 ? role.issues.join(", ") : "ready";
-    return `  ${role.role}: ${formatRoleAssignment(role.assignment)} ${state}`;
+    const resolved = role.resolvedModel ? ` resolved=${role.resolvedModel}` : "";
+    return `  ${role.role}: ${formatRoleAssignment(role.assignment)} ${state}${resolved}`;
   })
 ].join("\n");
 

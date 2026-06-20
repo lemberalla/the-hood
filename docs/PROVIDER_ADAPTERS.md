@@ -263,7 +263,7 @@ Rules:
 - Pass the generated schema through `--output-schema`.
 - Write redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact after the local command exits so status can show the role, provider/model, command args, workspace mode, sandbox, exit code, timeout state, output refs, parse status, and isolated patch ref when present.
 - Do not pass dangerous sandbox bypass flags.
-- Built-in models are `default`, `spark`, and `configured`. `configured` is a wildcard for user-selected CLI aliases such as a future `fable`; TheHood passes non-default model names through with `--model`.
+- Built-in friendly assignments are `default`, `spark`, and `configured`, but the active Codex model catalog comes from `codex debug models`. The runtime stores only a sanitized catalog with model slugs, display names, visibility, and reasoning/speed metadata. Friendly assignments such as `spark` resolve against the live catalog before TheHood passes `--model` to Codex CLI; unsupported custom strings are reported by `doctor` before a run.
 
 ## Claude Code Adapter
 

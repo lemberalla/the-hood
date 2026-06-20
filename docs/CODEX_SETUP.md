@@ -67,6 +67,8 @@ npm run smoke:codex-config -- --config ~/.codex/config.toml --repo /path/to/repo
 
 For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, a ChatGPT tab is visible, the page is authenticated, and the composer is ready. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, `chatgpt_tab_not_found`, `chatgpt_auth_required`, `chatgpt_composer_not_ready`, and `chatgpt_page_uninspectable`.
 
+For `codex-cli`, `doctor` asks the installed Codex CLI for its current model catalog with `codex debug models`. TheHood keeps only sanitized model metadata, resolves friendly assignments such as `codex-cli:spark` against that live catalog, and reports `model_not_available:<model>` when a custom role assignment is not supported by the current CLI/account.
+
 ## Actual Codex App Verification
 
 Add one generated TOML snippet to Codex's `config.toml`, then restart Codex so the MCP server list is rebuilt. A running Codex session should not be treated as proof because MCP servers are loaded at app or session startup.

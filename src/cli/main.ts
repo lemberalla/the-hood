@@ -12,7 +12,7 @@ import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
-import { listProviders } from "../runtime/providers.js";
+import { listProvidersWithRuntimeModels } from "../runtime/providers.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { buildRoleRoster } from "../runtime/roleRoster.js";
@@ -505,7 +505,7 @@ const handleConfig = async (
 
 const handleProviders = async (options: Record<string, CliOptionValue>): Promise<void> => {
   const config = await loadConfig(repoFromOptions(options));
-  const providers = listProviders(config);
+  const providers = listProvidersWithRuntimeModels(config);
   shouldPrintJson(options) ? printJson(providers) : process.stdout.write(`${formatProviders(providers)}\n`);
 };
 
@@ -1085,7 +1085,7 @@ const handleUi = async (
       config,
       health,
       roleRoster,
-      providers: listProviders(config),
+      providers: listProvidersWithRuntimeModels(config),
       teamPresets: listTeamPresets(),
       browser
     };

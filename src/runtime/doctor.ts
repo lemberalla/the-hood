@@ -2,8 +2,9 @@ import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { inspectBrowser } from "./browserManager.js";
-import { listProviders } from "./providers.js";
+import { listProvidersWithRuntimeModels } from "./providers.js";
 import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
+import { codexCliModelAvailable, resolveCodexCliModel, type CodexCliModelDiscovery } from "../providers/codexCliModels.js";
 import type { ProviderDescriptor } from "./providers.js";
 import type { ProviderAccessMode, RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
 
@@ -14,6 +15,7 @@ export interface ProviderHealth {
   models: string[];
   accessModes: ProviderAccessMode[];
   defaultAccessMode: ProviderAccessMode;
+  modelDiscovery?: CodexCliModelDiscovery;
   command?: string;
   commandFound?: boolean;
   issues: string[];
@@ -25,6 +27,8 @@ export interface RoleHealth {
   providerEnabled: boolean;
   providerImplemented: boolean;
   modelConfigured: boolean;
+  modelAvailable?: boolean;
+  resolvedModel?: string;
   commandFound?: boolean;
   issues: string[];
 }
@@ -100,6 +104,25 @@ const modelConfigured = (provider: ProviderDescriptor | undefined, assignment: R
   return provider.models.includes(assignment.model) || provider.models.includes("configured");
 };
 
+const modelAvailability = (
+  provider: ProviderDescriptor | undefined,
+  assignment: RoleAssignment
+): { available?: boolean; resolvedModel?: string } => {
+  if (provider?.id !== "codex-cli" || !provider.modelDiscovery) {
+    return {};
+  }
+
+  const available = codexCliModelAvailable(assignment.model, provider.modelDiscovery);
+  const resolvedModel = provider.modelDiscovery.status === "available"
+    ? resolveCodexCliModel(assignment.model, provider.modelDiscovery)
+    : undefined;
+
+  return {
+    ...(available === undefined ? {} : { available }),
+    ...(resolvedModel ? { resolvedModel } : {})
+  };
+};
+
 const bridgeIssues = (providerId: string, command?: string): string[] =>
   providerId === "chatgpt-web" && !command ? ["bridge_command_not_configured"] : [];
 
@@ -135,6 +158,7 @@ const providerIssues = (
 ): string[] => [
   ...(provider.enabled ? [] : ["provider_disabled"]),
   ...(implemented ? [] : ["provider_not_implemented"]),
+  ...(provider.modelDiscovery?.status === "unavailable" ? provider.modelDiscovery.issues : []),
   ...providerSpecificIssues,
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
@@ -145,6 +169,7 @@ const roleIssues = (
   provider: ProviderDescriptor | undefined,
   implemented: boolean,
   providerSpecificIssues: string[],
+  modelAvailable?: boolean,
   command?: string,
   commandFound?: boolean
 ): string[] => [
@@ -153,11 +178,12 @@ const roleIssues = (
   ...(implemented ? [] : ["provider_not_implemented"]),
   ...providerSpecificIssues,
   ...(provider && !modelConfigured(provider, assignment) ? [`model_not_configured:${assignment.model}`] : []),
+  ...(modelAvailable === false ? [`model_not_available:${assignment.model}`] : []),
   ...(commandFound === false ? ["command_not_found"] : [])
 ];
 
 export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<RuntimeHealthReport> => {
-  const providers = listProviders(config);
+  const providers = listProvidersWithRuntimeModels(config);
   const commandChecks = new Map<string, boolean>();
   const providerIssueChecks = new Map<string, string[]>();
 
@@ -186,6 +212,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       models: provider.models,
       accessModes: provider.accessModes,
       defaultAccessMode: provider.defaultAccessMode,
+      ...(provider.modelDiscovery ? { modelDiscovery: provider.modelDiscovery } : {}),
       ...(command ? { command } : {}),
       ...(commandFound === undefined ? {} : { commandFound }),
       issues: providerIssues(provider, implemented, providerSpecificIssues, command, commandFound)
@@ -201,6 +228,7 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
       const command = commandForProvider(assignment.provider);
       const commandFound = commandChecks.get(assignment.provider);
       const providerSpecificIssues = providerIssueChecks.get(assignment.provider) ?? [];
+      const availability = modelAvailability(provider, assignment);
 
       return {
         role: role as RuntimeRole,
@@ -208,8 +236,19 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
         providerEnabled: provider?.enabled ?? false,
         providerImplemented: implemented,
         modelConfigured: modelConfigured(provider, assignment),
+        ...(availability.available === undefined ? {} : { modelAvailable: availability.available }),
+        ...(availability.resolvedModel ? { resolvedModel: availability.resolvedModel } : {}),
         ...(commandFound === undefined ? {} : { commandFound }),
-        issues: roleIssues(role as RuntimeRole, assignment, provider, implemented, providerSpecificIssues, command, commandFound)
+        issues: roleIssues(
+          role as RuntimeRole,
+          assignment,
+          provider,
+          implemented,
+          providerSpecificIssues,
+          availability.available,
+          command,
+          commandFound
+        )
       };
     });
 

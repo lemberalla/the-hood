@@ -1,5 +1,10 @@
 import { builtinProviders } from "./defaults.js";
 import { providerAccessModes } from "./types.js";
+import {
+  codexCliKnownAliasModels,
+  discoverCodexCliModels,
+  type CodexCliModelDiscovery
+} from "../providers/codexCliModels.js";
 import type { ProviderAccessMode, ProviderConfig, TheHoodConfig } from "./types.js";
 
 export interface ProviderDescriptor extends ProviderConfig {
@@ -7,6 +12,7 @@ export interface ProviderDescriptor extends ProviderConfig {
   source: "builtin" | "config";
   accessModes: ProviderAccessMode[];
   defaultAccessMode: ProviderAccessMode;
+  modelDiscovery?: CodexCliModelDiscovery;
 }
 
 const defaultAccessModesByProvider = new Map<string, ProviderAccessMode[]>([
@@ -56,3 +62,23 @@ export const listProviders = (config: TheHoodConfig): ProviderDescriptor[] =>
       };
     })
     .sort((left, right) => left.id.localeCompare(right.id));
+
+const unique = <T>(values: T[]): T[] => [...new Set(values)];
+
+const withRuntimeModels = (provider: ProviderDescriptor): ProviderDescriptor => {
+  if (provider.id !== "codex-cli" || !provider.enabled) {
+    return provider;
+  }
+
+  const modelDiscovery = discoverCodexCliModels();
+  const discoveredModels = modelDiscovery.models.map((model) => model.slug);
+
+  return {
+    ...provider,
+    models: unique([...provider.models, ...discoveredModels, ...codexCliKnownAliasModels()]),
+    modelDiscovery
+  };
+};
+
+export const listProvidersWithRuntimeModels = (config: TheHoodConfig): ProviderDescriptor[] =>
+  listProviders(config).map(withRuntimeModels);
