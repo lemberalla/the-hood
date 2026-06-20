@@ -48,7 +48,7 @@ const initializeResult = (): JsonObject => ({
   },
   serverInfo,
   instructions:
-    "TheHood exposes a local agent runtime. The runtime owns state, permissions, approvals, and run records. Use thehood_doctor before invoking model-backed agents, thehood_consult to bring in a read-only guest agent such as Claude, and thehood_orchestrate for implementation runs. Use thehood_continue with approval=none when no manual approval gate is active; if autopilot applies, the runtime may auto-approve bounded gates such as provider invocation and non-secret external transfers and will record approval_auto_approved evidence. Use approval=approve/reject/revise only for an active manual approval gate after the user authorizes that gate."
+    "TheHood exposes a local agent runtime. The runtime owns state, permissions, approvals, and run records. Use thehood_doctor before invoking model-backed agents. Use thehood_pro_access before direct ChatGPT Pro consults from Codex, or after host policy rejects a chatgpt-web call, because TheHood autopilot cannot override Codex or tenant external-disclosure policy. Use thehood_consult to bring in a read-only guest agent such as Claude, and thehood_orchestrate for implementation runs. Use thehood_continue with approval=none when no manual approval gate is active; if autopilot applies, the runtime may auto-approve bounded gates such as provider invocation and non-secret external transfers and will record approval_auto_approved evidence. Use approval=approve/reject/revise only for an active manual approval gate after the user authorizes that gate."
 });
 
 const listToolsResult = (): JsonObject => ({

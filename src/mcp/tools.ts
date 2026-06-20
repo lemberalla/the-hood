@@ -879,6 +879,109 @@ const createRolesTool = (): McpTool => ({
     })
 });
 
+const createProAccessTool = (): McpTool => ({
+  definition: {
+    name: "thehood_pro_access",
+    title: "Inspect TheHood Pro Access Path",
+    description: "Local-only preflight for ChatGPT Pro access. This does not call Pro, does not send repo context externally, and is the safe fallback when Codex host policy blocks a direct chatgpt-web consult.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        repo_path: {
+          type: "string"
+        },
+        goal: {
+          type: "string",
+          description: "Optional user goal to include in the local-only handoff prompt."
+        },
+        constraints: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        }
+      },
+      required: ["repo_path"]
+    },
+    annotations: readOnlyAnnotations()
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const repoPath = requiredString(args, "repo_path");
+      const config = await loadConfig(repoPath);
+      const health = await inspectRuntimeHealth(config);
+      const chatGpt = health.providers.find((provider) => provider.id === "chatgpt-web");
+      const goal = optionalString(args, "goal");
+      const constraints = optionalStringList(args, "constraints");
+      const bridgeIssues = chatGpt?.issues ?? ["provider_not_configured:chatgpt-web"];
+      const bridgeReady = Boolean(chatGpt?.enabled && chatGpt.implemented && bridgeIssues.length === 0);
+      const proAssignment = "chatgpt-web:chatgpt-pro";
+      const connectorPrompt = [
+        "Use TheHood as the local runtime and repo gateway.",
+        "Do not rely on stale ChatGPT conversation context.",
+        "Call TheHood MCP tools for repo/run evidence instead of asking Codex to paste private repo context.",
+        "Return plans and strategic judgment as markdown in the role payload, with concrete next actions and evidence refs.",
+        ...(goal ? [`Goal: ${goal}`] : []),
+        ...(constraints.length > 0
+          ? [
+              "Constraints:",
+              ...constraints.map((constraint) => `- ${constraint}`)
+            ]
+          : [])
+      ].join("\n");
+
+      return {
+        kind: "pro_access_preflight",
+        provider: proAssignment,
+        repo_path: repoPath,
+        runtime_policy: {
+          approval_mode: config.approvalPolicy.mode,
+          external_transfers: config.approvalPolicy.externalTransfers.mode,
+          max_auto_approve_bytes: config.approvalPolicy.externalTransfers.maxAutoApproveBytes,
+          autopilot_allows_bounded_external_transfers:
+            config.approvalPolicy.mode === "autopilot" ||
+            config.approvalPolicy.externalTransfers.mode === "auto_low_risk"
+        },
+        bridge: {
+          status: bridgeReady ? "ready" : "not_ready",
+          command: chatGpt?.command ?? null,
+          issues: bridgeIssues
+        },
+        codex_host_policy_boundary: {
+          status: "outside_thehood_runtime_control",
+          summary:
+            "TheHood autopilot can auto-approve TheHood runtime gates, but it cannot override a Codex or tenant policy that forbids disclosure to an external provider.",
+          retry_guidance:
+            "If Codex rejects a chatgpt-web consult as an external disclosure, do not ask for the same approval again. Use connector mode or an abstract no-repo-context prompt."
+        },
+        recommended_paths: [
+          {
+            id: "chatgpt_mcp_connector",
+            status: "recommended_when_codex_blocks_external_disclosure",
+            description:
+              "Open ChatGPT Pro with TheHood as an MCP connector. ChatGPT requests bounded repo/run evidence through TheHood tools instead of Codex sending repo context to Pro.",
+            setup_command: "node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>",
+            handoff_prompt: connectorPrompt
+          },
+          {
+            id: "codex_agent_bridge",
+            status: bridgeReady ? "runtime_ready_host_may_still_block" : "not_ready",
+            description:
+              "Codex asks TheHood to invoke the ChatGPT Web bridge. TheHood autopilot can handle runtime provider/transfer gates, but the MCP host may still block external disclosure before TheHood runs.",
+            setup_command: "node dist/cli/main.js mcp config --chatgpt-web"
+          },
+          {
+            id: "abstract_pro_prompt",
+            status: "safe_when_no_repo_context_is_needed",
+            description:
+              "Ask Pro a product or architecture question without repo path, file excerpts, run artifacts, or private context."
+          }
+        ]
+      };
+    })
+});
+
 const createAgentBoardTool = (): McpTool => ({
   definition: {
     name: "thehood_agent_board",
@@ -1825,6 +1928,7 @@ const createAbortTool = (): McpTool => ({
 export const mcpTools: McpTool[] = [
   createDoctorTool(),
   createRolesTool(),
+  createProAccessTool(),
   createAgentBoardTool(),
   createAssignRolesTool(),
   createPlanTool(),

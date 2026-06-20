@@ -181,6 +181,10 @@ assert.ok(
   "tools/list should expose thehood_doctor"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_pro_access"),
+  "tools/list should expose thehood_pro_access"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_agent_board"),
   "tools/list should expose thehood_agent_board"
 );
@@ -200,6 +204,36 @@ const initialContinueAction = happyPath[2].result.structuredContent.next_actions
 assert.equal(initialContinueAction.arguments.approval, "none");
 assert.ok(initialContinueAction.description.includes("approval=none"));
 assert.ok(initialContinueAction.description.includes("autopilot"));
+
+const proAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_pro_access",
+      arguments: {
+        repo_path: repoPath,
+        goal: "Validate a strategic Pro conductor UX pivot.",
+        constraints: ["local-only preflight"]
+      }
+    }
+  }
+]);
+const proAccessContent = proAccessPath[1].result.structuredContent;
+assert.equal(proAccessContent.kind, "pro_access_preflight");
+assert.equal(proAccessContent.provider, "chatgpt-web:chatgpt-pro");
+assert.equal(proAccessContent.codex_host_policy_boundary.status, "outside_thehood_runtime_control");
+assert.ok(
+  proAccessContent.recommended_paths.some((path) => path.id === "chatgpt_mcp_connector"),
+  "pro access preflight should return a connector-mode fallback"
+);
+assert.ok(
+  proAccessContent.recommended_paths.some((path) => path.id === "codex_agent_bridge"),
+  "pro access preflight should return direct bridge readiness"
+);
+assert.equal(proAccessContent.provider_response_count, undefined);
 
 const agentBoardPath = await runMcp([
   ...baseMessages,
@@ -351,6 +385,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("runtime_revision_delegati
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
+assert.ok(doctorContent.runtime.capabilities.includes("pro_access_preflight"));
 assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board"));
 assert.ok(doctorContent.runtime.capabilities.includes("codex_agent_board_artifact"));
 const stubProvider = doctorContent.providers.find((provider) => provider.id === "stub");

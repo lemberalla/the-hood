@@ -31,6 +31,7 @@ It supports:
 - runtime-owned team presets for Codex default, ChatGPT Pro orchestration, and Claude critic setups
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
+- local-only Pro access preflight so Codex can distinguish runtime autopilot, direct bridge readiness, host-policy blocks, and ChatGPT MCP connector handoff paths
 - role mapping updates
 - run creation for `plan` and `implement`
 - approval, rejection, abort, status, and log inspection
@@ -87,6 +88,7 @@ Users can choose between two ChatGPT Pro paths:
 - `mcp-connector`: ChatGPT connects to TheHood as an MCP connector and uses TheHood's repo/run tools directly.
 
 Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
+When Codex or a tenant policy blocks a direct external disclosure to ChatGPT Web, that is outside TheHood autopilot. Use `thehood_pro_access` to get the local bridge status and a connector-mode handoff instead of repeating approval prompts.
 
 ## Quick Start
 

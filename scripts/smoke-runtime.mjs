@@ -798,6 +798,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("runtime_revision_delegatio
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
 assert.ok(doctorResult.runtime.capabilities.includes("chatgpt_mcp_connector_mode"));
+assert.ok(doctorResult.runtime.capabilities.includes("pro_access_preflight"));
 assert.ok(doctorResult.runtime.capabilities.includes("codex_agent_board"));
 assert.ok(doctorResult.runtime.capabilities.includes("codex_agent_board_artifact"));
 const lowRiskRouting = decideReviewRouting({

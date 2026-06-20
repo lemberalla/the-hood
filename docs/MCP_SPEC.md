@@ -60,6 +60,7 @@ Implemented tools:
 
 - `thehood_doctor`
 - `thehood_roles`
+- `thehood_pro_access`
 - `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
@@ -104,6 +105,24 @@ Input:
   "repo_path": "string"
 }
 ```
+
+### `thehood_pro_access`
+
+Inspect the ChatGPT Pro access path without calling Pro or sending repo context externally. This is the safe fallback when Codex host policy rejects a direct `chatgpt-web` consult before TheHood can apply runtime autopilot.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "goal": "optional local-only handoff goal",
+  "constraints": ["optional local-only handoff constraints"]
+}
+```
+
+Output includes current TheHood approval policy, ChatGPT Web bridge readiness, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, and recommended paths for ChatGPT MCP connector mode, direct Codex agent-bridge mode, or an abstract no-repo-context Pro prompt.
+
+If Codex rejects a direct Pro consult as an external disclosure, do not ask the user to approve the same blocked action again. Call `thehood_pro_access`, then use connector mode or a no-repo-context prompt.
 
 ### `thehood_agent_board`
 
@@ -563,7 +582,8 @@ Input:
 Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
-2. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator or Claude as critic/verifier.
-3. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic or QA tester; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
-4. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
-5. Call `thehood_continue` with `approval: "approve"`, `approval: "reject"`, or `approval: "revise"` only for an active manual approval gate after the user authorizes that gate.
+2. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex or when a previous Pro call was rejected by host policy.
+3. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator or Claude as critic/verifier.
+4. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic or QA tester; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.
+5. Call `thehood_orchestrate` for implementation runs that require approval and verifier separation.
+6. Call `thehood_continue` with `approval: "approve"`, `approval: "reject"`, or `approval: "revise"` only for an active manual approval gate after the user authorizes that gate.

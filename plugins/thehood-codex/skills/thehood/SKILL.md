@@ -11,12 +11,14 @@ TheHood is a local runtime. Models and Codex plugin skills may suggest work, but
 
 1. Prefer TheHood MCP tools when they are available.
 2. Start with `thehood_doctor` for the target repo before running provider or implementation work.
-3. If MCP tools are unavailable, check whether the runtime CLI is installed with `thehood --version`.
-4. If the runtime is missing, ask before installing or building it.
+3. Use `thehood_pro_access` before direct ChatGPT Pro consults from Codex, or immediately after a host-policy rejection.
+4. If MCP tools are unavailable, check whether the runtime CLI is installed with `thehood --version`.
+5. If the runtime is missing, ask before installing or building it.
 
 ## Runtime Use
 
 - Use `thehood_agent_board` when the user asks to see agents, lanes, role ownership, or current runtime status. Set `include_artifact: true` when the user wants a renderable dashboard payload.
+- Use `thehood_pro_access` when the user asks for Pro from Codex. This is local-only and does not call Pro; it reports runtime policy, bridge readiness, and connector-mode handoff instructions.
 - Use `thehood_consult`, `thehood_summon`, or `thehood_fanout` for read-only guest roles.
 - Use `thehood_orchestrate` for implementation work and `thehood_continue` to resume active runs.
 - Pass `approval: "none"` to `thehood_continue` when no manual approval gate is active. The runtime may auto-approve bounded low-risk gates when policy allows and will record that evidence.
@@ -29,6 +31,7 @@ TheHood is a local runtime. Models and Codex plugin skills may suggest work, but
 - Do not give verifier or critic roles edit tools.
 - Do not treat an agent board card as proof that validation, review, or approval passed. Read the referenced artifacts, events, handoffs, and command evidence.
 - Do not send secrets, browser profiles, provider tokens, private run logs, or unrelated repo content outside the local runtime.
+- If Codex rejects a direct `chatgpt-web` call as an external disclosure, do not ask for the same approval again and do not try to route around the host policy. Call `thehood_pro_access` and use ChatGPT MCP connector mode or an abstract no-repo-context prompt.
 
 ## Installation Guidance
 
