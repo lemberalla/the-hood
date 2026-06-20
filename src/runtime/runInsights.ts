@@ -100,6 +100,8 @@ export interface ProviderExecutionInsight {
   exitCode?: number;
   timedOut?: boolean;
   durationMs?: number;
+  stdoutRef?: string;
+  stderrRef?: string;
   responseParsed?: boolean;
   responseStatus?: string;
 }
@@ -358,6 +360,8 @@ const parseProviderExecution = (
     ...(exitCode !== undefined ? { exitCode } : {}),
     ...(typeof payload.timedOut === "boolean" ? { timedOut: payload.timedOut } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(typeof payload.stdoutRef === "string" ? { stdoutRef: payload.stdoutRef } : {}),
+    ...(typeof payload.stderrRef === "string" ? { stderrRef: payload.stderrRef } : {}),
     ...(typeof payload.responseParsed === "boolean" ? { responseParsed: payload.responseParsed } : {}),
     ...(typeof payload.responseStatus === "string" ? { responseStatus: payload.responseStatus } : {})
   };

@@ -318,12 +318,22 @@ const readyDelegateRole = (decision: JsonObject | undefined): RuntimeRole | unde
   const role = runtimeRoleFromDecisionField(decision, "delegateTo") ??
     runtimeRoleFromDecisionField(decision, "nextRole");
 
-  if (role !== "implementer") {
+  if (!role) {
     return undefined;
   }
 
   return decisionBooleanField(decision, "requiresMoreEvidence") === true ? undefined : role;
 };
+
+const readOnlyDelegateRoles = new Set<RuntimeRole>([
+  "orchestrator",
+  "planner",
+  "researcher",
+  "qa",
+  "verifier",
+  "critic",
+  "citation"
+]);
 
 const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
 const readOnlyProvidersRequiringInvocationApproval = new Set([
@@ -1591,14 +1601,132 @@ const executeReadOnlyRun = async (
         eventData.sliceName = sliceName;
       }
 
-      return completeReadOnlyRun(result.run, {
-        role,
+      if (delegateRole === "implementer") {
+        return completeReadOnlyRun(result.run, {
+          role,
+          response: result.response,
+          stopReason: `${role} produced a ready ${delegateRole} handoff.`,
+          eventMessage: `${role} produced a ready ${delegateRole} handoff.`,
+          handoffReason: `${role} completed read-only planning with a ready handoff to ${delegateRole}.`,
+          eventData
+        });
+      }
+
+      if (readOnlyDelegateRoles.has(delegateRole)) {
+        if (delegateRole === role) {
+          const approvalReason = `${role} delegated back to itself.`;
+          const gated = await updateRun(
+            result.run,
+            {
+              state: "awaiting_approval",
+              approvalRequired: true,
+              approvalReason
+            },
+            [
+              createEvent("approval_required", approvalReason, {
+                ...eventData,
+                role,
+                reason: "self_read_only_delegate"
+              })
+            ],
+            [approvalGateHandoff(result.run, {
+              reason: approvalReason,
+              role,
+              gate: "self_read_only_delegate"
+            })]
+          );
+
+          return {
+            run: gated,
+            response: result.response,
+            advanced: true,
+            stopReason: approvalReason
+          };
+        }
+
+        if (!result.run.roleMapping[delegateRole]) {
+          const approvalReason = `${role} delegated to ${delegateRole}, but ${delegateRole} role is not assigned.`;
+          const gated = await updateRun(
+            result.run,
+            {
+              state: "awaiting_approval",
+              approvalRequired: true,
+              approvalReason
+            },
+            [
+              createEvent("approval_required", approvalReason, {
+                ...eventData,
+                role,
+                reason: "missing_read_only_delegate_assignment"
+              })
+            ],
+            [approvalGateHandoff(result.run, {
+              reason: approvalReason,
+              role,
+              gate: "missing_read_only_delegate_assignment"
+            })]
+          );
+
+          return {
+            run: gated,
+            response: result.response,
+            advanced: true,
+            stopReason: approvalReason
+          };
+        }
+
+        const delegated = await updateRun(
+          result.run,
+          {
+            state: "planning",
+            approvalRequired: false
+          },
+          [
+            createEvent(`${role}_delegated_read_only_role`, `${role} delegated read-only planning to ${delegateRole}.`, {
+              ...eventData,
+              role,
+              toRole: delegateRole
+            })
+          ],
+          [agentHandoff(result.run, {
+            reason: `${role} delegated read-only planning to ${delegateRole}.`,
+            stateAfter: "planning",
+            fromRole: role,
+            toRole: delegateRole
+          })]
+        );
+
+        return executeReadOnlyRun(delegated, delegateRole);
+      }
+
+      const approvalReason = `${role} delegated to unsupported read-only role ${delegateRole}.`;
+      const gated = await updateRun(
+        result.run,
+        {
+          state: "awaiting_approval",
+          approvalRequired: true,
+          approvalReason
+        },
+        [
+          createEvent("approval_required", approvalReason, {
+            ...eventData,
+            role,
+            reason: "unsupported_read_only_delegate_role"
+          })
+        ],
+        [approvalGateHandoff(result.run, {
+          reason: approvalReason,
+          role,
+          gate: "unsupported_read_only_delegate_role"
+        })]
+      );
+
+      return {
+        run: gated,
         response: result.response,
-        stopReason: `${role} produced a ready ${delegateRole} handoff.`,
-        eventMessage: `${role} produced a ready ${delegateRole} handoff.`,
-        handoffReason: `${role} completed read-only planning with a ready handoff to ${delegateRole}.`,
-        eventData
-      });
+        advanced: true,
+        stopReason: approvalReason
+      };
     }
 
     const existingContextArtifact = latestRepoContextArtifact(result.run);

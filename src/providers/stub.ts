@@ -15,6 +15,9 @@ const shouldExerciseRepoContext = (request: AgentRequest): boolean =>
 const shouldExerciseRoleDelegate = (request: AgentRequest): boolean =>
   request.run.mode === "plan" && request.run.userGoal.includes("role-delegate-smoke");
 
+const shouldExercisePlannerDelegate = (request: AgentRequest): boolean =>
+  request.run.mode === "plan" && request.run.userGoal.includes("planner-delegate-smoke");
+
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -54,6 +57,23 @@ const orchestratorResponse = (request: AgentRequest): AgentResponse => {
       acceptanceCriteria: [
         "Plan runs complete after a ready implementer handoff.",
         "Repo context is not recaptured for implementation handoffs."
+      ]
+    });
+  }
+
+  if (request.role === "orchestrator" && shouldExercisePlannerDelegate(request)) {
+    return response("Stub orchestrator delegated a ready planning pass.", {
+      decision: {
+        action: "delegate",
+        reason: "Planner should synthesize the roadmap from existing repo context.",
+        delegateTo: "planner",
+        sliceName: "planner-delegate-smoke-ready-slice",
+        requiresMoreEvidence: false,
+        requiresUserApproval: false
+      },
+      acceptanceCriteria: [
+        "Read-only planner handoffs invoke the configured planner role.",
+        "Planner handoffs are not treated as repeated repo-context delegation."
       ]
     });
   }

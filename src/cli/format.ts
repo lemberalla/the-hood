@@ -249,8 +249,12 @@ const formatProviderExecutionLines = (insights: RunInsights): string[] => {
         execution.sandbox ? `sandbox=${execution.sandbox}` : undefined,
         execution.permissionMode ? `permission=${execution.permissionMode}` : undefined
       ].filter(Boolean).join(" ");
+      const logs = [
+        execution.stdoutRef ? `stdout=${execution.stdoutRef}` : undefined,
+        execution.stderrRef ? `stderr=${execution.stderrRef}` : undefined
+      ].filter(Boolean).join(" ");
 
-      return `  ${owner}  ${exit}${parsed}  ${mode}  artifact=${execution.artifact.ref}`.trimEnd();
+      return `  ${owner}  ${exit}${parsed}  ${mode}  artifact=${execution.artifact.ref}  ${logs}`.trimEnd();
     })
   ];
 };

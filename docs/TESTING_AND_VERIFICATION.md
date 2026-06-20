@@ -40,7 +40,7 @@ Current implementation:
 - `thehood evidence <run-id>` captures git status, git diff, and protected path matches.
 - The verification phase discovers package validation scripts in `typecheck`, `test`, `lint`, `build` order, runs the first available script through the runtime command runner, and attaches a validation summary artifact before verifier review.
 - After validation evidence is captured, the runtime attaches a `review_routing` artifact that classifies implementation risk and records which subjective review lanes are required or skipped.
-- Local command providers such as Codex CLI and Claude Code attach compact `provider_invocation` artifacts with command, role, provider/model, workspace mode, sandbox or permission mode, exit code, timeout state, output lengths, parse status, and isolated patch refs when present.
+- Local command providers such as Codex CLI and Claude Code attach redacted stdout/stderr `log` artifacts plus compact `provider_invocation` artifacts with command, role, provider/model, workspace mode, sandbox or permission mode, exit code, timeout state, output lengths and refs, parse status, and isolated patch refs when present.
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.

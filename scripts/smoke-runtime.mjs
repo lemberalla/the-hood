@@ -174,7 +174,9 @@ const createCdpSmokeServer = (snapshot) => {
 
 const createBridgeLifecycleCdpServer = (assistantResponses) => {
   const targetId = "thehood-bridge-smoke-target";
-  let promptSent = false;
+  let targetCreated = false;
+  let promptCount = 0;
+  let createCount = 0;
   let closeCount = 0;
 
   const valueForExpression = (expression) => {
@@ -192,11 +194,11 @@ const createBridgeLifecycleCdpServer = (assistantResponses) => {
     }
 
     if (expression.includes("querySelectorAll") && expression.includes("textContent")) {
-      return promptSent ? assistantResponses : [];
+      return assistantResponses.slice(0, promptCount);
     }
 
     if (expression.includes("editor.focus") && expression.includes("sendSelectors")) {
-      promptSent = true;
+      promptCount = Math.min(promptCount + 1, assistantResponses.length);
       return {
         ok: true,
         method: "button"
@@ -215,11 +217,22 @@ const createBridgeLifecycleCdpServer = (assistantResponses) => {
       response.writeHead(200, {
         "content-type": "application/json"
       });
-      response.end("[]");
+      response.end(JSON.stringify(targetCreated
+        ? [
+            {
+              id: targetId,
+              url: "https://chatgpt.com/",
+              title: "ChatGPT",
+              webSocketDebuggerUrl: `ws://${request.headers.host}/devtools/page/${targetId}`
+            }
+          ]
+        : []));
       return;
     }
 
     if (request.url?.startsWith("/json/new")) {
+      targetCreated = true;
+      createCount += 1;
       response.writeHead(200, {
         "content-type": "application/json"
       });
@@ -290,6 +303,7 @@ const createBridgeLifecycleCdpServer = (assistantResponses) => {
 
   return {
     server,
+    createCount: () => createCount,
     closeCount: () => closeCount
   };
 };
@@ -514,14 +528,17 @@ assert.equal(
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_CDP_URL, "http://127.0.0.1:9222");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.installed.startupTimeoutSec, 120);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_COMMAND, chatGptBridgePath);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS, "1");
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.local.startupTimeoutSec, 120);
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_COMMAND"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_TIMEOUT_MS"));
+assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120"));
 const bridgeSmokeSchemaPath = path.join(repoPath, "chatgpt-bridge-smoke.schema.json");
@@ -606,6 +623,66 @@ try {
 } finally {
   await new Promise((resolve, reject) => {
     successfulBridgeCdp.server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(undefined);
+    });
+  });
+}
+const runScopedBridgeSessionDir = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-chatgpt-session-smoke-"));
+const runScopedBridgeCdp = createBridgeLifecycleCdpServer([
+  successfulAgentResponse,
+  successfulAgentResponse
+]);
+await new Promise((resolve) => runScopedBridgeCdp.server.listen(0, "127.0.0.1", resolve));
+const runScopedBridgeAddress = runScopedBridgeCdp.server.address();
+assert.ok(runScopedBridgeAddress && typeof runScopedBridgeAddress === "object");
+try {
+  const runScopedEnv = {
+    THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
+    THEHOOD_RUN_ID: "run_bridge_session_smoke",
+    THEHOOD_CHATGPT_WEB_SESSION_DIR: runScopedBridgeSessionDir
+  };
+  const firstRunScopedBridgeOutput = JSON.parse((
+    await runNodeScript(
+      chatGptBridgePath,
+      [
+        "--schema",
+        bridgeSmokeSchemaPath,
+        "--cdp-url",
+        `http://127.0.0.1:${runScopedBridgeAddress.port}`,
+        "--timeout-ms",
+        "5000"
+      ],
+      "bridge run-scoped target smoke first",
+      { env: runScopedEnv }
+    )
+  ).stdout);
+  const secondRunScopedBridgeOutput = JSON.parse((
+    await runNodeScript(
+      chatGptBridgePath,
+      [
+        "--schema",
+        bridgeSmokeSchemaPath,
+        "--cdp-url",
+        `http://127.0.0.1:${runScopedBridgeAddress.port}`,
+        "--timeout-ms",
+        "5000"
+      ],
+      "bridge run-scoped target smoke second",
+      { env: runScopedEnv }
+    )
+  ).stdout);
+  assert.equal(firstRunScopedBridgeOutput.status, "ok");
+  assert.equal(secondRunScopedBridgeOutput.status, "ok");
+  assert.equal(runScopedBridgeCdp.createCount(), 1, "run-scoped bridge calls should reuse one ChatGPT target");
+  assert.equal(runScopedBridgeCdp.closeCount(), 0, "run-scoped bridge target should stay open for follow-up calls");
+} finally {
+  await fs.rm(runScopedBridgeSessionDir, { recursive: true, force: true });
+  await new Promise((resolve, reject) => {
+    runScopedBridgeCdp.server.close((error) => {
       if (error) {
         reject(error);
         return;
@@ -819,7 +896,22 @@ assert.equal(localExecution.exitCode, 0);
 assert.equal(localExecution.timedOut, false);
 assert.equal(localExecution.responseParsed, true);
 assert.equal(localExecution.responseStatus, "ok");
+assert.equal(typeof localExecution.stdoutRef, "string");
+assert.equal(typeof localExecution.stderrRef, "string");
 assert.ok(localExecution.args.includes("--output-schema"));
+const localExecutionStdoutArtifact = localAgentContinue.run.artifacts.find(
+  (artifact) => artifact.ref === localExecution.stdoutRef
+);
+const localExecutionStderrArtifact = localAgentContinue.run.artifacts.find(
+  (artifact) => artifact.ref === localExecution.stderrRef
+);
+assert.equal(localExecutionStdoutArtifact?.kind, "log");
+assert.equal(localExecutionStderrArtifact?.kind, "log");
+assert.ok(
+  (await fs.readFile(localExecution.stdoutRef, "utf8")).includes("fake codex smoke response"),
+  "local provider stdout log should capture redacted command output"
+);
+assert.equal(await fs.readFile(localExecution.stderrRef, "utf8"), "");
 const localAgentProgressArtifact = localAgentContinue.run.artifacts.find(
   (artifact) => artifact.kind === "progress"
 );
@@ -833,12 +925,16 @@ const localAgentStatusJson = JSON.parse(
 assert.equal(localAgentStatusJson.insights.latestProviderExecution.artifact.ref, localExecutionArtifact.ref);
 assert.equal(localAgentStatusJson.insights.latestProviderExecution.provider, "codex-cli");
 assert.equal(localAgentStatusJson.insights.latestProviderExecution.role, "critic");
+assert.equal(localAgentStatusJson.insights.latestProviderExecution.stdoutRef, localExecution.stdoutRef);
+assert.equal(localAgentStatusJson.insights.latestProviderExecution.stderrRef, localExecution.stderrRef);
 assert.equal(
   localAgentStatusJson.insights.canonicalMemory.currentRun.artifacts.latestProviderExecution.ref,
   localExecutionArtifact.ref
 );
 assert.ok(localAgentStatusText.stdout.includes("local agent executions:"));
 assert.ok(localAgentStatusText.stdout.includes("critic codex-cli:default"));
+assert.ok(localAgentStatusText.stdout.includes("stdout="));
+assert.ok(localAgentStatusText.stdout.includes("stderr="));
 await runCli(["roles", "set", "verifier", "codex-cli:default", "--repo", repoPath], { expectExitCode: 6 });
 const staleConfigPath = path.join(repoPath, ".thehood", "config.json");
 const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));
@@ -1568,6 +1664,41 @@ assert.equal(repoContextDirective.variables.canonicalMemory.ignoreProviderSessio
     (artifact) => artifact.kind === "progress" && artifact.summary.includes("Progress packet")
   );
   assert.ok(roleDelegateProgressArtifact, "ready implementer handoff should write a progress packet");
+
+  const plannerDelegatePlan = JSON.parse(
+    (
+      await runCli([
+        "plan",
+        "planner-delegate-smoke plan ready roadmap pass",
+        "--repo",
+        repoPath,
+        "--orchestrator",
+        "stub:orchestrator",
+        "--json"
+      ])
+    ).stdout
+  );
+  const plannerDelegateContinue = JSON.parse(
+    (await runCli(["continue", plannerDelegatePlan.runId, "--repo", repoPath, "--json"])).stdout
+  );
+  assert.equal(plannerDelegateContinue.run.state, "awaiting_approval");
+  assert.equal(plannerDelegateContinue.providerResponses.length, 1);
+  assert.equal(plannerDelegateContinue.providerResponses[0].data.decision.action, "delegate");
+  assert.equal(plannerDelegateContinue.providerResponses[0].data.decision.delegateTo, "planner");
+  assert.equal(plannerDelegateContinue.providerResponses[0].data.decision.requiresMoreEvidence, false);
+  assert.ok(plannerDelegateContinue.run.approvalReason.includes("planner role is not assigned"));
+  assert.ok(
+    plannerDelegateContinue.run.events.some(
+      (event) => event.data?.reason === "missing_read_only_delegate_assignment"
+    ),
+    "ready planner handoff without a planner assignment should stop at a missing-role gate"
+  );
+  assert.ok(
+    !plannerDelegateContinue.run.events.some(
+      (event) => event.data?.reason === "repeated_repo_context_delegate"
+    ),
+    "ready planner handoff should not be treated as repeated repo context delegation"
+  );
 
   const fakeExternalBridgePath = path.join(repoPath, "fake-external-chatgpt.mjs");
 const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log");

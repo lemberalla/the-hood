@@ -134,8 +134,11 @@ Included bridge:
 - Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
 - Fails fast with a blocked response when the visible ChatGPT page requires login.
-- Creates a dedicated ChatGPT target by default, verifies that the composer is empty before sending the prompt, closes the created target after a successfully parsed response, and keeps the target open on failed or timed-out ingestion so the visible answer can be inspected or recovered.
+- Creates a dedicated ChatGPT target for the first bridge call in a TheHood run, stores that target by run id, and reuses it for later ChatGPT Web calls in the same run so context follow-ups do not spawn new chats after every Pro answer.
+- Verifies a fresh composer before the first prompt in a run-scoped target and keeps directive acknowledgement checks on every response so reused run tabs do not accept stale provider-session output.
+- For bridge calls without a run id, closes the created target after a successfully parsed response and keeps the target open on failed or timed-out ingestion so the visible answer can be inspected or recovered.
 - Set `THEHOOD_CHATGPT_WEB_KEEP_TARGET=1` or pass `--keep-target` to keep all created targets, including successful responses.
+- Set `THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS=0` or pass `--no-run-scoped-target` to restore one-target-per-call behavior.
 - Set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` or pass `--close-target-on-failure` to restore cleanup after failed ingestion.
 - Requires ChatGPT responses to echo the current directive acknowledgement in the role payload, so schema-valid answers from stale browser/project context fail closed.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
@@ -258,7 +261,7 @@ Rules:
 - Use `read-only` sandbox for non-editing roles.
 - Require explicit provider-invocation approval before read-only repo calls.
 - Pass the generated schema through `--output-schema`.
-- Write a bounded `provider_invocation` artifact after the local command exits so status can show the role, provider/model, command args, workspace mode, sandbox, exit code, timeout state, parse status, and isolated patch ref when present.
+- Write redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact after the local command exits so status can show the role, provider/model, command args, workspace mode, sandbox, exit code, timeout state, output refs, parse status, and isolated patch ref when present.
 - Do not pass dangerous sandbox bypass flags.
 - Built-in models are `default`, `spark`, and `configured`. `configured` is a wildcard for user-selected CLI aliases such as a future `fable`; TheHood passes non-default model names through with `--model`.
 

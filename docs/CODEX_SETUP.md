@@ -185,12 +185,13 @@ export THEHOOD_CHATGPT_WEB_PROMPT_SELECTOR="#prompt-textarea,[contenteditable='t
 export THEHOOD_CHATGPT_WEB_SEND_SELECTOR="button[data-testid='send-button'],button[aria-label*='Send'],button[aria-label*='send']"
 export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assistant']"
 export THEHOOD_CHATGPT_WEB_NEW_CHAT_SELECTOR="a[href='/'],button[aria-label*='New chat']"
+export THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS=1
 # export THEHOOD_CHATGPT_WEB_REUSE_CHAT=1
 # export THEHOOD_CHATGPT_WEB_KEEP_TARGET=1
 # export THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0
 ```
 
-By default, the bridge creates a dedicated ChatGPT target for each request, verifies that the composer has no prior assistant messages, closes that target after a successfully parsed response, and keeps the target open when browser access, parsing, acknowledgement, or timeout handling fails. This preserves the visible Pro answer for recovery instead of deleting the evidence. It also requires the visible response to echo the current `directiveAck` inside the role payload. If ChatGPT restores an old conversation, or if the model returns schema-valid JSON from stale project context, the bridge fails closed instead of handing that answer to the runtime. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation, and set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` only when you want failed bridge calls to clean up their temporary tabs.
+By default, TheHood runtime calls use one ChatGPT target per run. The first bridge call creates and verifies a fresh composer, then later ChatGPT Web calls in the same run reuse that target instead of opening a new chat after every Pro answer. The bridge still requires the visible response to echo the current `directiveAck` inside the role payload, so stale project or conversation context fails closed. Calls without a run id keep the older one-target-per-call lifecycle: close after a successfully parsed response, keep the target open when browser access, parsing, acknowledgement, or timeout handling fails. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation, set `THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS=0` to disable run-scoped target reuse, and set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` only when you want failed bridge calls to clean up their temporary tabs.
 
 Example persistent role assignment:
 

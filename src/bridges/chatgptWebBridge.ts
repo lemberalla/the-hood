@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { AgentResponse } from "../providers/types.js";
 import { classifyChatGptPageSnapshot, chatGptPageSnapshotExpression } from "../runtime/chatGptPageReadiness.js";
 import type { JsonObject } from "../runtime/types.js";
@@ -28,9 +30,11 @@ interface BridgeOptions {
   responseSelector: string;
   newChatSelector: string;
   reuseChat: boolean;
+  runScopedTarget: boolean;
   keepCreatedTarget: boolean;
   keepTargetOnFailure: boolean;
   allowUnverifiedModel: boolean;
+  sessionDir: string;
 }
 
 interface ChromeTarget {
@@ -77,11 +81,14 @@ const defaultOptions: BridgeOptions = {
     process.env.THEHOOD_CHATGPT_WEB_NEW_CHAT_SELECTOR ??
     "a[href='/'],a[href='/?model=auto'],button[aria-label*='New chat'],a[aria-label*='New chat'],[data-testid='create-new-chat-button']",
   reuseChat: process.env.THEHOOD_CHATGPT_WEB_REUSE_CHAT === "1",
+  runScopedTarget: process.env.THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS !== "0",
   keepCreatedTarget: process.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET === "1",
   keepTargetOnFailure: process.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE !== "0",
   allowUnverifiedModel:
     process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
-    process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1"
+    process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1",
+  sessionDir: process.env.THEHOOD_CHATGPT_WEB_SESSION_DIR ??
+    path.join(os.tmpdir(), "thehood-chatgpt-web-sessions")
 };
 
 const readStdin = async (): Promise<string> =>
@@ -108,6 +115,11 @@ const parseArgs = (argv: string[]): BridgeOptions => {
 
     if (arg === "--reuse-chat") {
       options.reuseChat = true;
+      continue;
+    }
+
+    if (arg === "--no-run-scoped-target") {
+      options.runScopedTarget = false;
       continue;
     }
 
@@ -165,6 +177,9 @@ const parseArgs = (argv: string[]): BridgeOptions => {
         break;
       case "--new-chat-selector":
         options.newChatSelector = next;
+        break;
+      case "--session-dir":
+        options.sessionDir = next;
         break;
       default:
         throw new Error(`Unknown option: ${arg}`);
@@ -590,15 +605,17 @@ const listTargets = async (cdpUrl: string): Promise<ChromeTarget[]> => {
   return (await response.json()) as ChromeTarget[];
 };
 
+const isChatGptTarget = (candidate: ChromeTarget): boolean => {
+  const url = candidate.url ?? "";
+  return Boolean(
+    candidate.webSocketDebuggerUrl &&
+    (url.includes("chatgpt.com") || url.includes("chat.openai.com"))
+  );
+};
+
 const findChatGptTarget = async (cdpUrl: string): Promise<ChromeTarget> => {
   const targets = await listTargets(cdpUrl);
-  const target = targets.find((candidate) => {
-    const url = candidate.url ?? "";
-    return (
-      candidate.webSocketDebuggerUrl &&
-      (url.includes("chatgpt.com") || url.includes("chat.openai.com"))
-    );
-  });
+  const target = targets.find(isChatGptTarget);
 
   if (!target?.webSocketDebuggerUrl) {
     throw new Error("No ChatGPT tab with a DevTools websocket was found.");
@@ -632,8 +649,95 @@ const closeChromeTarget = async (cdpUrl: string, target: ChromeTarget | undefine
   await fetch(new URL(`/json/close/${encodeURIComponent(target.id)}`, cdpUrl)).catch(() => undefined);
 };
 
-const shouldCloseCreatedTarget = (options: BridgeOptions, parsedResponse: boolean): boolean =>
+interface TargetSession {
+  schemaVersion: 1;
+  runId: string;
+  targetId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const runScopedSessionId = (
+  options: BridgeOptions,
+  expectedAck: ExpectedDirectiveAck | undefined
+): string | undefined => {
+  if (options.reuseChat || !options.runScopedTarget) {
+    return undefined;
+  }
+
+  return expectedAck?.runId ?? process.env.THEHOOD_RUN_ID;
+};
+
+const safeSessionFileName = (runId: string): string =>
+  `${runId.replace(/[^A-Za-z0-9_.-]/g, "_")}.json`;
+
+const sessionFilePath = (options: BridgeOptions, runId: string): string =>
+  path.join(options.sessionDir, safeSessionFileName(runId));
+
+const readTargetSession = async (options: BridgeOptions, runId: string): Promise<TargetSession | undefined> => {
+  try {
+    const parsed = JSON.parse(await fs.readFile(sessionFilePath(options, runId), "utf8")) as Partial<TargetSession>;
+    if (parsed.schemaVersion === 1 && parsed.runId === runId && typeof parsed.targetId === "string") {
+      return parsed as TargetSession;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const removeTargetSession = async (options: BridgeOptions, runId: string): Promise<void> => {
+  await fs.rm(sessionFilePath(options, runId), { force: true }).catch(() => undefined);
+};
+
+const findRunScopedTarget = async (
+  options: BridgeOptions,
+  runId: string
+): Promise<ChromeTarget | undefined> => {
+  const session = await readTargetSession(options, runId);
+  if (!session) {
+    return undefined;
+  }
+
+  const targets = await listTargets(options.cdpUrl);
+  const target = targets.find((candidate) => candidate.id === session.targetId);
+
+  if (target && isChatGptTarget(target)) {
+    return target;
+  }
+
+  await removeTargetSession(options, runId);
+  return undefined;
+};
+
+const writeTargetSession = async (options: BridgeOptions, runId: string, target: ChromeTarget): Promise<void> => {
+  if (!target.id) {
+    return;
+  }
+
+  const filePath = sessionFilePath(options, runId);
+  const existing = await readTargetSession(options, runId);
+  const now = new Date().toISOString();
+  const session: TargetSession = {
+    schemaVersion: 1,
+    runId,
+    targetId: target.id,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+};
+
+const shouldCloseCreatedTarget = (
+  options: BridgeOptions,
+  parsedResponse: boolean,
+  runScopedTarget: boolean
+): boolean =>
   !options.reuseChat &&
+  !runScopedTarget &&
   !options.keepCreatedTarget &&
   (parsedResponse || !options.keepTargetOnFailure);
 
@@ -1099,13 +1203,24 @@ const run = async (): Promise<AgentResponse> => {
     return fallback(requiredDataKey, "This Node.js runtime does not provide WebSocket support.", "failed", expectedAck);
   }
 
+  const sessionRunId = runScopedSessionId(options, expectedAck);
   let target: ChromeTarget;
   let client: CdpClient;
   let parsedResponse = false;
+  let createdRunScopedTarget = false;
+  let reusedRunScopedTarget = false;
   try {
-    target = options.reuseChat
-      ? await findChatGptTarget(options.cdpUrl)
-      : await createChatGptTarget(options.cdpUrl, options.freshUrl);
+    if (options.reuseChat) {
+      target = await findChatGptTarget(options.cdpUrl);
+    } else {
+      const sessionTarget = sessionRunId ? await findRunScopedTarget(options, sessionRunId) : undefined;
+      target = sessionTarget ?? await createChatGptTarget(options.cdpUrl, options.freshUrl);
+      reusedRunScopedTarget = Boolean(sessionTarget);
+      createdRunScopedTarget = Boolean(sessionRunId && !sessionTarget);
+      if (sessionRunId && target.id) {
+        await writeTargetSession(options, sessionRunId, target);
+      }
+    }
     client = await connectCdp(target.webSocketDebuggerUrl ?? "", options.commandTimeoutMs);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1113,7 +1228,7 @@ const run = async (): Promise<AgentResponse> => {
   }
 
   try {
-    if (!options.reuseChat) {
+    if (!options.reuseChat && !reusedRunScopedTarget) {
       await client.navigate(options.freshUrl);
     }
 
@@ -1126,7 +1241,7 @@ const run = async (): Promise<AgentResponse> => {
       return fallback(requiredDataKey, loginRequiredMessage, "blocked", expectedAck);
     }
 
-    if (!options.reuseChat) {
+    if (!options.reuseChat && !reusedRunScopedTarget) {
       const freshness = await ensureFreshComposer(
         client,
         options.promptSelector,
@@ -1193,8 +1308,10 @@ const run = async (): Promise<AgentResponse> => {
     );
   } finally {
     client.close();
-    if (shouldCloseCreatedTarget(options, parsedResponse)) {
+    if (shouldCloseCreatedTarget(options, parsedResponse, Boolean(sessionRunId))) {
       await closeChromeTarget(options.cdpUrl, target);
+    } else if (createdRunScopedTarget && sessionRunId && !target.id) {
+      await removeTargetSession(options, sessionRunId);
     }
   }
 };

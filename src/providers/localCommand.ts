@@ -61,6 +61,8 @@ interface LocalAgentExecutionArtifactInput {
   durationMs: number;
   exitCode: number;
   timedOut: boolean;
+  stdout: string;
+  stderr: string;
   stdoutLength: number;
   stderrLength: number;
   responseParsed: boolean;
@@ -517,6 +519,23 @@ const writeLocalAgentExecutionArtifact = async (
   const sandbox = commandOption(input.args, "--sandbox");
   const permissionMode = commandOption(input.args, "--permission-mode");
   const summary = `${input.request.role} local agent ${input.spec.providerId}:${input.request.assignment.model} exited ${input.exitCode}.`;
+  const logBaseName = `${input.request.role}-${input.spec.providerId}-${newId("local-agent-output")}`;
+  const stdoutArtifact = await writeRunArtifact({
+    repoPath: input.request.run.repoPath,
+    runId: input.request.run.runId,
+    kind: "log",
+    name: `${logBaseName}.stdout.txt`,
+    content: input.stdout,
+    summary: `stdout for ${input.request.role} local agent ${input.spec.providerId}:${input.request.assignment.model}`
+  });
+  const stderrArtifact = await writeRunArtifact({
+    repoPath: input.request.run.repoPath,
+    runId: input.request.run.runId,
+    kind: "log",
+    name: `${logBaseName}.stderr.txt`,
+    content: input.stderr,
+    summary: `stderr for ${input.request.role} local agent ${input.spec.providerId}:${input.request.assignment.model}`
+  });
   const payload: JsonObject = {
     schemaVersion: 1,
     kind: "local_agent_execution",
@@ -539,6 +558,8 @@ const writeLocalAgentExecutionArtifact = async (
     timedOut: input.timedOut,
     stdoutLength: input.stdoutLength,
     stderrLength: input.stderrLength,
+    stdoutRef: stdoutArtifact.ref,
+    stderrRef: stderrArtifact.ref,
     responseParsed: input.responseParsed,
     responseStatus: input.responseStatus,
     ...(input.patchArtifact
@@ -564,7 +585,7 @@ const writeLocalAgentExecutionArtifact = async (
   await saveRun({
     ...latest,
     updatedAt: nowIso(),
-    artifacts: [...latest.artifacts, artifact],
+    artifacts: [...latest.artifacts, stdoutArtifact, stderrArtifact, artifact],
     events: [
       ...latest.events,
       {
@@ -586,6 +607,8 @@ const writeLocalAgentExecutionArtifact = async (
           durationMs: input.durationMs,
           responseParsed: input.responseParsed,
           responseStatus: input.responseStatus,
+          stdoutRef: stdoutArtifact.ref,
+          stderrRef: stderrArtifact.ref,
           artifactRef: artifact.ref
         }
       }
@@ -705,6 +728,8 @@ export const runLocalAgentCommand = async (
       timedOut,
       stdoutLength: redactedStdout.length,
       stderrLength: redactedStderr.length,
+      stdout: redactedStdout,
+      stderr: redactedStderr,
       responseParsed: Boolean(parsedResponse),
       responseStatus: responseWithPatch.status,
       ...(patchArtifact ? { patchArtifact } : {})
