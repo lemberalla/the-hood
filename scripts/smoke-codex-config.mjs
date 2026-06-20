@@ -27,10 +27,27 @@ const readOption = (name, fallback) => {
   return value;
 };
 
+const optionalOption = (name) => {
+  const index = process.argv.indexOf(name);
+  if (index === -1) {
+    return undefined;
+  }
+
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${name} requires a value.`);
+  }
+
+  return value;
+};
+
+const configOption = optionalOption("--config");
+const repoOption = optionalOption("--repo");
+const defaultConfigPath = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "config.toml");
 const configPath = path.resolve(
-  readOption("--config", path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "config.toml"))
+  configOption ?? defaultConfigPath
 );
-const repoPath = path.resolve(readOption("--repo", root));
+let repoPath = path.resolve(repoOption ?? root);
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -136,10 +153,70 @@ const parseInlineEnv = (value) => {
   return env;
 };
 
-const loadTheHoodConfig = async () => {
-  const source = await fs.readFile(configPath, "utf8");
+const fileExists = async (filePath) => {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return false;
+    }
+
+    throw error;
+  }
+};
+
+const createFixtureRepo = async () => {
+  const fixtureRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-codex-config-smoke-repo-"));
+  await fs.writeFile(path.join(fixtureRepoPath, "README.md"), "# TheHood Codex config smoke\n", "utf8");
+  await fs.mkdir(path.join(fixtureRepoPath, ".thehood"), { recursive: true });
+  await fs.writeFile(
+    path.join(fixtureRepoPath, ".thehood", "config.json"),
+    `${JSON.stringify(
+      {
+        version: 1,
+        roles: {
+          orchestrator: {
+            provider: "stub",
+            model: "orchestrator"
+          },
+          implementer: {
+            provider: "stub",
+            model: "implementer"
+          },
+          qa: {
+            provider: "stub",
+            model: "qa"
+          },
+          verifier: {
+            provider: "stub",
+            model: "verifier"
+          },
+          critic: {
+            provider: "stub",
+            model: "critic"
+          }
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  return fixtureRepoPath;
+};
+
+const generatedLocalLaunch = () => ({
+  command: process.execPath,
+  args: [path.join(root, "dist", "cli", "main.js"), "mcp"],
+  env: {}
+});
+
+const loadTheHoodConfig = async (filePath) => {
+  const source = await fs.readFile(filePath, "utf8");
   const serverBody = sectionBody(source, "mcp_servers.thehood");
-  assert.ok(serverBody, `Missing [mcp_servers.thehood] in ${configPath}`);
+  assert.ok(serverBody, `Missing [mcp_servers.thehood] in ${filePath}`);
 
   const values = keyValues(serverBody);
   const commandValue = values.get("command");
@@ -208,7 +285,29 @@ const runMcp = async (launch, messages) => {
     .map((line) => JSON.parse(line));
 };
 
-const launch = await loadTheHoodConfig();
+const loadSmokeLaunch = async () => {
+  if (await fileExists(configPath)) {
+    return {
+      launch: await loadTheHoodConfig(configPath),
+      configLabel: configPath
+    };
+  }
+
+  if (configOption) {
+    throw new Error(`Config file does not exist: ${configPath}`);
+  }
+
+  if (!repoOption) {
+    repoPath = await createFixtureRepo();
+  }
+
+  return {
+    launch: generatedLocalLaunch(),
+    configLabel: `generated local fixture (missing ${configPath})`
+  };
+};
+
+const { launch, configLabel } = await loadSmokeLaunch();
 const baseMessages = [
   {
     jsonrpc: "2.0",
@@ -327,7 +426,7 @@ for (const role of activeRoles) {
 process.stdout.write(
   [
     "Codex config MCP smoke passed.",
-    `config: ${configPath}`,
+    `config: ${configLabel}`,
     `repo: ${repoPath}`,
     `server: ${launch.command} ${launch.args.join(" ")}`,
     `capabilities: ${health.runtime.capabilities.join(", ")}`,
