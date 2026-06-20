@@ -739,6 +739,21 @@ const crewLaneRows = (run: RunMonitorItem | undefined, width: number): string[] 
   );
 };
 
+const revisionTrailRows = (run: RunMonitorItem | undefined, width: number): string[] => {
+  if (!run || run.revisionTrail.length === 0) {
+    return [];
+  }
+
+  return run.revisionTrail.slice(-3).map((item) =>
+    tableRow([
+      [truncateEnd(item.reasonCode ?? "revision", 22), 22],
+      [truncateEnd(item.status, 16), 16],
+      [truncateEnd(item.sourceRole ?? "source", 10), 10],
+      [truncateEnd(item.repairResponseRef ? "repair linked" : item.packetArtifactRef, Math.max(16, width - 52)), Math.max(16, width - 52)]
+    ])
+  );
+};
+
 const browserLines = (input: DashboardInput, width: number): string[] => [
   "BROWSER / REMOTE SURFACE",
   `cdp ${input.browser.cdpReachable ? "reachable" : "unreachable"} ${truncateEnd(input.browser.cdpUrl, Math.max(10, width - 18))}`,
@@ -806,6 +821,7 @@ const commandCenterWide = (view: DashboardView, width: number, useColor: boolean
     { width: leftPanelWidth, lines: ["HANDOFFS", ...handoffRows(view.input.approvalInbox, leftPanelWidth, 4)] },
     { width: rightPanelWidth, lines: ["REVIEW LANES", ...reviewLaneRows(view.currentRun, rightPanelWidth)] }
   ]);
+  const revisionRows = revisionTrailRows(view.currentRun, innerWidth);
   const lines = [
     ...sideBySide,
     "",
@@ -818,6 +834,13 @@ const commandCenterWide = (view: DashboardView, width: number, useColor: boolean
     "",
     "CREW TRAIL",
     ...crewLaneRows(view.currentRun, innerWidth),
+    ...(revisionRows.length > 0
+      ? [
+          "",
+          "REVISION TRAIL",
+          ...revisionRows
+        ]
+      : []),
     "",
     "LOOP RESPONSIBILITIES",
     ...responsibilityRows(view.currentRun, innerWidth)
@@ -829,6 +852,7 @@ const commandCenterWide = (view: DashboardView, width: number, useColor: boolean
 const commandCenterCompact = (view: DashboardView, width: number, useColor: boolean): string => {
   const innerWidth = width - 4;
   const crew = crewLines(view.input, innerWidth).slice(1);
+  const revisionRows = revisionTrailRows(view.currentRun, innerWidth);
   const lines = [
     "MARK        ACTIVE JOB",
     tableRow([[".-TH-.", 12], [view.currentRun ? `${shortRunId(view.currentRun.runId)}  ${view.currentRun.state} / ${view.currentRun.mode}` : "no active job", innerWidth - 14]]),
@@ -856,6 +880,13 @@ const commandCenterCompact = (view: DashboardView, width: number, useColor: bool
     "",
     "CREW TRAIL",
     ...crewLaneRows(view.currentRun, innerWidth),
+    ...(revisionRows.length > 0
+      ? [
+          "",
+          "REVISION TRAIL",
+          ...revisionRows
+        ]
+      : []),
     "",
     "REVIEW LANES",
     ...reviewLaneRows(view.currentRun, innerWidth)

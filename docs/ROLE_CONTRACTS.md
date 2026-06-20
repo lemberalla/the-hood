@@ -61,7 +61,7 @@ Review ownership is derived by the runtime from canonical run evidence. A lane r
 - Critic ownership is advisory. The runtime may call the critic from a `critic_trigger` policy decision, but critic output cannot satisfy validation, verifier, or completion gates.
 - Same-run summons are sidecar evidence and remain read-only.
 - Same-run fan-outs are grouped sidecar evidence and remain read-only.
-- Fixable QA, critic, or verifier findings can become a runtime-owned `revision_packet` handoff back to the implementer. The packet does not grant reviewer edit power and does not satisfy validation or verifier gates.
+- Fixable QA, critic, or verifier findings can become a runtime-owned `revision_packet` handoff back to the implementer. The packet and derived revision trail do not grant reviewer edit power and do not satisfy validation or verifier gates.
 
 ## Orchestrator
 

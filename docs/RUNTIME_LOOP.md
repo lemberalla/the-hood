@@ -44,6 +44,8 @@ Review routing is a runtime decision, not a model decision. After deterministic 
 
 Revision packets are runtime repair handoffs, not reviewer authority. When QA returns `needs_revision`, verifier returns `revise`, or critic returns `needs_revision`, the runtime writes a compact `revision_packet` artifact and moves the run back to `implementing` with that packet in the implementer directive context. The next QA/verifier pass must use fresh post-repair runtime evidence. Verifier `ask_user` or `abort`, protected test gates, unsafe critic feedback, max-iteration failures, and other hard policy gates still stop instead of silently revising.
 
+Revision trails are runtime-derived visibility over that repair path. A trail item links the revision packet, delegation event, implementer repair response, post-repair validation artifacts, review responses, handoff refs, and terminal completion event when present. It lets CLI, MCP, TUI, final reports, and progress packets show whether a repair is still active or already reviewed. It does not make stale pre-repair QA, validation, or verifier evidence valid for the post-repair pass.
+
 Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
 
 Crew lane trails are the product-facing version of those same evidence snapshots. The runtime derives `crewLanes` from loop responsibilities and review lanes so operators can see the hood as planner, builder, runtime QA, model QA tester, verifier, critic, integrator, approval, reconciliation, and completion lanes. Each lane includes authority (`edit`, `read_only`, `runtime`, or `operator`), required/advisory state, compact refs, and whether the lane can satisfy a gate. Crew lanes are display and handoff evidence only; they do not schedule agents, grant tools, or make advisory sidecars authoritative.
@@ -143,6 +145,7 @@ The runtime captures evidence directly:
 - review routing artifacts explaining risk tier, required lanes, skipped roles, and routing reasons
 - critic trigger artifacts explaining why an advisory critic was called
 - revision packet artifacts explaining why repair was delegated back to the implementer
+- revision trail items linking repair delegation to post-repair validation and review
 - external transfer manifest artifacts before approved provider transfers
 - typed handoff records for role delegation, approval mediation, and completion
 
@@ -158,9 +161,9 @@ Each provider directive includes a bounded `canonicalMemory` object. It is a ref
 
 ## Final Reports
 
-Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, bounded review ownership lanes, and bounded crew lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
+Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, bounded review ownership lanes, bounded crew lanes, and bounded revision trail items. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
-Run status insights expose the latest progress packet, reconciliation, repo context, provider execution, final report, and transfer manifest refs. They also expose bounded crew lane trails, loop responsibility schedules, and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Crew lanes, loop schedules, and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
+Run status insights expose the latest progress packet, reconciliation, repo context, provider execution, final report, and transfer manifest refs. They also expose bounded revision trails, crew lane trails, loop responsibility schedules, and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, revision handoffs, and review ownership lanes. Revision trails, crew lanes, loop schedules, and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

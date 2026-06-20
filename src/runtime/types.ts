@@ -415,6 +415,46 @@ export interface CrewLaneTrail {
   blockers: CrewLane[];
 }
 
+export type RevisionTrailStatus =
+  | "packet_written"
+  | "delegated"
+  | "repairing"
+  | "repair_reported"
+  | "awaiting_review"
+  | "reviewed"
+  | "superseded";
+
+export interface RevisionTrailItem {
+  id: string;
+  status: RevisionTrailStatus;
+  active: boolean;
+  packetArtifactRef: string;
+  sourceRole?: RuntimeRole;
+  reasonCode?: string;
+  repairObjective?: string;
+  sourceResponseRef?: string;
+  criticTriggerRef?: string;
+  repairResponseRef?: string;
+  completedEventRef?: string;
+  evidenceRefs: string[];
+  validationArtifactRefs: string[];
+  reviewResponseRefs: string[];
+  artifactRefs: string[];
+  eventRefs: string[];
+  handoffRefs: string[];
+  sourceRefs: ProgressPacketSourceRef[];
+}
+
+export interface RevisionTrail {
+  schemaVersion: 1;
+  kind: "revision_trail";
+  runId: string;
+  generatedAt: string;
+  phase: RunState;
+  items: RevisionTrailItem[];
+  latest?: RevisionTrailItem;
+}
+
 export interface ProgressPacketLimits {
   maxArtifacts: number;
   maxProviderResponses: number;
@@ -426,6 +466,7 @@ export interface ProgressPacketLimits {
   maxOperatorNextActions: number;
   maxLoopResponsibilities: number;
   maxCrewLanes: number;
+  maxRevisionTrailItems: number;
   maxStringLength: number;
 }
 
@@ -572,6 +613,7 @@ export interface ProgressPacket {
   operatorNextActions: ProgressPacketBoundedSection<OperatorNextAction>;
   loopResponsibilities: ProgressPacketBoundedSection<LoopResponsibility>;
   crewLanes: ProgressPacketBoundedSection<CrewLane>;
+  revisionTrail: ProgressPacketBoundedSection<RevisionTrailItem>;
   evidence: ProgressPacketEvidence;
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;

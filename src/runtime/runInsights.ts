@@ -5,6 +5,7 @@ import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
+import { deriveRevisionTrail } from "./revisionTrail.js";
 import { agentMarkdownField, boundAgentMarkdownPayloads, extractAgentMarkdown } from "../providers/markdownPayload.js";
 import {
   latestRunHandoff,
@@ -20,6 +21,7 @@ import type {
   LoopResponsibilitySchedule,
   OperatorNextAction,
   ReviewLane,
+  RevisionTrail,
   RunArtifact,
   RunRecord
 } from "./types.js";
@@ -138,6 +140,7 @@ export interface RunInsights {
   latestTransferManifest?: RunArtifactSummary;
   canonicalMemory?: JsonObject;
   crewLanes: CrewLaneTrail;
+  revisionTrail: RevisionTrail;
   loopResponsibilities: LoopResponsibilitySchedule;
   reviewLanes: ReviewLane[];
   operatorNextActions: OperatorNextAction[];
@@ -457,6 +460,7 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const insights: RunInsights = {
     ...(latestHandoff ? { latestHandoff: summarizeRunHandoff(latestHandoff) } : {}),
     crewLanes: deriveCrewLaneTrail(run),
+    revisionTrail: deriveRevisionTrail(run),
     loopResponsibilities: deriveLoopResponsibilitySchedule(run),
     reviewLanes: deriveReviewLanes(run),
     operatorNextActions: deriveOperatorNextActions(run),

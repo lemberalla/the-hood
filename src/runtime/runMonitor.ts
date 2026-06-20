@@ -2,7 +2,17 @@ import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
-import type { CrewLane, LoopResponsibility, OperatorNextAction, ReviewLane, RunArtifact, RunEvent, RunRecord } from "./types.js";
+import { deriveRevisionTrail } from "./revisionTrail.js";
+import type {
+  CrewLane,
+  LoopResponsibility,
+  OperatorNextAction,
+  ReviewLane,
+  RevisionTrailItem,
+  RunArtifact,
+  RunEvent,
+  RunRecord
+} from "./types.js";
 
 export type RunMonitorPhase =
   | "provider_wait"
@@ -40,6 +50,7 @@ export interface RunMonitorItem {
   artifactRefs: string[];
   reviewLanes: RunMonitorReviewLane[];
   crewLanes: CrewLane[];
+  revisionTrail: RevisionTrailItem[];
   loopResponsibilities: LoopResponsibility[];
   operatorNextActions: OperatorNextAction[];
 }
@@ -130,6 +141,9 @@ const loopResponsibilities = (run: RunRecord): LoopResponsibility[] =>
 const crewLanes = (run: RunRecord): CrewLane[] =>
   deriveCrewLaneTrail(run).lanes.slice(0, 10);
 
+const revisionTrail = (run: RunRecord): RevisionTrailItem[] =>
+  deriveRevisionTrail(run).items.slice(-5);
+
 const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
   const waitingDirective = directiveWait(run);
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
@@ -150,6 +164,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       artifactRefs: approvalArtifactRefs(run),
       reviewLanes: reviewLanes(run),
       crewLanes: crewLanes(run),
+      revisionTrail: revisionTrail(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -173,6 +188,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       artifactRefs: artifactRef ? [artifactRef] : [],
       reviewLanes: reviewLanes(run),
       crewLanes: crewLanes(run),
+      revisionTrail: revisionTrail(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -190,6 +206,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
       reviewLanes: reviewLanes(run),
       crewLanes: crewLanes(run),
+      revisionTrail: revisionTrail(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -206,6 +223,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
     artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
     reviewLanes: reviewLanes(run),
     crewLanes: crewLanes(run),
+    revisionTrail: revisionTrail(run),
     loopResponsibilities: loopResponsibilities(run),
     operatorNextActions: operatorNextActions(run)
   };

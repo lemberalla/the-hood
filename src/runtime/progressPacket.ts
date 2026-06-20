@@ -4,6 +4,7 @@ import { newId, nowIso } from "./ids.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
+import { deriveRevisionTrail } from "./revisionTrail.js";
 import { loadRun, saveRun } from "./store.js";
 import {
   runtimeRoles,
@@ -25,6 +26,7 @@ import {
   type ProgressPacketRunEvent,
   type ProgressPacketSourceRef,
   type ProgressPacketToolEvidence,
+  type RevisionTrailItem,
   type RunArtifact,
   type RunArtifactKind,
   type RunEvent,
@@ -45,6 +47,7 @@ export const defaultProgressPacketLimits: ProgressPacketLimits = {
   maxOperatorNextActions: 8,
   maxLoopResponsibilities: 12,
   maxCrewLanes: 12,
+  maxRevisionTrailItems: 8,
   maxStringLength: 1000
 };
 
@@ -72,6 +75,8 @@ const ontologyTerms = [
   "LoopResponsibilitySchedule",
   "CrewLane",
   "CrewLaneTrail",
+  "RevisionTrail",
+  "RevisionTrailItem",
   "OperatorNextAction",
   "OperatorActionOwner",
   "Reconciliation",
@@ -615,6 +620,16 @@ export const buildProgressPacket = (
       }
     })
   );
+  const revisionTrail = boundedSection(
+    "revisionTrail",
+    deriveRevisionTrail(run).items,
+    state.limits.maxRevisionTrailItems,
+    state,
+    (item): RevisionTrailItem => ({
+      ...item,
+      ...(item.repairObjective ? { repairObjective: truncateText(item.repairObjective, state) } : {})
+    })
+  );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestProviderExecution = latestArtifact(artifacts.items, (artifact) => artifact.kind === "provider_invocation");
@@ -646,6 +661,7 @@ export const buildProgressPacket = (
       ...item.artifactRefs.map((ref): ProgressPacketSourceRef => ({ kind: "run_artifact", runId: run.runId, ref }))
     ]),
     ...crewLanes.items.flatMap((lane) => lane.sourceRefs),
+    ...revisionTrail.items.flatMap((item) => item.sourceRefs),
     ...questions.items.flatMap((question) => question.sourceRefs)
   ]);
 
@@ -679,6 +695,7 @@ export const buildProgressPacket = (
     operatorNextActions,
     loopResponsibilities,
     crewLanes,
+    revisionTrail,
     evidence: {
       artifacts,
       providerResponses,
@@ -703,6 +720,7 @@ export const buildProgressPacket = (
         "operatorNextActions",
         "loopResponsibilities",
         "crewLanes",
+        "revisionTrail",
         "openQuestions"
       ],
       notes: [

@@ -29,6 +29,7 @@ export const runtimeCapabilities = [
   "model_assisted_qa_tester",
   "critic_trigger_artifacts",
   "revision_packet_artifacts",
+  "revision_trail",
   "runtime_revision_delegation",
   "branded_tui_shell",
   "approval_inbox_tui",

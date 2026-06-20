@@ -312,6 +312,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout")
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorContent.runtime.capabilities.includes("revision_packet_artifacts"));
+assert.ok(doctorContent.runtime.capabilities.includes("revision_trail"));
 assert.ok(doctorContent.runtime.capabilities.includes("runtime_revision_delegation"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_repo_gateway_tools"));
@@ -675,6 +676,8 @@ assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReport
 assert.equal(consultStatus.insights.latestProgressPacket.kind, "progress");
 assert.equal(consultStatus.insights.canonicalMemory.kind, "canonical_memory");
 assert.equal(consultStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
+assert.equal(consultStatus.insights.revisionTrail.kind, "revision_trail");
+assert.ok(Array.isArray(consultStatus.insights.revisionTrail.items));
 assert.equal(consultStatus.insights.crewLanes.kind, "crew_lane_trail");
 assert.ok(Array.isArray(consultStatus.insights.crewLanes.lanes));
 assert.ok(

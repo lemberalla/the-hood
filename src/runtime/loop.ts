@@ -26,6 +26,7 @@ import {
   writeRevisionPacketArtifact,
   type RevisionPacketDecision
 } from "./revisionPacket.js";
+import { deriveRevisionTrail } from "./revisionTrail.js";
 import {
   decideReviewRouting,
   reviewRoutingJson,
@@ -895,6 +896,7 @@ const writeFinalReport = async (
           ? { criticTrigger: latestCriticTriggerArtifact(latest) }
           : {}),
         crewLanes: deriveCrewLaneTrail(latest).lanes,
+        revisionTrail: deriveRevisionTrail(latest).items,
         reviewLanes: deriveReviewLanes(latest)
       },
       null,

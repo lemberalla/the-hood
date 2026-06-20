@@ -291,6 +291,16 @@ const formatRevisionPacketLines = (insights: RunInsights): string[] => {
   ];
 };
 
+const formatRevisionTrailLines = (insights: RunInsights): string[] =>
+  insights.revisionTrail.items.slice(-5).flatMap((item) => [
+    `  ${item.reasonCode ?? "revision"}  ${item.status}${item.active ? " active" : ""}  source=${item.sourceRole ?? "unknown"}`,
+    ...(item.repairObjective ? [`    repairObjective: ${item.repairObjective}`] : []),
+    `    packet: ${item.packetArtifactRef}`,
+    ...(item.repairResponseRef ? [`    repairResponse: ${item.repairResponseRef}`] : []),
+    ...(item.validationArtifactRefs.length > 0 ? [`    validation: ${item.validationArtifactRefs.join(", ")}`] : []),
+    ...(item.reviewResponseRefs.length > 0 ? [`    review: ${item.reviewResponseRefs.join(", ")}`] : [])
+  ]);
+
 const formatFanoutLines = (insights: RunInsights): string[] => {
   const fanout = insights.latestFanout;
 
@@ -452,6 +462,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const providerExecutions = formatProviderExecutionLines(insights);
   const criticTrigger = formatCriticTriggerLines(insights);
   const revisionPacket = formatRevisionPacketLines(insights);
+  const revisionTrail = formatRevisionTrailLines(insights);
   const reviewRouting = formatReviewRoutingLines(insights);
   const fanout = formatFanoutLines(insights);
   const crewLanes = formatCrewLaneLines(insights);
@@ -504,6 +515,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
       ? [
           "",
           ...revisionPacket
+        ]
+      : []),
+    ...(revisionTrail.length > 0
+      ? [
+          "",
+          "revision trail:",
+          ...revisionTrail
         ]
       : []),
     ...(reviewRouting.length > 0

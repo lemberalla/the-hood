@@ -492,6 +492,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("configurable_budget_envelo
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorResult.runtime.capabilities.includes("critic_trigger_artifacts"));
 assert.ok(doctorResult.runtime.capabilities.includes("revision_packet_artifacts"));
+assert.ok(doctorResult.runtime.capabilities.includes("revision_trail"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_revision_delegation"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_access_modes"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_repo_gateway_tools"));
@@ -2515,6 +2516,23 @@ assert.equal(qaRevisionPacket.kind, "revision_packet");
 assert.equal(qaRevisionPacket.sourceRole, "qa");
 assert.equal(qaRevisionPacket.reasonCode, "qa_needs_revision");
 assert.ok(qaRevisionPacket.evidenceRefs.some((ref) => ref.includes("/agent/")));
+const qaRevisionFinalReportArtifact = qaRevisionContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "report" && artifact.summary.includes("Final report")
+);
+assert.ok(qaRevisionFinalReportArtifact, "QA revision loop should attach a final report");
+const qaRevisionFinalReport = JSON.parse(await fs.readFile(qaRevisionFinalReportArtifact.ref, "utf8"));
+assert.ok(Array.isArray(qaRevisionFinalReport.revisionTrail), "final report should expose revision trail");
+assert.ok(
+  qaRevisionFinalReport.revisionTrail.some(
+    (item) =>
+      item.packetArtifactRef === qaRevisionPacketArtifact.ref &&
+      item.status === "reviewed" &&
+      item.repairResponseRef &&
+      item.validationArtifactRefs.length > 0 &&
+      item.reviewResponseRefs.length > 0
+  ),
+  "final report revision trail should link repair, validation, and review evidence"
+);
 assert.ok(
   qaRevisionContinue.run.events.some(
     (event) => event.type === "revision_delegated" && event.data?.reasonCode === "qa_needs_revision"
@@ -2534,6 +2552,18 @@ const qaRevisionStatus = JSON.parse(
   (await runCli(["status", qaRevisionRun.runId, "--repo", qaRevisionRepoPath, "--json"])).stdout
 );
 assert.equal(qaRevisionStatus.insights.latestRevisionPacket.reasonCode, "qa_needs_revision");
+assert.equal(qaRevisionStatus.insights.revisionTrail.kind, "revision_trail");
+assert.ok(
+  qaRevisionStatus.insights.revisionTrail.items.some(
+    (item) =>
+      item.packetArtifactRef === qaRevisionPacketArtifact.ref &&
+      item.status === "reviewed" &&
+      item.repairResponseRef &&
+      item.validationArtifactRefs.length > 0 &&
+      item.reviewResponseRefs.length > 0
+  ),
+  "status insights should expose the reviewed repair trail"
+);
 assert.equal(
   qaRevisionStatus.insights.canonicalMemory.currentRun.artifacts.latestRevisionPacket.ref,
   qaRevisionPacketArtifact.ref
@@ -2544,8 +2574,16 @@ const qaRevisionProgressArtifact = qaRevisionContinue.run.artifacts.find(
 assert.ok(qaRevisionProgressArtifact, "QA revision loop should still complete with a progress packet");
 const qaRevisionProgress = JSON.parse(await fs.readFile(qaRevisionProgressArtifact.ref, "utf8"));
 assert.equal(qaRevisionProgress.latest.revisionPacket.ref, qaRevisionPacketArtifact.ref);
+assert.ok(Array.isArray(qaRevisionProgress.revisionTrail.items), "progress packet should expose revision trail");
+assert.ok(
+  qaRevisionProgress.revisionTrail.items.some(
+    (item) => item.packetArtifactRef === qaRevisionPacketArtifact.ref && item.status === "reviewed"
+  ),
+  "progress packet should expose reviewed revision trail item"
+);
 const qaRevisionStatusText = await runCli(["status", qaRevisionRun.runId, "--repo", qaRevisionRepoPath]);
 assert.ok(qaRevisionStatusText.stdout.includes("revision packet:"));
+assert.ok(qaRevisionStatusText.stdout.includes("revision trail:"));
 assert.ok(qaRevisionStatusText.stdout.includes("reasonCode: qa_needs_revision"));
 
 const verifierRevisionRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-verifier-revision-smoke-"));
