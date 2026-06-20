@@ -379,6 +379,23 @@ const formatLoopResponsibilityLines = (insights: RunInsights): string[] =>
     ];
   });
 
+const formatCrewLaneOwner = (owner: RunInsights["crewLanes"]["lanes"][number]["owner"]): string =>
+  owner.assignment ? `${owner.label} (${owner.assignment})` : owner.label;
+
+const formatCrewLaneLines = (insights: RunInsights): string[] =>
+  insights.crewLanes.lanes.slice(0, 10).flatMap((lane) => {
+    const status = formatLoopResponsibilityStatus(lane.status);
+    const gate = lane.canSatisfyGate ? "gate" : lane.sidecarOnly ? "sidecar" : "view";
+    const required = lane.required ? (lane.satisfiesRequired ? "satisfies" : "missing") : "advisory";
+
+    return [
+      `  ${lane.kind.padEnd(17)} ${status.padEnd(12)} ${lane.authority.padEnd(9)} ${required}  ${gate}  owner=${formatCrewLaneOwner(lane.owner)}`,
+      `    ${lane.summary}`,
+      ...(lane.artifactRefs[0] ? [`    artifact: ${lane.artifactRefs[0]}`] : []),
+      ...(lane.eventRefs[0] ? [`    event: ${lane.eventRefs[0]}`] : [])
+    ];
+  });
+
 const formatOperatorNextActionLines = (insights: RunInsights): string[] =>
   insights.operatorNextActions.slice(0, 6).flatMap((nextAction) => [
     `  ${nextAction.action.padEnd(24)} ${nextAction.blocking ? "blocking" : "ready"}  owner=${formatOperatorOwner(nextAction.owner)}`,
@@ -437,6 +454,7 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   const revisionPacket = formatRevisionPacketLines(insights);
   const reviewRouting = formatReviewRoutingLines(insights);
   const fanout = formatFanoutLines(insights);
+  const crewLanes = formatCrewLaneLines(insights);
   const reviewLanes = formatReviewLaneLines(insights);
   const loopResponsibilities = formatLoopResponsibilityLines(insights);
   const operatorNextActions = formatOperatorNextActionLines(insights);
@@ -498,6 +516,13 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
       ? [
           "",
           ...fanout
+        ]
+      : []),
+    ...(crewLanes.length > 0
+      ? [
+          "",
+          "crew lanes:",
+          ...crewLanes
         ]
       : []),
     ...(reviewLanes.length > 0

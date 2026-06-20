@@ -10,6 +10,7 @@ import {
 import { writeRunArtifact } from "./artifacts.js";
 import { runRuntimeCommand } from "./commandRunner.js";
 import { loadConfig } from "./config.js";
+import { deriveCrewLaneTrail } from "./crewLanes.js";
 import {
   transferManifestSummary,
   writeExternalTransferManifestArtifact
@@ -893,6 +894,7 @@ const writeFinalReport = async (
         ...(latestCriticTriggerArtifact(latest)
           ? { criticTrigger: latestCriticTriggerArtifact(latest) }
           : {}),
+        crewLanes: deriveCrewLaneTrail(latest).lanes,
         reviewLanes: deriveReviewLanes(latest)
       },
       null,

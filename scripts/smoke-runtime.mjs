@@ -480,6 +480,7 @@ assert.ok(doctorResult.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_inbox_tui"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorResult.runtime.capabilities.includes("operator_next_actions"));
+assert.ok(doctorResult.runtime.capabilities.includes("crew_lane_trail"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorResult.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorResult.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
@@ -2212,6 +2213,26 @@ assert.equal(finalReportQaTesterLane.owner.role, "qa");
 assert.equal(finalReportQaTesterLane.owner.assignment, "stub:qa");
 assert.equal(finalReportQaTesterLane.canSatisfyRequired, false);
 assert.equal(finalReportQaTesterLane.satisfiesRequired, false);
+assert.ok(Array.isArray(finalReport.crewLanes), "final report should expose crew lanes");
+assert.ok(
+  finalReport.crewLanes.some(
+    (lane) =>
+      lane.id === "crew-lane-implement" &&
+      lane.authority === "edit" &&
+      lane.owner.assignment === "stub:implementer"
+  ),
+  "final report should expose implementer crew lane"
+);
+assert.ok(
+  finalReport.crewLanes.some(
+    (lane) =>
+      lane.id === "crew-lane-verify" &&
+      lane.authority === "read_only" &&
+      lane.reviewLaneId === "review-lane-verifier" &&
+      lane.satisfiesRequired === true
+  ),
+  "final report should expose verifier crew lane"
+);
 const reviewRoutingArtifact = loopResult.run.artifacts
   .filter((artifact) => artifact.kind === "review_routing")
   .at(-1);
@@ -2285,6 +2306,17 @@ assert.ok(
   ),
   "progress packet should expose the QA tester responsibility"
 );
+assert.ok(Array.isArray(progressPacket.crewLanes.items), "progress packet should expose crew lanes");
+assert.ok(
+  progressPacket.crewLanes.items.some(
+    (lane) =>
+      lane.id === "crew-lane-test" &&
+      lane.authority === "read_only" &&
+      lane.reviewLaneId === "review-lane-qa-tester" &&
+      lane.owner.assignment === "stub:qa"
+  ),
+  "progress packet should expose QA tester crew lane"
+);
 const verifiedLoopStatusText = await runCli(["status", loopRun.runId, "--repo", loopRepoPath]);
 const verifiedLoopStatusJson = JSON.parse(
   (await runCli(["status", loopRun.runId, "--repo", loopRepoPath, "--json"])).stdout
@@ -2296,6 +2328,13 @@ assert.equal(
   verifiedLoopStatusJson.insights.canonicalMemory.currentRun.artifacts.latestReviewRouting.ref,
   reviewRoutingArtifact.ref
 );
+assert.ok(Array.isArray(verifiedLoopStatusJson.insights.crewLanes.lanes));
+assert.ok(
+  verifiedLoopStatusJson.insights.crewLanes.lanes.some(
+    (lane) => lane.id === "crew-lane-verify" && lane.reviewLaneId === "review-lane-verifier"
+  )
+);
+assert.ok(verifiedLoopStatusText.stdout.includes("crew lanes:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("review lanes:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("review routing:"));
 assert.ok(verifiedLoopStatusText.stdout.includes("reviewer"));

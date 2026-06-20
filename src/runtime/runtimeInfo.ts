@@ -35,6 +35,7 @@ export const runtimeCapabilities = [
   "operator_run_monitor",
   "operator_next_actions",
   "loop_responsibility_schedule",
+  "crew_lane_trail",
   "runtime_loop_runner",
   "autopilot_approval_policy",
   "mcp_autopilot_continue_guidance",

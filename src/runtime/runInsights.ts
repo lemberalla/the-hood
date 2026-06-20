@@ -1,6 +1,7 @@
 import { readRunArtifact } from "./artifacts.js";
 import { recentAutopilotApprovalsFromRuns } from "./approvalInbox.js";
 import { buildCanonicalMemory, latestCanonicalArtifactRefs } from "./canonicalMemory.js";
+import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
@@ -14,6 +15,7 @@ import {
 import type { AgentResponse } from "../providers/types.js";
 import type { AutopilotApproval } from "./approvalInbox.js";
 import type {
+  CrewLaneTrail,
   JsonObject,
   LoopResponsibilitySchedule,
   OperatorNextAction,
@@ -135,6 +137,7 @@ export interface RunInsights {
   latestRemoteRepoContext?: RunArtifactSummary;
   latestTransferManifest?: RunArtifactSummary;
   canonicalMemory?: JsonObject;
+  crewLanes: CrewLaneTrail;
   loopResponsibilities: LoopResponsibilitySchedule;
   reviewLanes: ReviewLane[];
   operatorNextActions: OperatorNextAction[];
@@ -453,6 +456,7 @@ export const getRunInsights = async (run: RunRecord): Promise<RunInsights> => {
   const latestHandoff = latestRunHandoff(run);
   const insights: RunInsights = {
     ...(latestHandoff ? { latestHandoff: summarizeRunHandoff(latestHandoff) } : {}),
+    crewLanes: deriveCrewLaneTrail(run),
     loopResponsibilities: deriveLoopResponsibilitySchedule(run),
     reviewLanes: deriveReviewLanes(run),
     operatorNextActions: deriveOperatorNextActions(run),

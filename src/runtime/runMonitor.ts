@@ -1,7 +1,8 @@
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
+import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
-import type { LoopResponsibility, OperatorNextAction, ReviewLane, RunArtifact, RunEvent, RunRecord } from "./types.js";
+import type { CrewLane, LoopResponsibility, OperatorNextAction, ReviewLane, RunArtifact, RunEvent, RunRecord } from "./types.js";
 
 export type RunMonitorPhase =
   | "provider_wait"
@@ -38,6 +39,7 @@ export interface RunMonitorItem {
   gate?: string;
   artifactRefs: string[];
   reviewLanes: RunMonitorReviewLane[];
+  crewLanes: CrewLane[];
   loopResponsibilities: LoopResponsibility[];
   operatorNextActions: OperatorNextAction[];
 }
@@ -125,6 +127,9 @@ const operatorNextActions = (run: RunRecord): OperatorNextAction[] =>
 const loopResponsibilities = (run: RunRecord): LoopResponsibility[] =>
   deriveLoopResponsibilitySchedule(run).responsibilities.slice(0, 10);
 
+const crewLanes = (run: RunRecord): CrewLane[] =>
+  deriveCrewLaneTrail(run).lanes.slice(0, 10);
+
 const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
   const waitingDirective = directiveWait(run);
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
@@ -144,6 +149,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       ...(gate ? { gate } : {}),
       artifactRefs: approvalArtifactRefs(run),
       reviewLanes: reviewLanes(run),
+      crewLanes: crewLanes(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -166,6 +172,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       ...(provider ? { provider } : {}),
       artifactRefs: artifactRef ? [artifactRef] : [],
       reviewLanes: reviewLanes(run),
+      crewLanes: crewLanes(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -182,6 +189,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       detail: run.stopReason ?? `Run is ${run.state}.`,
       artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
       reviewLanes: reviewLanes(run),
+      crewLanes: crewLanes(run),
       loopResponsibilities: loopResponsibilities(run),
       operatorNextActions: operatorNextActions(run)
     };
@@ -197,6 +205,7 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
     detail: `Runtime is in ${run.state}.`,
     artifactRefs: latestTransferManifest ? [latestTransferManifest.ref] : [],
     reviewLanes: reviewLanes(run),
+    crewLanes: crewLanes(run),
     loopResponsibilities: loopResponsibilities(run),
     operatorNextActions: operatorNextActions(run)
   };

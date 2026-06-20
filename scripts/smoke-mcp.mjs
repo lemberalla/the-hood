@@ -302,6 +302,7 @@ assert.ok(doctorContent.runtime.capabilities.includes("chatgpt_web_auth_readines
 assert.ok(doctorContent.runtime.capabilities.includes("branded_tui_shell"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_run_monitor"));
 assert.ok(doctorContent.runtime.capabilities.includes("operator_next_actions"));
+assert.ok(doctorContent.runtime.capabilities.includes("crew_lane_trail"));
 assert.ok(doctorContent.runtime.capabilities.includes("runtime_loop_runner"));
 assert.ok(doctorContent.runtime.capabilities.includes("autopilot_approval_policy"));
 assert.ok(doctorContent.runtime.capabilities.includes("mcp_autopilot_continue_guidance"));
@@ -674,6 +675,12 @@ assert.equal(consultStatus.insights.finalReport.artifact.ref, consultFinalReport
 assert.equal(consultStatus.insights.latestProgressPacket.kind, "progress");
 assert.equal(consultStatus.insights.canonicalMemory.kind, "canonical_memory");
 assert.equal(consultStatus.insights.canonicalMemory.artifactBodyPolicy, "refs_only");
+assert.equal(consultStatus.insights.crewLanes.kind, "crew_lane_trail");
+assert.ok(Array.isArray(consultStatus.insights.crewLanes.lanes));
+assert.ok(
+  consultStatus.insights.crewLanes.lanes.some((lane) => lane.id === "crew-lane-complete"),
+  "MCP status insights should expose runtime-derived crew lanes"
+);
 assert.ok(Array.isArray(consultStatus.insights.operatorNextActions));
 assert.ok(
   consultStatus.insights.operatorNextActions.some((nextAction) => nextAction.action === "terminal_complete"),

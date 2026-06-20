@@ -724,6 +724,21 @@ const responsibilityRows = (run: RunMonitorItem | undefined, width: number): str
   );
 };
 
+const crewLaneRows = (run: RunMonitorItem | undefined, width: number): string[] => {
+  if (!run || run.crewLanes.length === 0) {
+    return ["crew trail not reported"];
+  }
+
+  return run.crewLanes.slice(0, 6).map((lane) =>
+    tableRow([
+      [lane.kind, 17],
+      [loopResponsibilityStatusLabel(lane.status), 12],
+      [lane.authority, 10],
+      [truncateEnd(lane.owner.assignment ?? lane.owner.label, Math.max(16, width - 43)), Math.max(16, width - 43)]
+    ])
+  );
+};
+
 const browserLines = (input: DashboardInput, width: number): string[] => [
   "BROWSER / REMOTE SURFACE",
   `cdp ${input.browser.cdpReachable ? "reachable" : "unreachable"} ${truncateEnd(input.browser.cdpUrl, Math.max(10, width - 18))}`,
@@ -801,6 +816,9 @@ const commandCenterWide = (view: DashboardView, width: number, useColor: boolean
     "",
     ...handoffAndReview,
     "",
+    "CREW TRAIL",
+    ...crewLaneRows(view.currentRun, innerWidth),
+    "",
     "LOOP RESPONSIBILITIES",
     ...responsibilityRows(view.currentRun, innerWidth)
   ];
@@ -835,6 +853,9 @@ const commandCenterCompact = (view: DashboardView, width: number, useColor: bool
     "",
     "HANDOFFS",
     ...handoffRows(view.input.approvalInbox, innerWidth, 3),
+    "",
+    "CREW TRAIL",
+    ...crewLaneRows(view.currentRun, innerWidth),
     "",
     "REVIEW LANES",
     ...reviewLaneRows(view.currentRun, innerWidth)

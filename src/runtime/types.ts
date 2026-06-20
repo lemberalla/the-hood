@@ -379,6 +379,42 @@ export interface LoopResponsibilitySchedule {
   blockers: LoopResponsibility[];
 }
 
+export type CrewLaneAuthority = "runtime" | "edit" | "read_only" | "operator";
+export type CrewLaneSourceKind = "loop_responsibility" | "review_lane";
+
+export interface CrewLane {
+  id: string;
+  kind: LoopResponsibilityKind;
+  label: string;
+  owner: LoopResponsibilityOwner;
+  authority: CrewLaneAuthority;
+  required: boolean;
+  blocking: boolean;
+  status: LoopResponsibilityStatus;
+  state: RunState;
+  sourceKind: CrewLaneSourceKind;
+  summary: string;
+  responsibilityId: string;
+  reviewLaneId?: string;
+  canSatisfyGate: boolean;
+  satisfiesRequired: boolean;
+  artifactRefs: string[];
+  eventRefs: string[];
+  handoffRefs: string[];
+  sourceRefs: ProgressPacketSourceRef[];
+  sidecarOnly?: boolean;
+}
+
+export interface CrewLaneTrail {
+  schemaVersion: 1;
+  kind: "crew_lane_trail";
+  runId: string;
+  generatedAt: string;
+  phase: RunState;
+  lanes: CrewLane[];
+  blockers: CrewLane[];
+}
+
 export interface ProgressPacketLimits {
   maxArtifacts: number;
   maxProviderResponses: number;
@@ -389,6 +425,7 @@ export interface ProgressPacketLimits {
   maxReviewLanes: number;
   maxOperatorNextActions: number;
   maxLoopResponsibilities: number;
+  maxCrewLanes: number;
   maxStringLength: number;
 }
 
@@ -534,6 +571,7 @@ export interface ProgressPacket {
   reviewLanes: ProgressPacketBoundedSection<ReviewLane>;
   operatorNextActions: ProgressPacketBoundedSection<OperatorNextAction>;
   loopResponsibilities: ProgressPacketBoundedSection<LoopResponsibility>;
+  crewLanes: ProgressPacketBoundedSection<CrewLane>;
   evidence: ProgressPacketEvidence;
   openQuestions: ProgressPacketBoundedSection<ProgressPacketOpenQuestion>;
   provenance: ProgressPacketProvenance;

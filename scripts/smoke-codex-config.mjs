@@ -295,6 +295,7 @@ for (const expectedCapability of [
   "chatgpt_web_auth_readiness",
   "branded_tui_shell",
   "operator_next_actions",
+  "crew_lane_trail",
   "runtime_loop_runner",
   "autopilot_approval_policy",
   "mcp_autopilot_continue_guidance",

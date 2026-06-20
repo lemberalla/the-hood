@@ -46,6 +46,8 @@ Revision packets are runtime repair handoffs, not reviewer authority. When QA re
 
 Loop responsibility schedules are runtime-derived visibility snapshots over the same canonical evidence. A schedule names the current planner/orchestrator, implementer, verifier, runtime QA/validation, model-assisted QA tester, critic, reconciliation, integration, operator approval, and completion responsibilities with compact owner, status, gate, artifact, event, and handoff refs. The schedule does not add permissions, call providers, satisfy gates, or replace the state machine; it lets CLI, MCP, TUI, and future app surfaces show who owns the next responsibility without duplicating orchestration logic.
 
+Crew lane trails are the product-facing version of those same evidence snapshots. The runtime derives `crewLanes` from loop responsibilities and review lanes so operators can see the hood as planner, builder, runtime QA, model QA tester, verifier, critic, integrator, approval, reconciliation, and completion lanes. Each lane includes authority (`edit`, `read_only`, `runtime`, or `operator`), required/advisory state, compact refs, and whether the lane can satisfy a gate. Crew lanes are display and handoff evidence only; they do not schedule agents, grant tools, or make advisory sidecars authoritative.
+
 The headless loop runner is a repeat driver over the same runtime state machine. It repeatedly advances a run until terminal state, required manual approval, no progress, or a caller-supplied cycle cap. It does not approve manual gates, add roles, schedule sidecar evidence, or replace verifier/runtime QA ownership.
 
 ## State Machine
@@ -156,9 +158,9 @@ Each provider directive includes a bounded `canonicalMemory` object. It is a ref
 
 ## Final Reports
 
-Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, and bounded review ownership lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
+Completed read-only and verified implementation runs attach a `report` artifact with `kind: "final_report"`. The report includes the run goal, final state, stop reason, completing role, artifact refs, command metadata, approval events, bounded review ownership lanes, and bounded crew lanes. The runtime also stores a bounded progress packet artifact after completion so a later planner reconciliation step can ask for external-transfer approval using an exact artifact ref.
 
-Run status insights expose the latest progress packet, reconciliation, repo context, provider execution, final report, and transfer manifest refs. They also expose bounded loop responsibility schedules and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Loop schedules and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
+Run status insights expose the latest progress packet, reconciliation, repo context, provider execution, final report, and transfer manifest refs. They also expose bounded crew lane trails, loop responsibility schedules, and operator next actions derived by the runtime from run state, approvals, provider waits, terminal state, and review ownership lanes. Crew lanes, loop schedules, and operator next actions are navigation aids over canonical artifacts; they do not replace artifact reads when a reviewer needs the full evidence and they do not weaken approval policy.
 
 Provider status is also authoritative. A worker response with `blocked` pauses at an approval gate. A worker response with `failed` fails the run. The runtime must not advance blocked or failed implementation into verification.
 

@@ -1,4 +1,5 @@
 import { writeRunArtifact } from "./artifacts.js";
+import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { newId, nowIso } from "./ids.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveOperatorNextActions } from "./operatorNextActions.js";
@@ -7,6 +8,7 @@ import { loadRun, saveRun } from "./store.js";
 import {
   runtimeRoles,
   type ApprovalEvent,
+  type CrewLane,
   type JsonObject,
   type JsonValue,
   type LoopResponsibility,
@@ -42,6 +44,7 @@ export const defaultProgressPacketLimits: ProgressPacketLimits = {
   maxReviewLanes: 12,
   maxOperatorNextActions: 8,
   maxLoopResponsibilities: 12,
+  maxCrewLanes: 12,
   maxStringLength: 1000
 };
 
@@ -67,6 +70,8 @@ const ontologyTerms = [
   "RevisionPacket",
   "LoopResponsibility",
   "LoopResponsibilitySchedule",
+  "CrewLane",
+  "CrewLaneTrail",
   "OperatorNextAction",
   "OperatorActionOwner",
   "Reconciliation",
@@ -594,6 +599,22 @@ export const buildProgressPacket = (
       }
     })
   );
+  const crewLanes = boundedSection(
+    "crewLanes",
+    deriveCrewLaneTrail(run).lanes,
+    state.limits.maxCrewLanes,
+    state,
+    (lane): CrewLane => ({
+      ...lane,
+      label: truncateText(lane.label, state),
+      summary: truncateText(lane.summary, state),
+      owner: {
+        ...lane.owner,
+        label: truncateText(lane.owner.label, state),
+        ...(lane.owner.assignment ? { assignment: truncateText(lane.owner.assignment, state) } : {})
+      }
+    })
+  );
   const latestPlan = latestArtifact(artifacts.items, (artifact) => artifact.kind === "plan");
   const latestProviderResponse = providerResponses.items.at(-1);
   const latestProviderExecution = latestArtifact(artifacts.items, (artifact) => artifact.kind === "provider_invocation");
@@ -624,6 +645,7 @@ export const buildProgressPacket = (
       ...item.eventRefs.map((id): ProgressPacketSourceRef => ({ kind: "run_event", runId: run.runId, id })),
       ...item.artifactRefs.map((ref): ProgressPacketSourceRef => ({ kind: "run_artifact", runId: run.runId, ref }))
     ]),
+    ...crewLanes.items.flatMap((lane) => lane.sourceRefs),
     ...questions.items.flatMap((question) => question.sourceRefs)
   ]);
 
@@ -656,6 +678,7 @@ export const buildProgressPacket = (
     reviewLanes,
     operatorNextActions,
     loopResponsibilities,
+    crewLanes,
     evidence: {
       artifacts,
       providerResponses,
@@ -679,6 +702,7 @@ export const buildProgressPacket = (
         "reviewLanes",
         "operatorNextActions",
         "loopResponsibilities",
+        "crewLanes",
         "openQuestions"
       ],
       notes: [
