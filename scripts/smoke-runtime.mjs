@@ -172,6 +172,128 @@ const createCdpSmokeServer = (snapshot) => {
   return server;
 };
 
+const createBridgeLifecycleCdpServer = (assistantResponses) => {
+  const targetId = "thehood-bridge-smoke-target";
+  let promptSent = false;
+  let closeCount = 0;
+
+  const valueForExpression = (expression) => {
+    if (expression.includes("composerPresent") && expression.includes("location.href")) {
+      return {
+        url: "https://chatgpt.com/",
+        title: "ChatGPT",
+        authSignal: null,
+        composerPresent: true
+      };
+    }
+
+    if (expression.includes("return promptSelectors.some")) {
+      return true;
+    }
+
+    if (expression.includes("querySelectorAll") && expression.includes("textContent")) {
+      return promptSent ? assistantResponses : [];
+    }
+
+    if (expression.includes("editor.focus") && expression.includes("sendSelectors")) {
+      promptSent = true;
+      return {
+        ok: true,
+        method: "button"
+      };
+    }
+
+    if (expression.includes("Message delivery timed out")) {
+      return null;
+    }
+
+    return null;
+  };
+
+  const server = http.createServer((request, response) => {
+    if (request.url === "/json/list") {
+      response.writeHead(200, {
+        "content-type": "application/json"
+      });
+      response.end("[]");
+      return;
+    }
+
+    if (request.url?.startsWith("/json/new")) {
+      response.writeHead(200, {
+        "content-type": "application/json"
+      });
+      response.end(JSON.stringify({
+        id: targetId,
+        url: "https://chatgpt.com/",
+        title: "ChatGPT",
+        webSocketDebuggerUrl: `ws://${request.headers.host}/devtools/page/${targetId}`
+      }));
+      return;
+    }
+
+    if (request.url === `/json/close/${targetId}`) {
+      closeCount += 1;
+      response.writeHead(200, {
+        "content-type": "text/plain"
+      });
+      response.end("Target is closing");
+      return;
+    }
+
+    response.writeHead(404);
+    response.end();
+  });
+
+  server.on("upgrade", (request, socket) => {
+    const key = request.headers["sec-websocket-key"];
+    if (typeof key !== "string") {
+      socket.destroy();
+      return;
+    }
+
+    const accept = crypto
+      .createHash("sha1")
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64");
+    socket.write([
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${accept}`,
+      "",
+      ""
+    ].join("\r\n"));
+
+    let buffered = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      buffered = Buffer.concat([buffered, chunk]);
+      const decoded = decodeWebSocketTextFrames(buffered);
+      buffered = decoded.remaining;
+      if (decoded.closeReceived) {
+        socket.end();
+        return;
+      }
+
+      for (const message of decoded.messages) {
+        const requestMessage = JSON.parse(message);
+        const result = requestMessage.method === "Runtime.evaluate"
+          ? { result: { value: valueForExpression(requestMessage.params.expression) } }
+          : {};
+        socket.write(encodeWebSocketText(JSON.stringify({
+          id: requestMessage.id,
+          result
+        })));
+      }
+    });
+  });
+
+  return {
+    server,
+    closeCount: () => closeCount
+  };
+};
+
 const runCli = async (args, options = {}) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
     cwd: root,
@@ -392,13 +514,106 @@ assert.equal(
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED, "1");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_CDP_URL, "http://127.0.0.1:9222");
 assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.installed.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.installed.startupTimeoutSec, 120);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_COMMAND, chatGptBridgePath);
 assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_TIMEOUT_MS, "300000");
+assert.equal(chatGptMcpConfigResult.local.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE, "1");
 assert.equal(chatGptMcpConfigResult.local.startupTimeoutSec, 120);
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_COMMAND"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_TIMEOUT_MS"));
+assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120"));
+const bridgeSmokeSchemaPath = path.join(repoPath, "chatgpt-bridge-smoke.schema.json");
+await fs.writeFile(
+  bridgeSmokeSchemaPath,
+  `${JSON.stringify({ properties: { data: { required: ["decision"] } } }, null, 2)}\n`,
+  "utf8"
+);
+const failedBridgeCdp = createBridgeLifecycleCdpServer(["Pro answered visibly, but not as AgentResponse JSON."]);
+await new Promise((resolve) => failedBridgeCdp.server.listen(0, "127.0.0.1", resolve));
+const failedBridgeAddress = failedBridgeCdp.server.address();
+assert.ok(failedBridgeAddress && typeof failedBridgeAddress === "object");
+try {
+  const failedBridgeOutput = JSON.parse((
+    await runNodeScript(
+      chatGptBridgePath,
+      [
+        "--schema",
+        bridgeSmokeSchemaPath,
+        "--cdp-url",
+        `http://127.0.0.1:${failedBridgeAddress.port}`,
+        "--timeout-ms",
+        "200"
+      ],
+      "bridge failure smoke",
+      {
+        env: {
+          THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1"
+        }
+      }
+    )
+  ).stdout);
+  assert.equal(failedBridgeOutput.status, "blocked");
+  assert.equal(failedBridgeCdp.closeCount(), 0, "failed bridge ingestion should keep the created target open");
+} finally {
+  await new Promise((resolve, reject) => {
+    failedBridgeCdp.server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(undefined);
+    });
+  });
+}
+const successfulAgentResponse = JSON.stringify({
+  status: "ok",
+  summary: "parsed visible AgentResponse",
+  data: {
+    decision: {
+      action: "complete",
+      reason: "bridge lifecycle smoke"
+    }
+  }
+});
+const successfulBridgeCdp = createBridgeLifecycleCdpServer([successfulAgentResponse]);
+await new Promise((resolve) => successfulBridgeCdp.server.listen(0, "127.0.0.1", resolve));
+const successfulBridgeAddress = successfulBridgeCdp.server.address();
+assert.ok(successfulBridgeAddress && typeof successfulBridgeAddress === "object");
+try {
+  const successfulBridgeOutput = JSON.parse((
+    await runNodeScript(
+      chatGptBridgePath,
+      [
+        "--schema",
+        bridgeSmokeSchemaPath,
+        "--cdp-url",
+        `http://127.0.0.1:${successfulBridgeAddress.port}`,
+        "--timeout-ms",
+        "5000"
+      ],
+      "bridge success smoke",
+      {
+        env: {
+          THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1"
+        }
+      }
+    )
+  ).stdout);
+  assert.equal(successfulBridgeOutput.status, "ok");
+  assert.equal(successfulBridgeCdp.closeCount(), 1, "successful bridge ingestion should close the created target");
+} finally {
+  await new Promise((resolve, reject) => {
+    successfulBridgeCdp.server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(undefined);
+    });
+  });
+}
 const tunnelConfig = await runCli([
   "mcp",
   "tunnel",

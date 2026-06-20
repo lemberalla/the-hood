@@ -54,6 +54,7 @@ This adds:
 - `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1`
 - `THEHOOD_CHATGPT_WEB_CDP_URL=http://127.0.0.1:9222`
 - `THEHOOD_CHATGPT_WEB_TIMEOUT_MS=300000`
+- `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=1`
 
 Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
 
@@ -186,9 +187,10 @@ export THEHOOD_CHATGPT_WEB_RESPONSE_SELECTOR="[data-message-author-role='assista
 export THEHOOD_CHATGPT_WEB_NEW_CHAT_SELECTOR="a[href='/'],button[aria-label*='New chat']"
 # export THEHOOD_CHATGPT_WEB_REUSE_CHAT=1
 # export THEHOOD_CHATGPT_WEB_KEEP_TARGET=1
+# export THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0
 ```
 
-By default, the bridge creates a dedicated ChatGPT target for each request, verifies that the composer has no prior assistant messages, and closes that target after the response. It also requires the visible response to echo the current `directiveAck` inside the role payload. If ChatGPT restores an old conversation, or if the model returns schema-valid JSON from stale project context, the bridge fails closed instead of handing that answer to the runtime. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation.
+By default, the bridge creates a dedicated ChatGPT target for each request, verifies that the composer has no prior assistant messages, closes that target after a successfully parsed response, and keeps the target open when browser access, parsing, acknowledgement, or timeout handling fails. This preserves the visible Pro answer for recovery instead of deleting the evidence. It also requires the visible response to echo the current `directiveAck` inside the role payload. If ChatGPT restores an old conversation, or if the model returns schema-valid JSON from stale project context, the bridge fails closed instead of handing that answer to the runtime. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation, and set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` only when you want failed bridge calls to clean up their temporary tabs.
 
 Example persistent role assignment:
 

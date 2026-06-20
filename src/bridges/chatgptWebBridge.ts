@@ -29,6 +29,7 @@ interface BridgeOptions {
   newChatSelector: string;
   reuseChat: boolean;
   keepCreatedTarget: boolean;
+  keepTargetOnFailure: boolean;
   allowUnverifiedModel: boolean;
 }
 
@@ -77,6 +78,7 @@ const defaultOptions: BridgeOptions = {
     "a[href='/'],a[href='/?model=auto'],button[aria-label*='New chat'],a[aria-label*='New chat'],[data-testid='create-new-chat-button']",
   reuseChat: process.env.THEHOOD_CHATGPT_WEB_REUSE_CHAT === "1",
   keepCreatedTarget: process.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET === "1",
+  keepTargetOnFailure: process.env.THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE !== "0",
   allowUnverifiedModel:
     process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
     process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL === "1"
@@ -106,6 +108,21 @@ const parseArgs = (argv: string[]): BridgeOptions => {
 
     if (arg === "--reuse-chat") {
       options.reuseChat = true;
+      continue;
+    }
+
+    if (arg === "--keep-target") {
+      options.keepCreatedTarget = true;
+      continue;
+    }
+
+    if (arg === "--keep-target-on-failure") {
+      options.keepTargetOnFailure = true;
+      continue;
+    }
+
+    if (arg === "--close-target-on-failure") {
+      options.keepTargetOnFailure = false;
       continue;
     }
 
@@ -615,6 +632,11 @@ const closeChromeTarget = async (cdpUrl: string, target: ChromeTarget | undefine
   await fetch(new URL(`/json/close/${encodeURIComponent(target.id)}`, cdpUrl)).catch(() => undefined);
 };
 
+const shouldCloseCreatedTarget = (options: BridgeOptions, parsedResponse: boolean): boolean =>
+  !options.reuseChat &&
+  !options.keepCreatedTarget &&
+  (parsedResponse || !options.keepTargetOnFailure);
+
 const connectCdp = async (webSocketUrl: string, commandTimeoutMs: number): Promise<CdpClient> => {
   let nextId = 1;
   const pending = new Map<
@@ -1079,6 +1101,7 @@ const run = async (): Promise<AgentResponse> => {
 
   let target: ChromeTarget;
   let client: CdpClient;
+  let parsedResponse = false;
   try {
     target = options.reuseChat
       ? await findChatGptTarget(options.cdpUrl)
@@ -1145,6 +1168,7 @@ const run = async (): Promise<AgentResponse> => {
     );
 
     if (result.response) {
+      parsedResponse = true;
       return result.response;
     }
 
@@ -1169,7 +1193,7 @@ const run = async (): Promise<AgentResponse> => {
     );
   } finally {
     client.close();
-    if (!options.reuseChat && !options.keepCreatedTarget) {
+    if (shouldCloseCreatedTarget(options, parsedResponse)) {
       await closeChromeTarget(options.cdpUrl, target);
     }
   }

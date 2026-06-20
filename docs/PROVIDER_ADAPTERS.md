@@ -134,7 +134,9 @@ Included bridge:
 - Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
 - Fails fast with a blocked response when the visible ChatGPT page requires login.
-- Creates a dedicated ChatGPT target by default, verifies that the composer is empty before sending the prompt, and closes the created target unless `THEHOOD_CHATGPT_WEB_KEEP_TARGET=1` is set.
+- Creates a dedicated ChatGPT target by default, verifies that the composer is empty before sending the prompt, closes the created target after a successfully parsed response, and keeps the target open on failed or timed-out ingestion so the visible answer can be inspected or recovered.
+- Set `THEHOOD_CHATGPT_WEB_KEEP_TARGET=1` or pass `--keep-target` to keep all created targets, including successful responses.
+- Set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` or pass `--close-target-on-failure` to restore cleanup after failed ingestion.
 - Requires ChatGPT responses to echo the current directive acknowledgement in the role payload, so schema-valid answers from stale browser/project context fail closed.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
 

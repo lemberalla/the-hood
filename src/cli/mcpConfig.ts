@@ -69,7 +69,8 @@ const chatGptEnv = (command: string, cdpUrl: string): Record<string, string> => 
   THEHOOD_CHATGPT_WEB_COMMAND: command,
   THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
   THEHOOD_CHATGPT_WEB_CDP_URL: cdpUrl,
-  THEHOOD_CHATGPT_WEB_TIMEOUT_MS: "300000"
+  THEHOOD_CHATGPT_WEB_TIMEOUT_MS: "300000",
+  THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE: "1"
 });
 
 const localBridgePath = (cliPath: string | undefined): string =>
