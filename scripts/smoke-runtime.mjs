@@ -503,6 +503,10 @@ await fs.writeFile(
     "  const runId = input.match(/runId\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-run';",
     "  const nonce = input.match(/nonce\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-nonce';",
     "  const ack = { runId, nonce, responseField: 'thehoodDirectiveAck' };",
+    "  if (input.includes('SMOKE_MALFORMED_LOCAL_OUTPUT')) {",
+    "    process.stdout.write(JSON.stringify({ type: 'result', result: 'not an AgentResponse envelope' }));",
+    "    return;",
+    "  }",
     "  const payloads = {",
     "    decision: { action: 'complete', reason: 'fake codex smoke response', evidenceRefs: ['smoke-evidence-ref'], artifactRefs: ['smoke-artifact-ref'], thehoodDirectiveAck: ack },",
     "    critiqueResult: { verdict: 'acceptable', blockingConcerns: [], nonBlockingConcerns: ['fake codex review path exercised'], thehoodDirectiveAck: ack },",
@@ -521,6 +525,47 @@ await fs.writeFile(
 );
 await fs.chmod(fakeCodexPath, 0o755);
 process.env.THEHOOD_CODEX_COMMAND = fakeCodexPath;
+const fakeClaudeDir = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-runtime-fake-claude-"));
+const fakeClaudePath = path.join(fakeClaudeDir, "fake-claude.mjs");
+await fs.writeFile(
+  fakeClaudePath,
+  [
+    "#!/usr/bin/env node",
+    "let input = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    "process.stdin.on('end', () => {",
+    "  const key = input.match(/requiredDataKey\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'decision';",
+    "  const runId = input.match(/runId\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-run';",
+    "  const nonce = input.match(/nonce\\\":\\s*\\\"([^\\\"]+)\\\"/)?.[1] ?? 'fake-nonce';",
+    "  const ack = { runId, nonce, responseField: 'thehoodDirectiveAck' };",
+    "  const payloads = {",
+    "    decision: { action: 'complete', reason: 'fake claude wrapper response', evidenceRefs: ['claude-evidence-ref'], artifactRefs: ['claude-artifact-ref'], thehoodDirectiveAck: ack },",
+    "    critiqueResult: { verdict: 'acceptable', blockingConcerns: [], nonBlockingConcerns: ['fake claude wrapper path exercised'], thehoodDirectiveAck: ack },",
+    "    verificationResult: { verdict: 'approve', summary: 'fake claude verified', failedCriteria: [], risks: [], nextAction: 'complete', thehoodDirectiveAck: ack },",
+    "    qaResult: { verdict: 'pass', summary: 'fake claude QA passed', suggestedCommands: [], risks: [], thehoodDirectiveAck: ack }",
+    "  };",
+    "  const response = {",
+    "    status: 'ok',",
+    "    summary: 'fake claude wrapper response',",
+    "    data: { [key]: payloads[key] ?? payloads.decision }",
+    "  };",
+    "  process.stdout.write(JSON.stringify({",
+    "    type: 'result',",
+    "    subtype: 'success',",
+    "    is_error: false,",
+    "    result: 'fake claude returned a structured_output wrapper',",
+    "    status: response.status,",
+    "    summary: response.summary,",
+    "    structured_output: { data: response.data }",
+    "  }));",
+    "});",
+    ""
+  ].join("\n"),
+  "utf8"
+);
+await fs.chmod(fakeClaudePath, 0o755);
+process.env.THEHOOD_CLAUDE_COMMAND = fakeClaudePath;
 const mcpConfig = await runCli(["mcp", "config", "--json"]);
 const mcpConfigResult = JSON.parse(mcpConfig.stdout);
 assert.equal(mcpConfigResult.installed.command, "thehood");
@@ -1000,6 +1045,42 @@ assert.ok(localAgentStatusText.stdout.includes("local agent executions:"));
 assert.ok(localAgentStatusText.stdout.includes("critic codex-cli:default"));
 assert.ok(localAgentStatusText.stdout.includes("stdout="));
 assert.ok(localAgentStatusText.stdout.includes("stderr="));
+
+const claudeWrapperRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-claude-wrapper-smoke-"));
+await runCli(["init", "--repo", claudeWrapperRepoPath]);
+await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", claudeWrapperRepoPath]);
+const claudeWrapperRun = JSON.parse(
+  (await runCli([
+    "run",
+    "exercise claude structured output wrapper normalization",
+    "--mode",
+    "review",
+    "--repo",
+    claudeWrapperRepoPath,
+    "--critic",
+    "claude-code:sonnet",
+    "--json"
+  ])).stdout
+);
+const claudeWrapperContinue = JSON.parse(
+  (await runCli(["continue", claudeWrapperRun.runId, "--repo", claudeWrapperRepoPath, "--json"])).stdout
+);
+assert.equal(claudeWrapperContinue.run.state, "completed");
+assert.equal(claudeWrapperContinue.providerResponses[0].status, "ok");
+assert.equal(claudeWrapperContinue.providerResponses[0].summary, "fake claude wrapper response");
+assert.equal(
+  claudeWrapperContinue.providerResponses[0].data.critiqueResult.nonBlockingConcerns[0],
+  "fake claude wrapper path exercised"
+);
+const claudeWrapperExecutionArtifact = claudeWrapperContinue.run.artifacts.find(
+  (artifact) => artifact.kind === "provider_invocation"
+);
+assert.ok(claudeWrapperExecutionArtifact, "claude wrapper smoke should write a provider invocation artifact");
+const claudeWrapperExecution = JSON.parse(await fs.readFile(claudeWrapperExecutionArtifact.ref, "utf8"));
+assert.equal(claudeWrapperExecution.provider, "claude-code");
+assert.equal(claudeWrapperExecution.command, fakeClaudePath);
+assert.equal(claudeWrapperExecution.responseParsed, true);
+assert.equal(claudeWrapperExecution.responseStatus, "ok");
 
 const implementCompleteRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-implement-complete-smoke-"));
 await runCli(["init", "--repo", implementCompleteRepoPath]);
@@ -1544,6 +1625,65 @@ assert.equal(fanoutCriticLane.canSatisfyRequired, false);
 const fanoutStatusText = await runCli(["status", fanoutPlan.runId, "--repo", repoPath]);
 assert.ok(fanoutStatusText.stdout.includes("agent fan-out:"));
 assert.ok(fanoutStatusText.stdout.includes("gates: advisory only"));
+const fanoutResilienceRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-fanout-resilience-smoke-"));
+await runCli(["init", "--repo", fanoutResilienceRepoPath]);
+await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", fanoutResilienceRepoPath]);
+const fanoutResiliencePlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "fanout should continue after contained advisory failure",
+      "--repo",
+      fanoutResilienceRepoPath,
+      "--orchestrator",
+      "stub:orchestrator",
+      "--json"
+    ])
+  ).stdout
+);
+const fanoutResilienceItems = JSON.stringify([
+  {
+    role: "critic",
+    agent: "codex-cli:default",
+    kind: "critique",
+    brief: "SMOKE_MALFORMED_LOCAL_OUTPUT: emit malformed advisory output."
+  },
+  {
+    role: "qa",
+    agent: "stub:qa",
+    kind: "qa",
+    brief: "QA should still run after the contained malformed advisory response."
+  }
+]);
+const fanoutResilienceResult = JSON.parse(
+  (
+    await runCli([
+      "fanout",
+      fanoutResiliencePlan.runId,
+      "--repo",
+      fanoutResilienceRepoPath,
+      "--items-json",
+      fanoutResilienceItems,
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(fanoutResilienceResult.status, "blocked");
+assert.equal(fanoutResilienceResult.bounds.requestedItems, 2);
+assert.equal(fanoutResilienceResult.bounds.executedItems, 2);
+assert.deepEqual(fanoutResilienceResult.items.map((item) => item.status), ["blocked", "completed"]);
+assert.equal(fanoutResilienceResult.items[0].providerStatus, "blocked");
+assert.equal(fanoutResilienceResult.items[1].assignment.provider, "stub");
+const fanoutResilienceProviderExecution = fanoutResilienceResult.run.artifacts
+  .filter((artifact) => artifact.kind === "provider_invocation")
+  .at(-1);
+assert.ok(
+  fanoutResilienceProviderExecution,
+  "fanout resilience smoke should capture the malformed local provider invocation"
+);
+const fanoutResilienceExecution = JSON.parse(await fs.readFile(fanoutResilienceProviderExecution.ref, "utf8"));
+assert.equal(fanoutResilienceExecution.responseParsed, false);
+assert.equal(fanoutResilienceExecution.responseStatus, "blocked");
 const fanoutBudgetRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-fanout-budget-smoke-"));
 await runCli(["init", "--repo", fanoutBudgetRepoPath]);
 const fanoutBudgetConfig = JSON.parse(

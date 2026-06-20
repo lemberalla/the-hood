@@ -377,14 +377,17 @@ export const fanoutAgents = async (input: FanoutAgentsInput): Promise<FanoutAgen
       results.push(itemResult);
       currentRun = result.run;
 
-      if (itemResult.status !== "completed") {
+      if (itemResult.status !== "completed" && currentRun.approvalRequired) {
         break;
       }
     } catch (error) {
       const itemResult = failedItem(index, item, error);
       results.push(itemResult);
       currentRun = await loadRun(input.repoPath, input.runId);
-      break;
+
+      if (currentRun.approvalRequired) {
+        break;
+      }
     }
   }
 

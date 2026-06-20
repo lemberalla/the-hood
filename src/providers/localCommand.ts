@@ -185,13 +185,16 @@ const writeSchemaFile = async (providerId: string, schema: JsonObject): Promise<
 const isObject = (value: unknown): value is JsonObject =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+const isAgentResponseStatus = (value: unknown): value is AgentResponse["status"] =>
+  value === "ok" || value === "blocked" || value === "failed";
+
 const isAgentResponse = (value: unknown): value is AgentResponse => {
   if (!isObject(value)) {
     return false;
   }
 
   return (
-    (value.status === "ok" || value.status === "blocked" || value.status === "failed") &&
+    isAgentResponseStatus(value.status) &&
     typeof value.summary === "string" &&
     isObject(value.data)
   );
@@ -239,6 +242,37 @@ const parseJsonCandidate = (text: string): unknown | undefined => {
   return undefined;
 };
 
+const unwrapStructuredOutput = (value: JsonObject): unknown | undefined => {
+  const structuredOutput = value.structured_output ?? value.structuredOutput;
+
+  if (typeof structuredOutput === "string") {
+    const parsed = parseJsonCandidate(structuredOutput);
+    return isAgentResponse(parsed) ? parsed : undefined;
+  }
+
+  if (!isObject(structuredOutput)) {
+    return undefined;
+  }
+
+  if (isAgentResponse(structuredOutput)) {
+    return structuredOutput;
+  }
+
+  if (
+    isAgentResponseStatus(value.status) &&
+    typeof value.summary === "string" &&
+    isObject(structuredOutput.data)
+  ) {
+    return {
+      status: value.status,
+      summary: value.summary,
+      data: structuredOutput.data
+    };
+  }
+
+  return undefined;
+};
+
 const unwrapProviderResult = (value: unknown): unknown => {
   if (!isObject(value)) {
     return value;
@@ -246,6 +280,11 @@ const unwrapProviderResult = (value: unknown): unknown => {
 
   if (isAgentResponse(value)) {
     return value;
+  }
+
+  const structuredOutput = unwrapStructuredOutput(value);
+  if (structuredOutput !== undefined) {
+    return structuredOutput;
   }
 
   const result = value.result;

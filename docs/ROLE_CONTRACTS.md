@@ -46,7 +46,7 @@ A summon does not grant edit tools, apply patches, accept work, or rewrite the r
 
 Summon responses can appear as read-only sidecar evidence on review ownership lanes. They are useful for QA, critique, and second opinions, but they cannot satisfy required verifier ownership, replace runtime-captured validation evidence, or advance the main state machine.
 
-A fan-out is a bounded group of summons on the same run. It uses the same read-only role limits, provider approval gates, and sidecar evidence rules as individual summons. Fan-out writes a compact group artifact for visibility, but it does not create a new scheduler, grant edit tools, or satisfy required review gates.
+A fan-out is a bounded group of summons on the same run. It uses the same read-only role limits, provider approval gates, and sidecar evidence rules as individual summons. Active approval gates stop later fan-out items, while contained advisory provider failures are recorded without granting those failures acceptance authority. Fan-out writes a compact group artifact for visibility, but it does not create a new scheduler, grant edit tools, or satisfy required review gates.
 
 Crew lane trails are runtime-derived display views over role responsibilities, review ownership, and handoffs. They make the hood readable as planner, builder, QA, verifier, critic, integrator, operator, reconciliation, and completion lanes, but they do not grant authority beyond the role contract below.
 
