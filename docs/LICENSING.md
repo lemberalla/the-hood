@@ -1,36 +1,21 @@
 # Licensing
 
-TheHood is intended to become a public licensed repository, but the exact license should be chosen deliberately.
+TheHood is licensed under the MIT License.
 
-## Recommended Options
+## Why MIT
 
-### Apache-2.0
+MIT is the right fit for TheHood's current public posture:
 
-Best fit if the project may attract external contributors, provider adapters, or commercial users and we want an explicit patent grant.
+- it is familiar to the JavaScript and developer-tooling ecosystem
+- it is short, permissive, and easy to understand
+- it lowers adoption friction for early users, forks, and experiments
+- it gives the public repo a more approachable signal while the runtime is still young
 
-Tradeoff:
+## Tradeoff
 
-- Slightly longer and more formal than MIT.
+Apache-2.0 remains a reasonable future option for projects that need an explicit patent grant and more formal contribution posture. TheHood is choosing MIT for reputation, simplicity, and adoption at this stage.
 
-### MIT
+## Files
 
-Best fit if the goal is maximum simplicity and permissive reuse.
-
-Tradeoff:
-
-- Does not include the same explicit patent language as Apache-2.0.
-
-## Current Decision
-
-No `LICENSE` file has been added yet because the license choice is a project decision.
-
-Recommended default: Apache-2.0 for a public agent-runtime project with provider integrations.
-
-## Follow-Up
-
-Once the license is chosen:
-
-- add top-level `LICENSE`
-- update `README.md`
-- update package metadata once package files exist
-
+- Root license file: `LICENSE`
+- Package metadata: `package.json` uses SPDX id `MIT`

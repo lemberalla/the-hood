@@ -2,6 +2,8 @@
 
 TheHood is a local, provider-neutral agent runtime for running serious multi-agent software work from Codex, a CLI, and eventually a small macOS menubar companion.
 
+Status: experimental local runtime. The CLI, MCP server, runtime artifacts, provider role mapping, local Codex/Claude command adapters, ChatGPT Web bridge, same-run summons/fan-out, crew lanes, approval gates, and smoke tests exist today. API provider adapters, hosted/public UI, and native Codex app visual agent cards are planned or partial unless noted in the docs.
+
 The core idea is simple:
 
 - Models suggest.
@@ -90,6 +92,14 @@ npm install
 npm run build
 npm run smoke:runtime
 npm run smoke:mcp
+node dist/cli/main.js setup --repo .
+node dist/cli/main.js doctor --repo .
+node dist/cli/main.js roster --repo .
+```
+
+The full local CLI surface includes:
+
+```bash
 node dist/cli/main.js init --repo .
 node dist/cli/main.js setup --repo .
 node dist/cli/main.js doctor --repo .
@@ -169,11 +179,13 @@ Agents
 - [Glossary](docs/GLOSSARY.md)
 - [Licensing](docs/LICENSING.md)
 - [Open Decisions](docs/OPEN_DECISIONS.md)
+- [Public Repo Readiness](docs/PUBLIC_REPO_READINESS.md)
 
 ## Public Repo Docs
 
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Agent Instructions](AGENTS.md)
 
 ## Decisions

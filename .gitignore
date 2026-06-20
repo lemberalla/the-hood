@@ -1,9 +1,10 @@
 .DS_Store
 node_modules/
 dist/
-.thehood/config.json
-.thehood/runs/
-.thehood/artifacts/
+.thehood/
+.thehood-browser.json
 .env
 .env.*
 !.env.example
+*.log
+*.tgz

@@ -10,7 +10,11 @@
   "files": [
     "dist",
     "README.md",
-    "docs"
+    "LICENSE",
+    "docs",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/prepare-bin.mjs",
@@ -30,7 +34,7 @@
     "orchestration",
     "runtime"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.8.3"
