@@ -226,6 +226,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Goal, Loop, Schedule](docs/GOAL_LOOP_SCHEDULE.md)
 - [Completion Contract](docs/COMPLETION_CONTRACT.md)
 - [Loop Recipes](docs/LOOP_RECIPES.md)
+- [Synthetic Stub Demo](docs/DEMO.md)
 - [Prompt Schemas](docs/PROMPT_SCHEMAS.md)
 - [Memory And Reconciliation](docs/MEMORY_AND_RECONCILIATION.md)
 - [CLI Spec](docs/CLI_SPEC.md)
@@ -241,6 +242,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Licensing](docs/LICENSING.md)
 - [Open Decisions](docs/OPEN_DECISIONS.md)
 - [Public Repo Readiness](docs/PUBLIC_REPO_READINESS.md)
+- [v0.1.0-preview.0 Release Notes](docs/release/v0.1.0-preview.0.md)
 
 ## Public Repo Docs
 
