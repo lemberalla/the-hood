@@ -2,7 +2,7 @@
 
 TheHood is a local, provider-neutral agent runtime for running serious multi-agent software work from Codex, a CLI, and eventually a small macOS menubar companion.
 
-Status: experimental local runtime. The CLI, MCP server, runtime artifacts, provider role mapping, local Codex/Claude command adapters, ChatGPT Web bridge, same-run summons/fan-out, crew lanes, Codex-facing agent board snapshots, renderable dashboard payloads, optional Codex plugin scaffold, approval gates, and smoke tests exist today. API provider adapters, hosted/public UI, and automatic native Codex app visual rendering beyond explicit artifact rendering are planned or partial unless noted in the docs.
+Status: developer preview. TheHood is preparing for `v0.1.0-preview.0` as a local CLI/MCP runtime for governed software goal loops. It is useful for early adopters who are comfortable with local tools, explicit approval boundaries, and experimental provider wiring. It is not a hosted agent service, cloud scheduler, or polished app platform.
 
 The core idea is simple:
 
@@ -10,9 +10,29 @@ The core idea is simple:
 - The runtime enforces.
 - Users stay in control.
 
-TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into GPT, ChatGPT Pro, Claude Code, OpenAI API, Anthropic API, or local models for any role. Codex becomes the governed workbench; Claude can second-judge or build; Pro can approve strategy when the stakes justify it.
+TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into GPT, ChatGPT Pro, Claude Code, future API adapters, or future local models for roles as those paths are wired. Codex becomes the governed workbench; Claude can second-judge or build; Pro can approve strategy when the stakes justify it.
 
 The first product surface is a CLI plus an MCP server. The macOS menubar app should remain a thin trigger and status surface over the same local runtime.
+
+## Works Today
+
+- Local project setup and JSON runtime config under `.thehood/config.json`.
+- CLI and stdio MCP control surfaces over the same local runtime.
+- Codex-first role mapping with separate orchestrator, planner, implementer, QA, verifier, and critic roles.
+- Local Codex CLI and Claude Code command adapters that must return schema-bound responses.
+- Deterministic `stub` provider for local smoke tests and synthetic demonstrations.
+- Approval gates, protected test/fixture/snapshot/eval classification, isolated patch capture, and runtime-owned integration reports.
+- Runtime-owned evidence: command logs, git status/diff snapshots, provider invocation artifacts, final reports, progress packets, review lanes, revision packets, and agent board snapshots.
+- Same-run summons and bounded fan-out as read-only sidecar evidence, not acceptance votes.
+- ChatGPT Web bridge and ChatGPT MCP connector guidance as experimental, user-configured provider paths.
+
+## Planned Or Experimental
+
+- OpenAI API, Anthropic API, and local model adapters are represented in provider config but are not wired as production external model adapters yet.
+- Hosted execution, cloud routines, timer schedules, and overnight automation are not part of `v0.1.0-preview.0`.
+- A full web dashboard and macOS menubar app remain future control surfaces over the runtime.
+- ChatGPT MCP connector mode depends on ChatGPT custom connector/tunnel availability in the user's workspace and should be treated as optional.
+- Native Codex visual rendering beyond explicit artifact/dashboard payloads remains a later integration layer.
 
 ## Current Implementation
 
@@ -199,6 +219,12 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Codex Setup](docs/CODEX_SETUP.md)
 - [Runtime Loop](docs/RUNTIME_LOOP.md)
 - [Role Contracts](docs/ROLE_CONTRACTS.md)
+- [Trust Model](docs/TRUST_MODEL.md)
+- [Provider Matrix](docs/PROVIDER_MATRIX.md)
+- [Known Limitations](docs/KNOWN_LIMITATIONS.md)
+- [Goal, Loop, Schedule](docs/GOAL_LOOP_SCHEDULE.md)
+- [Completion Contract](docs/COMPLETION_CONTRACT.md)
+- [Loop Recipes](docs/LOOP_RECIPES.md)
 - [Prompt Schemas](docs/PROMPT_SCHEMAS.md)
 - [Memory And Reconciliation](docs/MEMORY_AND_RECONCILIATION.md)
 - [CLI Spec](docs/CLI_SPEC.md)

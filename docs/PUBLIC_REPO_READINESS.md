@@ -1,6 +1,12 @@
 # Public Repo Readiness
 
-This checklist tracks repo-side scaffolding and external GitHub settings required before a public launch. The repo can be built and smoked locally today, but public release still requires a final safety, packaging, and repository-settings pass.
+This checklist tracks repo-side scaffolding and external GitHub settings required before a public `v0.1.0-preview.0` developer-preview launch. The repo can be built and smoked locally today, but public release still requires a final safety, packaging, and repository-settings pass.
+
+## Release Position
+
+The public preview should make one claim clearly: TheHood is a local runtime for governed software goal loops. It can plan, act, capture evidence, verify independently, revise, stop safely, and preserve artifacts.
+
+It should not claim cloud routines, hosted execution, API-provider automation, a full dashboard, or polished native app rendering.
 
 ## Must Finish Before Public
 
@@ -12,6 +18,7 @@ This checklist tracks repo-side scaffolding and external GitHub settings require
 - Verify a fresh clone path: `npm ci`, `npm run build`, `npm run smoke:mcp`, `npm run smoke:codex-config`, and `npm run smoke:runtime`.
 - Verify package contents with `npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json`.
 - Make README claims match current behavior. Mark API adapters, hosted UI, and automatic Codex app rendering beyond explicit agent board artifact payloads as planned unless implemented.
+- Keep ChatGPT MCP connector mode documented as experimental and optional. It depends on external ChatGPT custom connector availability and is not a public-preview blocker.
 - Configure branch protection, required CI checks, secret scanning or push protection, private vulnerability reporting, and issue/PR templates on GitHub. These settings are external to the repository tree and must be verified before public launch.
 
 ## Current Public Surface
