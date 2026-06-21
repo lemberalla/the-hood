@@ -1,6 +1,6 @@
 # Contributing
 
-TheHood is starting documentation-first because the safety model matters as much as the code.
+TheHood is starting documentation-first because the safety model matters as much as the code. See `docs/CONTRIBUTOR_GUIDE.md` for the full contributor guide.
 
 ## Before Opening A Change
 
@@ -36,7 +36,23 @@ Use synthetic fixtures for examples.
 
 ## Verification Expectations
 
-Changes that affect runtime behavior should include evidence from the relevant validation command once the project has an implementation and test setup.
+Changes that affect runtime behavior should include evidence from the relevant validation command.
+
+Core checks:
+
+```bash
+npm run typecheck
+npm run build
+npm run smoke:mcp
+npm run smoke:codex-config
+npm run smoke:runtime
+git --no-pager diff --check
+```
+
+Release-sensitive changes should also run:
+
+```bash
+npm run release:check
+```
 
 The implementer and verifier should be different agents or different review phases.
-

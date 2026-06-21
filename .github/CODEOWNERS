@@ -1,0 +1,11 @@
+* @lemberalla
+
+/src/runtime/ @lemberalla
+/src/providers/ @lemberalla
+/src/bridges/ @lemberalla
+/src/mcp/ @lemberalla
+/docs/SECURITY_AND_PRIVACY.md @lemberalla
+/SECURITY.md @lemberalla
+/PRIVACY.md @lemberalla
+/.github/workflows/ @lemberalla
+/package.json @lemberalla

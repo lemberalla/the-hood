@@ -1,0 +1,30 @@
+name: Docs
+description: Improve public or contributor documentation
+labels:
+  - docs
+body:
+  - type: dropdown
+    id: docs-kind
+    attributes:
+      label: Docs type
+      options:
+        - typo
+        - conceptual docs
+        - provider docs
+        - loop recipe
+        - security/privacy docs
+        - release docs
+        - website docs
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What should change?
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source of truth
+      description: Link the code path, doc, command output, or release evidence the docs should match.
