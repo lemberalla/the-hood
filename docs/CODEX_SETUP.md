@@ -33,6 +33,29 @@ The command prints two TOML snippets:
 
 Use one snippet in Codex's MCP server configuration.
 
+## ChatGPT MCP Connector Mode
+
+This path is for ChatGPT Web/Pro acting as an MCP host. It is not the `chatgpt-web` browser bridge that Codex can ask TheHood to invoke.
+
+Generate deterministic Secure MCP Tunnel guidance for both installed and local-build commands:
+
+```bash
+thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+```
+
+Use the local-build command while developing this checkout so ChatGPT reaches the current `dist/cli/main.js`. The helper does not start the tunnel, install `tunnel-client`, configure ChatGPT, or contact OpenAI; it only prints the command shape TheHood expects.
+
+After running `tunnel-client init`, `tunnel-client doctor --profile thehood-local --explain`, and `tunnel-client run --profile thehood-local`, create the ChatGPT connector from the tunnel connection and enable it in a new ChatGPT conversation.
+
+First connector validation from ChatGPT:
+
+1. Ask ChatGPT to call `thehood_doctor` for the target `repo_path`.
+2. Ask ChatGPT to call `thehood_repo_tree` or `thehood_repo_read_file` for a harmless path.
+3. Ask ChatGPT to call `thehood_pro_access` when it needs the Pro bridge readiness and connector-mode handoff options.
+
+TheHood remains the local runtime and repo gateway in connector mode. ChatGPT receives only bounded tool results it calls, and private repos should use trusted MCP hosts because repo and run data can be disclosed through those results.
+
 For ChatGPT Pro through the included browser bridge, start the TheHood-managed browser profile and select the intended model:
 
 ```bash

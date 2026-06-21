@@ -12,7 +12,9 @@ thehood mcp
 
 The current implementation uses the MCP stdio transport: newline-delimited JSON-RPC messages over stdin/stdout. It implements initialization, `tools/list`, `tools/call`, and `ping`.
 
-For ChatGPT Web, use ChatGPT Developer Mode with an MCP connector. For private local repos, prefer OpenAI Secure MCP Tunnel pointing at the stdio command:
+## ChatGPT Developer Mode Connector
+
+For ChatGPT Web/Pro as an MCP host, use ChatGPT Developer Mode with an MCP connector. For private local repos, prefer OpenAI Secure MCP Tunnel pointing at the local TheHood stdio command:
 
 ```bash
 tunnel-client init \
@@ -27,6 +29,14 @@ tunnel-client run --profile thehood-local
 
 Then create a ChatGPT connector using the tunnel connection and enable it in a new conversation. In that mode, ChatGPT can call TheHood's exact repo and run tools instead of receiving a prebuilt summary.
 
+Validate connector mode from a fresh ChatGPT conversation by asking ChatGPT to use the TheHood connector to call:
+
+1. `thehood_doctor` for the target `repo_path`.
+2. `thehood_repo_tree` or `thehood_repo_read_file` for a harmless path.
+3. `thehood_pro_access` when ChatGPT should understand the available Pro bridge and MCP connector handoff paths.
+
+Successful connector validation proves only that ChatGPT can reach TheHood MCP and receive bounded tool results. It does not run a live TheHood orchestration, approve provider calls, or replace runtime verification.
+
 The CLI can print the same tunnel setup shape:
 
 ```bash
@@ -35,6 +45,8 @@ node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
 ```
 
 Use the local-build command while developing TheHood so the tunnel points at the current checkout's `dist/cli/main.js`.
+
+This connector path is separate from the `chatgpt-web` agent bridge. Connector mode does not use the TheHood-managed Chrome profile, CDP, or `THEHOOD_CHATGPT_WEB_*` environment variables. The bridge path is for Codex or TheHood asking the runtime to invoke ChatGPT Web; connector mode is for ChatGPT acting as the MCP host and asking TheHood for repo/run evidence through tools.
 
 References:
 

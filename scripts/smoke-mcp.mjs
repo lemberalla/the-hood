@@ -100,6 +100,27 @@ await fs.writeFile(
 );
 await runCommand(["init", "--repo", repoPath]);
 
+const tunnelReport = JSON.parse(
+  await runCommand(["mcp", "tunnel", "--tunnel-id", "tunnel_0123456789abcdef", "--profile", "thehood-local", "--json"])
+);
+assert.ok(tunnelReport.installed.initCommand.includes("sample_mcp_stdio_local"));
+assert.ok(tunnelReport.installed.initCommand.includes("--mcp-command 'thehood mcp'"));
+assert.equal(tunnelReport.installed.doctorCommand, "tunnel-client doctor --profile thehood-local --explain");
+assert.equal(tunnelReport.installed.runCommand, "tunnel-client run --profile thehood-local");
+assert.ok(tunnelReport.local.initCommand.includes("dist/cli/main.js"));
+assert.ok(
+  tunnelReport.chatGptSteps.some((step) => step.includes("thehood_doctor") && step.includes("thehood_repo_tree")),
+  "tunnel report should include deterministic ChatGPT connector validation steps"
+);
+assert.ok(
+  tunnelReport.notes.some((note) => note.includes("separate from the chatgpt-web agent bridge")),
+  "tunnel report should keep MCP connector mode separate from the ChatGPT Web bridge"
+);
+assert.ok(
+  tunnelReport.notes.some((note) => note.includes("trusted MCP hosts")),
+  "tunnel report should warn that connector tool results disclose repo/run data"
+);
+
 const baseMessages = [
   {
     jsonrpc: "2.0",
@@ -145,6 +166,9 @@ const happyPath = await runMcp([
 assert.equal(happyPath[0].result.protocolVersion, "2025-06-18");
 assert.ok(happyPath[0].result.instructions.includes("approval=none"));
 assert.ok(happyPath[0].result.instructions.includes("autopilot"));
+assert.ok(happyPath[0].result.instructions.includes("thehood mcp tunnel --tunnel-id <id> --profile thehood-local"));
+assert.ok(happyPath[0].result.instructions.includes("Secure MCP Tunnel"));
+assert.ok(happyPath[0].result.instructions.includes("read-only repo gateway tools"));
 assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_plan"),
   "tools/list should expose thehood_plan"
@@ -233,6 +257,9 @@ assert.ok(
   proAccessContent.recommended_paths.some((path) => path.id === "chatgpt_mcp_connector"),
   "pro access preflight should return a connector-mode fallback"
 );
+const proConnectorPath = proAccessContent.recommended_paths.find((path) => path.id === "chatgpt_mcp_connector");
+assert.ok(proConnectorPath.setup_command.includes("--profile thehood-local"));
+assert.ok(proConnectorPath.handoff_prompt.includes("Call TheHood MCP tools"));
 assert.ok(
   proAccessContent.recommended_paths.some((path) => path.id === "codex_agent_bridge"),
   "pro access preflight should return direct bridge readiness"

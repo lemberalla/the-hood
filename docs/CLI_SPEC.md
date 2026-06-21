@@ -370,5 +370,8 @@ The helper does not start the tunnel or contact OpenAI. It prints:
 - `tunnel-client doctor`
 - `tunnel-client run`
 - ChatGPT Developer Mode connector setup notes
+- a connector validation path using `thehood_doctor` and read-only repo gateway tools
+
+The tunnel helper is for MCP connector mode, where ChatGPT is the MCP host. It is separate from `thehood mcp config --chatgpt-web`, which configures the `chatgpt-web` browser bridge for TheHood-initiated agent-bridge calls.
 
 Use the local-build command while developing this checkout so ChatGPT sees the current `dist` output. Use the installed-package command after publishing or installing TheHood.

@@ -98,6 +98,7 @@ Users can choose between two ChatGPT Pro paths:
 - `mcp-connector`: ChatGPT connects to TheHood as an MCP connector and uses TheHood's repo/run tools directly.
 
 Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
+For connector mode, generate the local setup guide with `thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local`, keep Secure MCP Tunnel running, and validate from a fresh ChatGPT conversation with `thehood_doctor` plus a read-only repo gateway tool. This is separate from the `chatgpt-web` agent bridge and does not use Chrome/CDP bridge environment variables.
 When Codex or a tenant policy blocks a direct external disclosure to ChatGPT Web, that is outside TheHood autopilot. Use `thehood_pro_access` to get the local bridge status and a connector-mode handoff instead of repeating approval prompts.
 For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos default to remote refs when the provider supports that route, so Codex should not ask the user to type a new long disclosure sentence after a host-policy rejection.
 

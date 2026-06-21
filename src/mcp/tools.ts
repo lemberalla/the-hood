@@ -1386,7 +1386,7 @@ const createProAccessTool = (): McpTool => ({
             status: "recommended_when_codex_blocks_external_disclosure",
             description:
               "Open ChatGPT Pro with TheHood as an MCP connector. ChatGPT requests bounded repo/run evidence through TheHood tools instead of Codex sending repo context to Pro.",
-            setup_command: "node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>",
+            setup_command: "node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local",
             handoff_prompt: connectorPrompt
           },
           {
