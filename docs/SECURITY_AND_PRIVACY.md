@@ -69,6 +69,7 @@ The runtime must:
 - require explicit approval before applying isolated worker patches to the target checkout
 - require separate approval before verifier review when an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - require `THEHOOD_ALLOW_DIRECT_EDIT=1` before a local agent can edit the target checkout directly
+- keep repo-local runtime state in `.thehood/`, automatically add `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` for git checkouts, and treat that state as private local evidence rather than source code
 
 ## MCP Repo Gateway
 

@@ -407,6 +407,12 @@ const runLocalCommand = async (command, args, cwd) => {
   };
 };
 
+const assertLocalStateExclude = async (repoPath) => {
+  const exclude = await fs.readFile(path.join(repoPath, ".git", "info", "exclude"), "utf8");
+  assert.ok(exclude.includes(".thehood/"), "local git exclude should ignore .thehood/");
+  assert.ok(exclude.includes(".thehood-browser.json"), "local git exclude should ignore .thehood-browser.json");
+};
+
 assert.deepEqual(parseGitHubRemoteUrl("https://github.com/owner/repo.git"), {
   owner: "owner",
   repo: "repo",
@@ -804,6 +810,19 @@ assert.equal(setupJson.commandName, "thehood");
 assert.ok(setupJson.localBuildCommand.includes("dist/cli/main.js"));
 assert.ok(setupJson.oneSessionAlias.startsWith("alias thehood="));
 assert.ok(setupJson.localUiCommand.includes("--repo"));
+const gitIgnoredInitRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-gitignore-init-smoke-"));
+await runLocalCommand("git", ["init"], gitIgnoredInitRepoPath);
+const gitIgnoredInit = JSON.parse((await runCli(["init", "--repo", gitIgnoredInitRepoPath, "--json"])).stdout);
+assert.equal(gitIgnoredInit.localStateIgnore.status, "updated");
+assert.deepEqual(gitIgnoredInit.localStateIgnore.addedEntries, [".thehood/", ".thehood-browser.json"]);
+await assertLocalStateExclude(gitIgnoredInitRepoPath);
+const gitIgnoredInitAgain = JSON.parse((await runCli(["init", "--repo", gitIgnoredInitRepoPath, "--json"])).stdout);
+assert.equal(gitIgnoredInitAgain.localStateIgnore.status, "already_ignored");
+assert.deepEqual(gitIgnoredInitAgain.localStateIgnore.addedEntries, []);
+const gitIgnoredRunRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-gitignore-run-smoke-"));
+await runLocalCommand("git", ["init"], gitIgnoredRunRepoPath);
+await runCli(["plan", "create local runtime state", "--repo", gitIgnoredRunRepoPath, "--json"]);
+await assertLocalStateExclude(gitIgnoredRunRepoPath);
 await runCli(["init", "--repo", repoPath]);
 const initialConfig = JSON.parse((await runCli(["config", "show", "--repo", repoPath, "--json"])).stdout);
 assert.equal(initialConfig.defaults.maxIterations, 8);

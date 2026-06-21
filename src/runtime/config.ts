@@ -2,8 +2,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createDefaultConfig } from "./defaults.js";
 import { InputError } from "./errors.js";
+import { ensureLocalStateIgnored, type LocalStateIgnoreResult } from "./localStateIgnore.js";
 import { getProjectPaths } from "./paths.js";
 import type { ProviderConfig, RoleMap, TheHoodConfig } from "./types.js";
+
+export interface InitConfigResult {
+  configPath: string;
+  created: boolean;
+  localStateIgnore: LocalStateIgnoreResult;
+}
 
 const readJsonFile = async <T>(filePath: string): Promise<T> => {
   const raw = await fs.readFile(filePath, "utf8");
@@ -96,19 +103,22 @@ export const loadConfig = async (repoPath: string): Promise<TheHoodConfig> => {
 
 export const writeConfig = async (repoPath: string, config: TheHoodConfig): Promise<string> => {
   const paths = getProjectPaths(repoPath);
+  await ensureLocalStateIgnored(repoPath);
   await fs.mkdir(path.dirname(paths.configPath), { recursive: true });
   await fs.writeFile(paths.configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
   return paths.configPath;
 };
 
-export const initConfig = async (repoPath: string): Promise<{ configPath: string; created: boolean }> => {
+export const initConfig = async (repoPath: string): Promise<InitConfigResult> => {
   const paths = getProjectPaths(repoPath);
+  const localStateIgnore = await ensureLocalStateIgnored(repoPath);
 
   try {
     await fs.access(paths.configPath);
     return {
       configPath: paths.configPath,
-      created: false
+      created: false,
+      localStateIgnore
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -122,6 +132,7 @@ export const initConfig = async (repoPath: string): Promise<{ configPath: string
 
   return {
     configPath,
-    created: true
+    created: true,
+    localStateIgnore
   };
 };

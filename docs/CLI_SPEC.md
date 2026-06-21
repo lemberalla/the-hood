@@ -144,6 +144,8 @@ thehood continue <run-id>
 
 The current implementation uses `.thehood/config.json` to avoid adding a YAML parser before the runtime is stable.
 
+TheHood may also create `.thehood/runs` and `.thehood/artifacts` when a plan, run, orchestration, validation, or provider call records evidence. In git checkouts, TheHood automatically adds `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` before writing repo-local runtime state. This keeps local evidence out of normal `git status` without mutating the repo's committed `.gitignore`. Users can delete `.thehood/` to clear local run history.
+
 Initial config shape:
 
 ```json

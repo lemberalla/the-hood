@@ -16,7 +16,7 @@ The first product surface is a CLI plus an MCP server. The macOS menubar app sho
 
 ## Works Today
 
-- Local project setup and JSON runtime config under `.thehood/config.json`.
+- Local project setup and JSON runtime config under `.thehood/config.json`, with local git excludes for TheHood runtime state.
 - CLI and stdio MCP control surfaces over the same local runtime.
 - Codex-first role mapping with separate orchestrator, planner, implementer, QA, verifier, and critic roles.
 - Local Codex CLI and Claude Code command adapters that must return schema-bound responses.
@@ -167,6 +167,8 @@ node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
 node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>
 ```
+
+TheHood stores local run history and evidence in `.thehood/`, including run records, logs, provider responses, approval evidence, final reports, and progress packets. This is useful local state, not source code. When TheHood creates repo-local state inside a git checkout, it automatically adds `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` so normal `git status` stays clean without changing the repo's committed `.gitignore`. Do not commit `.thehood/`; delete it when you want to clear local run history.
 
 The optional Codex plugin lives at `plugins/thehood-codex` and is listed by the repo marketplace at `.agents/plugins/marketplace.json`. It is not installed by default because repo-root Codex custom agents and plugin-provided surfaces should appear only when a user opts into them.
 

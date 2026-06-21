@@ -9,6 +9,7 @@ import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
+import type { LocalStateIgnoreResult } from "../runtime/localStateIgnore.js";
 import { advanceRun } from "../runtime/loop.js";
 import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { startMcpServer } from "../mcp/server.js";
@@ -447,6 +448,19 @@ const latestDiffArtifact = (artifacts: RunArtifact[]): RunArtifact => {
   return artifact;
 };
 
+const formatLocalStateIgnoreResult = (result: LocalStateIgnoreResult): string => {
+  const entries = result.ignoredEntries.join(", ");
+
+  switch (result.status) {
+    case "updated":
+      return `Protected local state in git exclude: ${result.excludePath} (${entries})`;
+    case "already_ignored":
+      return `Local state already protected by git exclude: ${result.excludePath} (${entries})`;
+    case "not_git_repo":
+      return `Local state ignore not updated because this path is not a git checkout (${entries})`;
+  }
+};
+
 const handleInit = async (options: Record<string, CliOptionValue>): Promise<void> => {
   const result = await initConfig(repoFromOptions(options));
 
@@ -456,7 +470,10 @@ const handleInit = async (options: Record<string, CliOptionValue>): Promise<void
   }
 
   process.stdout.write(
-    `${result.created ? "Created" : "Found existing"} config: ${result.configPath}\n`
+    [
+      `${result.created ? "Created" : "Found existing"} config: ${result.configPath}`,
+      formatLocalStateIgnoreResult(result.localStateIgnore)
+    ].join("\n") + "\n"
   );
 };
 
