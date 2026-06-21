@@ -30,6 +30,7 @@ thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood roles set implementer claude-code:sonnet
 thehood roles set verifier claude-code:sonnet
 thehood roles set critic claude-code:fable
+thehood goal "Prepare release metadata" --repo . --max-iterations 5
 thehood run "Implement the requested change" --repo .
 thehood run "Implement the requested change" --repo . --loop
 thehood plan "Design the feature" --repo .
@@ -83,6 +84,12 @@ thehood roles set qa codex-cli:spark
 | `research` | Read-only exploration and findings |
 | `implement` | Scoped edits after approval policy allows them |
 | `review` | Independent diff or repo review |
+
+## Goal Surface
+
+`thehood goal "<goal>" --repo . --max-iterations 5` creates a normal bounded implementation run and immediately drives the existing headless loop. It is a product-facing alias over `run` plus `loop`, not a scheduler.
+
+`--max-iterations` applies only to the created run. It does not change repo config defaults and does not create timer loops, background daemons, cloud queues, or new approval behavior.
 
 ## Role Selection
 

@@ -100,6 +100,7 @@ Usage:
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
+  thehood goal <goal> [--repo <path>] [--max-iterations <n>] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood plan <goal> [--repo <path>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood run <goal> [--repo <path>] [--mode <mode>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood status [run-id] [--repo <path>] [--json]
@@ -649,19 +650,21 @@ const handleTeams = async (
 };
 
 const handleCreateRun = async (
-  command: "plan" | "run",
+  command: "goal" | "plan" | "run",
   args: string[],
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
   const goal = args.join(" ").trim();
   const mode = command === "plan" ? "plan" : parseMode(getStringOption(options, "mode"), "implement");
-  const shouldLoop = getBooleanOption(options, "loop");
+  const shouldLoop = command === "goal" || getBooleanOption(options, "loop");
+  const maxIterations = parsePositiveIntegerOption(options, "maxIterations");
   const run = await createRun({
     repoPath: repoFromOptions(options),
     goal,
     mode,
     roleOverrides: parseRoleOverrides(options),
-    constraints: getStringListOption(options, "constraint")
+    constraints: getStringListOption(options, "constraint"),
+    ...(maxIterations === undefined ? {} : { maxIterations })
   });
 
   if (shouldLoop) {
@@ -1207,6 +1210,7 @@ const runCli = async (argv: string[]): Promise<void> => {
     case "roles":
       await handleRoles(args, parsed.options);
       return;
+    case "goal":
     case "plan":
     case "run":
       await handleCreateRun(command, args, parsed.options);

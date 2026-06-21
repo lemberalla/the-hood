@@ -2958,6 +2958,53 @@ assert.equal(finalReportQaLane.state, "satisfied");
 assert.equal(finalReportQaLane.owner.kind, "runtime");
 assert.equal(finalReportQaLane.canSatisfyRequired, true);
 assert.equal(finalReportQaLane.satisfiesRequired, true);
+
+const goalRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-goal-smoke-"));
+await runCli(["init", "--repo", goalRepoPath]);
+await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", goalRepoPath]);
+await fs.writeFile(
+  path.join(goalRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('goal validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const goalResult = JSON.parse(
+  (await runCli([
+    "goal",
+    "exercise public goal loop alias",
+    "--repo",
+    goalRepoPath,
+    "--orchestrator",
+    "stub:orchestrator",
+    "--implementer",
+    "stub:implementer",
+    "--qa",
+    "stub:qa",
+    "--verifier",
+    "stub:verifier",
+    "--critic",
+    "stub:critic",
+    "--max-iterations",
+    "5",
+    "--json"
+  ])).stdout
+);
+assert.equal(goalResult.run.state, "completed");
+assert.equal(goalResult.run.maxIterations, 5);
+assert.equal(goalResult.run.mode, "implement");
+assert.ok(goalResult.providerResponses.length >= 3);
+assert.ok(
+  goalResult.run.approvalEvents.some((event) =>
+    event.reason.includes("Auto-approved by TheHood autopilot policy")
+  )
+);
 const finalReportQaTesterLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
 assert.ok(finalReportQaTesterLane, "final report should expose QA tester lane");
 assert.equal(finalReportQaTesterLane.kind, "tester");

@@ -147,6 +147,7 @@ node dist/cli/main.js agent-board --repo . --artifact --json
 node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
 node dist/cli/main.js roles --repo .
+node dist/cli/main.js goal "Prepare release metadata" --repo . --max-iterations 5
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js run "Exercise the full loop" --repo . --loop
 node dist/cli/main.js status --repo .

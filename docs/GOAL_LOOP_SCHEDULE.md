@@ -40,3 +40,11 @@ For the preview:
 - `goal` is in scope.
 - `loop` is in scope while the local runtime is active.
 - `schedule` is future work.
+
+The CLI goal surface is intentionally thin:
+
+```bash
+thehood goal "Prepare release metadata" --repo . --max-iterations 5
+```
+
+It creates a normal implementation run and drives the existing headless loop. It does not add timers, background daemons, cloud queues, or new approval semantics.
