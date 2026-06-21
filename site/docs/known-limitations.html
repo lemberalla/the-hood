@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Known Limitations - TheHood</title>
+    <meta name="description" content="Known limitations for TheHood v0.1.0 preview.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="getting-started.html">Get Started</a>
+          <a href="loops.html">Loops</a>
+          <a href="provider-matrix.html">Providers</a>
+          <a href="security.html">Security</a>
+          <a aria-current="page" href="known-limitations.html">Limits</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a href="getting-started.html">Getting Started</a>
+        <a href="loops.html">Goal Loops</a>
+        <a href="provider-matrix.html">Provider Matrix</a>
+        <a href="security.html">Security</a>
+        <a href="contributing.html">Contributing</a>
+        <a aria-current="page" href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Honest preview boundary</p>
+        <h1>Known Limitations</h1>
+        <p>The preview is useful for early adopters, but several surfaces remain experimental or future work.</p>
+
+        <table class="table">
+          <thead>
+            <tr><th>Area</th><th>Current boundary</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Hosted execution</td><td>Not included. Runs are local-session workflows.</td></tr>
+            <tr><td>Schedules</td><td>Not included. No timers, daemons, or cloud queues.</td></tr>
+            <tr><td>API providers</td><td>OpenAI and Anthropic API metadata exists, but production adapters are not wired.</td></tr>
+            <tr><td>ChatGPT MCP connector</td><td>Experimental and dependent on external ChatGPT workspace availability.</td></tr>
+            <tr><td>Native app</td><td>Future thin control surface. The CLI and MCP server are the current primary surfaces.</td></tr>
+            <tr><td>Public package</td><td>Prepared for preview publishing, but release still requires final audit and tag.</td></tr>
+          </tbody>
+        </table>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `docs/KNOWN_LIMITATIONS.md` and `docs/PUBLIC_REPO_READINESS.md`.</div></footer>
+  </body>
+</html>

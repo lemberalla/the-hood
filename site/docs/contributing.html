@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contributing - TheHood</title>
+    <meta name="description" content="How to contribute to TheHood public preview without bypassing runtime invariants.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="getting-started.html">Get Started</a>
+          <a href="loops.html">Loops</a>
+          <a href="provider-matrix.html">Providers</a>
+          <a href="security.html">Security</a>
+          <a aria-current="page" href="contributing.html">Contributing</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a href="getting-started.html">Getting Started</a>
+        <a href="loops.html">Goal Loops</a>
+        <a href="provider-matrix.html">Provider Matrix</a>
+        <a href="security.html">Security</a>
+        <a aria-current="page" href="contributing.html">Contributing</a>
+        <a href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Public repo rails</p>
+        <h1>Contributing</h1>
+        <p>Public-preview contributions should preserve the runtime invariants and keep provider-specific behavior behind adapters.</p>
+
+        <h2>Local Checks</h2>
+        <div class="terminal"><pre><code>npm run typecheck
+npm run build
+npm run smoke:mcp
+npm run smoke:codex-config
+npm run smoke:runtime</code></pre></div>
+
+        <h2>Pull Requests</h2>
+        <ul>
+          <li>Explain runtime, provider, approval, filesystem, MCP, or verification behavior changes.</li>
+          <li>Classify protected test, fixture, snapshot, or eval changes.</li>
+          <li>Keep examples synthetic.</li>
+          <li>Do not commit secrets, local `.thehood/` state, browser profiles, provider logs, or private run transcripts.</li>
+        </ul>
+
+        <h2>Provider Work</h2>
+        <p>Provider adapters should normalize external behavior into TheHood schemas. They should not own approval state, bypass transfer manifests, or grant tools to roles that should remain read-only.</p>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `CONTRIBUTING.md` and `docs/CONTRIBUTOR_GUIDE.md`.</div></footer>
+  </body>
+</html>

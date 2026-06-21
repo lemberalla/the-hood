@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Security - TheHood</title>
+    <meta name="description" content="TheHood public-preview security and privacy boundaries.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="getting-started.html">Get Started</a>
+          <a href="loops.html">Loops</a>
+          <a href="provider-matrix.html">Providers</a>
+          <a aria-current="page" href="security.html">Security</a>
+          <a href="known-limitations.html">Limits</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a href="getting-started.html">Getting Started</a>
+        <a href="loops.html">Goal Loops</a>
+        <a href="provider-matrix.html">Provider Matrix</a>
+        <a aria-current="page" href="security.html">Security</a>
+        <a href="contributing.html">Contributing</a>
+        <a href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Trust boundary</p>
+        <h1>Security</h1>
+        <p>TheHood keeps authority in the runtime. Provider sessions may help reason, but they do not own permissions, artifacts, approval state, or final verification.</p>
+
+        <div class="grid status-list">
+          <article class="card"><span class="label">Local</span><h3>State stays on disk</h3><p>Run records, artifacts, approval events, and local config live under the repo-local TheHood state directory.</p></article>
+          <article class="card"><span class="label warn">Explicit</span><h3>Transfers are gated</h3><p>Before local repo context leaves the machine for browser or API providers, TheHood writes a transfer manifest.</p></article>
+          <article class="card"><span class="label stop">Forbidden</span><h3>No private artifacts</h3><p>Do not publish `.thehood/`, browser profiles, provider transcripts, local env files, or real run logs.</p></article>
+        </div>
+
+        <h2>Enforced</h2>
+        <ul>
+          <li>Models suggest; runtime enforces.</li>
+          <li>Implementer and verifier separation is mandatory.</li>
+          <li>Verifier and critic roles do not receive edit tools.</li>
+          <li>Protected test, fixture, snapshot, and eval changes require explicit classification.</li>
+          <li>Provider adapters must not bypass runtime permissions.</li>
+        </ul>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `docs/SECURITY_AND_PRIVACY.md`, `PRIVACY.md`, and `docs/TRUST_MODEL.md`.</div></footer>
+  </body>
+</html>

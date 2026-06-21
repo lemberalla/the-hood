@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Provider Matrix - TheHood</title>
+    <meta name="description" content="Current provider status for TheHood public preview.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="getting-started.html">Get Started</a>
+          <a href="loops.html">Loops</a>
+          <a aria-current="page" href="provider-matrix.html">Providers</a>
+          <a href="security.html">Security</a>
+          <a href="known-limitations.html">Limits</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a href="getting-started.html">Getting Started</a>
+        <a href="loops.html">Goal Loops</a>
+        <a aria-current="page" href="provider-matrix.html">Provider Matrix</a>
+        <a href="security.html">Security</a>
+        <a href="contributing.html">Contributing</a>
+        <a href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Provider-neutral roles</p>
+        <h1>Provider Matrix</h1>
+        <p>Provider choice changes who supplies suggestions. It does not change runtime authority, approvals, role separation, or verification gates.</p>
+
+        <table class="table">
+          <thead>
+            <tr><th>Provider</th><th>Status</th><th>Preview use</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>`stub`</td><td>Implemented</td><td>Deterministic local smoke tests and synthetic demos. No external calls.</td></tr>
+            <tr><td>`codex-cli`</td><td>Implemented</td><td>Local Codex command adapter with schema-bound responses.</td></tr>
+            <tr><td>`claude-code`</td><td>Implemented</td><td>Local Claude Code command adapter for selected roles.</td></tr>
+            <tr><td>`chatgpt-web`</td><td>Experimental</td><td>User-authenticated ChatGPT Web bridge when configured locally.</td></tr>
+            <tr><td>`mcp-connector`</td><td>Experimental</td><td>ChatGPT connector and tunnel path when available in the user's workspace.</td></tr>
+            <tr><td>`openai-api`</td><td>Future</td><td>Configured metadata exists, but production API adapter wiring is not included.</td></tr>
+            <tr><td>`anthropic-api`</td><td>Future</td><td>Configured metadata exists, but production API adapter wiring is not included.</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Role Policy</h2>
+        <ul>
+          <li>Implementer and verifier must not be the same agent for the same task.</li>
+          <li>Verifier and critic roles do not receive edit tools.</li>
+          <li>Provider adapters normalize responses into TheHood schemas.</li>
+          <li>Provider adapters must not bypass runtime permissions or transfer manifests.</li>
+        </ul>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `docs/PROVIDER_MATRIX.md` and `docs/ROLE_CONTRACTS.md`.</div></footer>
+  </body>
+</html>

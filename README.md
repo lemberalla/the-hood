@@ -243,6 +243,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Open Decisions](docs/OPEN_DECISIONS.md)
 - [Public Repo Readiness](docs/PUBLIC_REPO_READINESS.md)
 - [v0.1.0-preview.0 Release Notes](docs/release/v0.1.0-preview.0.md)
+- [Static Preview Site](site/README.md)
 
 ## Public Repo Docs
 

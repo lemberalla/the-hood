@@ -19,6 +19,7 @@ It should not claim cloud routines, hosted execution, API-provider automation, a
 - Verify release packaging with `npm run release:check`.
 - Verify package contents with `npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json`.
 - Keep the synthetic stub demo runnable from `examples/stub-demo` and `docs/DEMO.md`.
+- Keep the static site in `site/` dependency-free, analytics-free, and aligned with README claims.
 - Make README claims match current behavior. Mark API adapters, hosted UI, and automatic Codex app rendering beyond explicit agent board artifact payloads as planned unless implemented.
 - Keep ChatGPT MCP connector mode documented as experimental and optional. It depends on external ChatGPT custom connector availability and is not a public-preview blocker.
 - Configure branch protection, required CI checks, secret scanning or push protection, private vulnerability reporting, and issue/PR templates on GitHub. These settings are external to the repository tree and must be verified before public launch.
