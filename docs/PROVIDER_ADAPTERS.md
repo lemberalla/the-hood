@@ -144,6 +144,7 @@ Included bridge:
 - Source: `src/bridges/chatgptWebBridge.ts`
 - Uses Chrome DevTools Protocol against the TheHood-managed persistent browser profile by default.
 - Requires explicit model confirmation through `THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED=1` or `--allow-unverified-model`.
+- Treats ChatGPT Web GitHub connector access as unconfirmed unless `THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED=1` is set after verifying the active bridge session can use that connector.
 - Fails fast with a blocked response when the visible ChatGPT page requires login.
 - Creates a dedicated ChatGPT target for the first bridge call in a TheHood run, stores that target by run id, and reuses it for later ChatGPT Web calls in the same run so context follow-ups do not spawn new chats after every Pro answer.
 - Verifies a fresh composer before the first prompt in a run-scoped target and keeps directive acknowledgement checks on every response so reused run tabs do not accept stale provider-session output.
@@ -165,7 +166,7 @@ Rules:
 - Fail closed when the authenticated ChatGPT page or composer cannot be verified.
 - Fail closed when a fresh composer cannot be verified or when the response does not acknowledge the current directive.
 - The bridge must not log cookies, local storage, tokens, or private browser profile data.
-- When the directive includes `context.remoteRepoContext`, use ChatGPT Web's GitHub connector for the named owner, repo, branch, and commit instead of asking TheHood to send local file excerpts. If the connector cannot access the repo or commit, ask TheHood for bounded local repo context.
+- When the directive includes `context.remoteRepoContext`, use ChatGPT Web's GitHub connector for the named owner, repo, branch, and commit instead of asking TheHood to send local file excerpts. The runtime only selects this route after connector access has been confirmed for the active bridge path. If the connector cannot access the repo or commit, ask TheHood for bounded local repo context.
 
 Best roles:
 

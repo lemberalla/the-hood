@@ -140,7 +140,7 @@ Output includes current TheHood approval policy, provider/model readiness, repo 
 Repo visibility drives the default UX:
 
 - Dirty or unpushed repos require a user choice: commit and push a checkpoint first, approve bounded local context or diff transfer, use no-repo-context strategy, or cancel.
-- Clean pushed GitHub repos default to remote refs when the provider supports that route. For `chatgpt-web`, TheHood should prefer ChatGPT's GitHub connector at the exact commit instead of sending local file contents through Codex.
+- Clean pushed GitHub repos default to remote refs only when the provider route is verified. For `chatgpt-web`, TheHood should prefer ChatGPT's GitHub connector at the exact commit only when the active ChatGPT Web bridge GitHub connector surface is confirmed; otherwise the preflight should present connector setup, explicit local context approval, no-repo-context, or cancel paths.
 
 If Codex rejects a direct model-backed call as an external disclosure, do not ask the user to type a fresh long approval phrase. Present the model-access approval packet, show the exact approval text in a fenced `text` block if the user accepts, or switch to no-repo-context or connector mode.
 
@@ -657,7 +657,7 @@ Input:
 Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
-2. Call `thehood_model_access` before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, present the user choices from the preflight. If the repo is clean and pushed, use the remote GitHub refs default when the provider supports it. If host policy rejects a direct call, present the compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
+2. Call `thehood_model_access` before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, present the user choices from the preflight. If the repo is clean and pushed, use the remote GitHub refs default only when the preflight reports the provider route as confirmed; for `chatgpt-web`, unconfirmed bridge GitHub connector access still requires user choice. If host policy rejects a direct call, present the compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
 3. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex and ChatGPT Web bridge readiness or ChatGPT MCP connector handoff details matter.
 4. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator, Claude as critic/verifier, Claude as implementer, or Spark plus Sonnet role separation.
 5. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic, QA tester, or Claude second judge; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.

@@ -9,6 +9,7 @@ const cliPath = path.join(root, "dist", "cli", "main.js");
 process.env.THEHOOD_CHATGPT_WEB_COMMAND = "";
 process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL = "0";
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_CDP_URL = "http://127.0.0.1:9";
 
 const runCommand = async (args) => {
@@ -253,6 +254,7 @@ const proAccessContent = proAccessPath[1].result.structuredContent;
 assert.equal(proAccessContent.kind, "pro_access_preflight");
 assert.equal(proAccessContent.provider, "chatgpt-web:chatgpt-pro");
 assert.equal(proAccessContent.codex_host_policy_boundary.status, "outside_thehood_runtime_control");
+assert.equal(proAccessContent.bridge.github_connector_confirmed, false);
 assert.ok(
   proAccessContent.recommended_paths.some((path) => path.id === "chatgpt_mcp_connector"),
   "pro access preflight should return a connector-mode fallback"
@@ -370,34 +372,84 @@ const remoteModelAccessPath = await runMcp([
   }
 ]);
 const remoteModelAccessContent = remoteModelAccessPath[1].result.structuredContent;
-assert.equal(remoteModelAccessContent.repo_visibility.default_gate, "remote_github_refs");
+assert.equal(remoteModelAccessContent.repo_visibility.default_gate, "user_choice_required");
 assert.equal(remoteModelAccessContent.repo_visibility.clean, true);
 assert.equal(remoteModelAccessContent.repo_visibility.pushed, true);
+assert.equal(remoteModelAccessContent.repo_visibility.remote_refs_available, true);
+assert.equal(remoteModelAccessContent.repo_visibility.github_connector_confirmed, false);
 assert.equal(remoteModelAccessContent.repo_visibility.github_remote.owner, "thehood");
 assert.ok(
   remoteModelAccessContent.repo_visibility.user_choices.some(
-    (choice) => choice.id === "use_remote_github_refs" && choice.recommended === true
+    (choice) => choice.id === "confirm_chatgpt_web_github_connector" && choice.recommended === true
   ),
-  "clean pushed model access preflight should recommend remote GitHub refs"
+  "clean pushed model access preflight should require connector confirmation before remote refs"
 );
 assert.ok(
   remoteModelAccessContent.recommended_paths.some(
-    (path) => path.id === "use_remote_github_refs" && path.status === "default_for_chatgpt_web"
+    (path) => path.id === "confirm_chatgpt_web_github_connector" && path.status === "required_before_remote_default"
   ),
-  "clean pushed ChatGPT Web preflight should default to remote GitHub refs"
+  "clean pushed ChatGPT Web preflight should not default to unconfirmed remote GitHub refs"
 );
 assert.ok(
   remoteModelAccessContent.destinations.some(
     (destination) =>
       destination.assignment === "chatgpt-web:chatgpt-pro" &&
       destination.remote_repo_access.route === "github_connector" &&
-      destination.remote_repo_access.status === "default"
+      destination.remote_repo_access.status === "connector_unconfirmed"
   ),
-  "clean pushed ChatGPT Web destination should use GitHub connector by default"
+  "clean pushed ChatGPT Web destination should report unconfirmed connector access"
 );
 assert.ok(
-  !remoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
-  "clean pushed remote default should not recommend local context approval by default"
+  remoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "unconfirmed remote refs should keep explicit local context approval available"
+);
+
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "1";
+const confirmedRemoteModelAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_model_access",
+      arguments: {
+        repo_path: remoteReadyRepoPath,
+        agents: ["chatgpt-web:chatgpt-pro"],
+        purpose: "Confirmed remote default review.",
+        context_kind: "repo_context"
+      }
+    }
+  }
+]);
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "0";
+const confirmedRemoteModelAccessContent = confirmedRemoteModelAccessPath[1].result.structuredContent;
+assert.equal(confirmedRemoteModelAccessContent.repo_visibility.default_gate, "remote_github_refs");
+assert.equal(confirmedRemoteModelAccessContent.repo_visibility.github_connector_confirmed, true);
+assert.ok(
+  confirmedRemoteModelAccessContent.repo_visibility.user_choices.some(
+    (choice) => choice.id === "use_remote_github_refs" && choice.recommended === true
+  ),
+  "confirmed clean pushed model access preflight should recommend remote GitHub refs"
+);
+assert.ok(
+  confirmedRemoteModelAccessContent.recommended_paths.some(
+    (path) => path.id === "use_remote_github_refs" && path.status === "default_for_chatgpt_web"
+  ),
+  "confirmed clean pushed ChatGPT Web preflight should default to remote GitHub refs"
+);
+assert.ok(
+  confirmedRemoteModelAccessContent.destinations.some(
+    (destination) =>
+      destination.assignment === "chatgpt-web:chatgpt-pro" &&
+      destination.remote_repo_access.route === "github_connector" &&
+      destination.remote_repo_access.status === "default"
+  ),
+  "confirmed clean pushed ChatGPT Web destination should use GitHub connector by default"
+);
+assert.ok(
+  !confirmedRemoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "confirmed remote default should not recommend local context approval by default"
 );
 
 const agentBoardPath = await runMcp([

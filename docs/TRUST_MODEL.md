@@ -45,7 +45,7 @@ Runtime-captured evidence wins over model claims. A completed run should point t
 
 Before local repo context, progress packets, or memory bodies cross a browser/API provider boundary, TheHood writes a transfer manifest. The manifest records destination, purpose, source refs, byte counts, risk class, bounded preview, and approval copy.
 
-Refs-only GitHub connector context names remote coordinates instead of local file excerpts. It does not replace transfer manifests for local context bodies.
+Refs-only GitHub connector context names remote coordinates instead of local file excerpts and is selected only when the provider connector route is confirmed. It does not replace transfer manifests for local context bodies.
 
 ## Fail-Closed Behavior
 

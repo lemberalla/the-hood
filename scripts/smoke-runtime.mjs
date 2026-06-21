@@ -15,6 +15,7 @@ const baseEnv = () => ({
   THEHOOD_CHATGPT_WEB_COMMAND: "",
   THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
   THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0",
+  THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED: "0",
   THEHOOD_CHATGPT_WEB_CDP_URL: "http://127.0.0.1:9"
 });
 const { chooseRepoContextRoute, parseGitHubRemoteUrl } = await import(
@@ -463,6 +464,31 @@ assert.equal(
     pushed: true,
     statusPathCount: 0,
     statusPaths: [],
+    githubConnectorConfirmed: false,
+    reasons: []
+  }).reason,
+  "chatgpt_web_github_connector_unconfirmed"
+);
+assert.equal(
+  chooseRepoContextRoute({
+    provider: "chatgpt-web",
+    repoPath: "/tmp/repo",
+    githubRemote: {
+      name: "origin",
+      owner: "owner",
+      repo: "repo",
+      url: "git@github.com:owner/repo.git",
+      normalizedUrl: "https://github.com/owner/repo"
+    },
+    branch: "main",
+    commit: "abc",
+    upstream: "origin/main",
+    upstreamCommit: "abc",
+    clean: true,
+    pushed: true,
+    statusPathCount: 0,
+    statusPaths: [],
+    githubConnectorConfirmed: true,
     reasons: []
   }).route,
   "github_connector"
@@ -475,6 +501,7 @@ assert.equal(
     pushed: true,
     statusPathCount: 0,
     statusPaths: [],
+    githubConnectorConfirmed: false,
     reasons: []
   }).route,
   "local_bundle"
@@ -2122,7 +2149,8 @@ await fs.writeFile(
 await fs.chmod(fakeExternalBridgePath, 0o755);
 const fakeExternalEnv = {
   THEHOOD_CHATGPT_WEB_COMMAND: fakeExternalBridgePath,
-  THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath
+  THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath,
+  THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED: "1"
 };
 const remoteContextRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-remote-context-smoke-"));
 await runCli(["init", "--repo", remoteContextRepoPath]);

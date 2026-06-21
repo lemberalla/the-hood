@@ -24,7 +24,10 @@ import { deriveOperatorNextActions } from "../runtime/operatorNextActions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { buildRoleRoster } from "../runtime/roleRoster.js";
 import { getRunInsights, type RunInsights } from "../runtime/runInsights.js";
-import { inspectRemoteRepoContext } from "../runtime/remoteRepoContext.js";
+import {
+  chatGptWebGitHubConnectorConfirmed,
+  inspectRemoteRepoContext
+} from "../runtime/remoteRepoContext.js";
 import { summonAgent } from "../runtime/summons.js";
 import type { AgentResponse } from "../providers/types.js";
 import type {
@@ -1004,8 +1007,9 @@ const modelAccessModelInfo = (
 const modelAccessRepoVisibility = (
   inspection: Awaited<ReturnType<typeof inspectRemoteRepoContext>>
 ): JsonObject => {
-  const remoteReady = Boolean(inspection.githubRemote && inspection.commit && inspection.clean && inspection.pushed);
-  const userChoices: JsonObject[] = remoteReady
+  const remoteRefsAvailable = Boolean(inspection.githubRemote && inspection.commit && inspection.clean && inspection.pushed);
+  const remoteDefaultReady = remoteRefsAvailable && inspection.githubConnectorConfirmed;
+  const userChoices: JsonObject[] = remoteDefaultReady
     ? [
         {
           id: "use_remote_github_refs",
@@ -1023,6 +1027,34 @@ const modelAccessRepoVisibility = (
           recommended: false
         }
       ]
+    : remoteRefsAvailable
+      ? [
+          {
+            id: "confirm_chatgpt_web_github_connector",
+            label: "Confirm ChatGPT Web GitHub connector",
+            recommended: true
+          },
+          {
+            id: "chatgpt_mcp_connector",
+            label: "Use ChatGPT MCP connector",
+            recommended: false
+          },
+          {
+            id: "approve_local_context_transfer",
+            label: "Approve bounded local context transfer",
+            recommended: false
+          },
+          {
+            id: "abstract_no_repo_context_prompt",
+            label: "Use no-repo-context strategy",
+            recommended: false
+          },
+          {
+            id: "cancel_external_model_access",
+            label: "Cancel external model access",
+            recommended: false
+          }
+        ]
     : [
         {
           id: "commit_push_checkpoint_then_remote",
@@ -1067,10 +1099,15 @@ const modelAccessRepoVisibility = (
     commit: inspection.commit ?? null,
     upstream: inspection.upstream ?? null,
     upstream_commit: inspection.upstreamCommit ?? null,
-    default_gate: remoteReady ? "remote_github_refs" : "user_choice_required",
-    default_route: remoteReady
-      ? "Use remote GitHub refs at the exact commit when the provider supports it; do not send local file contents through Codex."
-      : "Ask the user to commit and push a checkpoint, explicitly approve local context/diff transfer, use no-repo-context strategy, or cancel.",
+    remote_refs_available: remoteRefsAvailable,
+    github_connector_confirmed: inspection.githubConnectorConfirmed,
+    github_connector_confirmation_env: "THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED",
+    default_gate: remoteDefaultReady ? "remote_github_refs" : "user_choice_required",
+    default_route: remoteDefaultReady
+      ? "Use ChatGPT Web's confirmed GitHub connector at the exact remote commit. Do not send local file contents through Codex."
+      : remoteRefsAvailable
+        ? "Remote GitHub refs are available, but the active ChatGPT Web bridge GitHub connector is unconfirmed. Confirm the bridge connector, use ChatGPT MCP connector mode, approve bounded local context transfer, use no-repo-context strategy, or cancel."
+        : "Ask the user to commit and push a checkpoint, explicitly approve local context/diff transfer, use no-repo-context strategy, or cancel.",
     user_choices: userChoices
   };
 };
@@ -1080,12 +1117,20 @@ const githubRemoteReady = (repoVisibility: JsonObject): boolean =>
 
 const modelAccessRemoteRepoAccess = (providerId: string, repoVisibility: JsonObject): JsonObject => {
   if (providerId === "chatgpt-web") {
+    const remoteRefsAvailable = repoVisibility.remote_refs_available === true;
+    const githubConnectorConfirmed = repoVisibility.github_connector_confirmed === true;
     return {
       route: "github_connector",
-      status: githubRemoteReady(repoVisibility) ? "default" : "available_after_clean_pushed_checkpoint",
+      status: githubRemoteReady(repoVisibility)
+        ? "default"
+        : remoteRefsAvailable && !githubConnectorConfirmed
+          ? "connector_unconfirmed"
+          : "available_after_clean_pushed_checkpoint",
       description: githubRemoteReady(repoVisibility)
-        ? "Use ChatGPT Pro's GitHub connector at the exact remote commit. No local file contents need to be sent through Codex."
-        : "Commit and push the local checkout first, then use ChatGPT Pro's GitHub connector at the exact remote commit."
+        ? "Use ChatGPT Pro's confirmed GitHub connector at the exact remote commit. No local file contents need to be sent through Codex."
+        : remoteRefsAvailable && !githubConnectorConfirmed
+          ? "The repo is clean and pushed, but TheHood has not confirmed that the active ChatGPT Web bridge session can use GitHub connector tools. Set THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED=1 only after verifying that tool surface."
+          : "Commit and push the local checkout first, then confirm ChatGPT Web GitHub connector access before using remote refs as the default."
     };
   }
 
@@ -1134,34 +1179,48 @@ const modelAccessRecommendedPaths = (
 ): JsonObject[] => {
   const allReady = destinations.every((destination) => destination.status === "runtime_ready_host_may_still_block");
   const hasChatGptWeb = destinations.some((destination) => destination.provider === "chatgpt-web");
-  const remoteReady = githubRemoteReady(repoVisibility);
+  const remoteDefaultReady = githubRemoteReady(repoVisibility);
+  const remoteRefsAvailable = repoVisibility.remote_refs_available === true;
   const paths: JsonObject[] = [
-    ...(remoteReady
+    ...(remoteDefaultReady
       ? [
           {
             id: "use_remote_github_refs",
             status: hasChatGptWeb ? "default_for_chatgpt_web" : "available_if_provider_can_inspect_remote",
             description:
-              "Use the clean pushed GitHub repo at the exact commit. Do not send local file contents through Codex."
+              "Use the clean pushed GitHub repo at the exact commit through a confirmed provider GitHub connector. Do not send local file contents through Codex."
           }
         ]
+      : remoteRefsAvailable && hasChatGptWeb
+        ? [
+            {
+              id: "confirm_chatgpt_web_github_connector",
+              status: "required_before_remote_default",
+              description:
+                "The repo is clean and pushed, but TheHood has not confirmed that the active ChatGPT Web bridge session has GitHub connector access. Verify that tool surface, then set THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED=1 before treating remote refs as default."
+            }
+          ]
       : [
           {
             id: "commit_push_checkpoint_then_remote",
             status: "recommended_before_external_code_review",
             description:
               "Commit and push the local checkout first so remote-capable providers can inspect the exact repo state without Codex sending local file contents."
-          },
+          }
+        ]),
+    ...(!remoteDefaultReady
+      ? [
           {
             id: "approve_local_context_transfer",
             status: "requires_user_decision",
             description:
               "Approve sending bounded local repo context, diff, or progress evidence to the selected model provider when the user does not want to checkpoint and push first."
           }
-        ]),
+        ]
+      : []),
     {
       id: "approve_packet_then_call_models",
-      status: remoteReady && hasChatGptWeb ? "not_needed_for_chatgpt_web_remote_default" : allReady ? "runtime_ready_host_may_still_block" : "not_ready",
+      status: remoteDefaultReady && hasChatGptWeb ? "not_needed_for_chatgpt_web_remote_default" : allReady ? "runtime_ready_host_may_still_block" : "not_ready",
       description:
         "Use the approval packet copy once, then run the model-backed TheHood consult, fan-out, or orchestration call. Do not invent a new long approval sentence after a host-policy rejection."
     },
@@ -1371,6 +1430,8 @@ const createProAccessTool = (): McpTool => ({
         bridge: {
           status: bridgeReady ? "ready" : "not_ready",
           command: chatGpt?.command ?? null,
+          github_connector_confirmed: chatGptWebGitHubConnectorConfirmed(),
+          github_connector_confirmation_env: "THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED",
           issues: bridgeIssues
         },
         codex_host_policy_boundary: {

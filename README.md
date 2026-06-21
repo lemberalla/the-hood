@@ -64,7 +64,7 @@ It supports:
 - runtime-owned final reports for completed runs
 - runtime-owned progress packet artifacts for completed runs
 - runtime-owned external transfer manifests before repo context or progress packets leave the machine
-- GitHub connector-aware repo context routing for clean pushed repos in ChatGPT Web
+- confirmed GitHub connector-aware repo context routing for clean pushed repos in ChatGPT Web
 - user-configurable approval policy with manual, auto-low-risk, and autopilot modes
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
@@ -94,7 +94,7 @@ It supports:
 - runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
-- refs-only GitHub connector context when ChatGPT Web can inspect a clean pushed GitHub repo at the current commit
+- refs-only GitHub connector context when the active ChatGPT Web bridge has confirmed GitHub connector access and can inspect a clean pushed GitHub repo at the current commit
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths
 - schema-bound planner reconciliation from completed run progress packets
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
@@ -120,7 +120,7 @@ Users can choose between two ChatGPT Pro paths:
 Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
 For connector mode, generate the local setup guide with `thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local`, keep Secure MCP Tunnel running, and validate from a fresh ChatGPT conversation with `thehood_doctor` plus a read-only repo gateway tool. This is separate from the `chatgpt-web` agent bridge and does not use Chrome/CDP bridge environment variables.
 When Codex or a tenant policy blocks a direct external disclosure to ChatGPT Web, that is outside TheHood autopilot. Use `thehood_pro_access` to get the local bridge status and a connector-mode handoff instead of repeating approval prompts.
-For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos default to remote refs when the provider supports that route, so Codex should not ask the user to type a new long disclosure sentence after a host-policy rejection.
+For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos can use remote refs only when the target provider route is verified. For `chatgpt-web`, TheHood treats remote refs as the default only when the active bridge GitHub connector surface is confirmed; otherwise it presents connector setup, explicit local context approval, no-repo-context, or cancel paths.
 
 ## Quick Start
 
