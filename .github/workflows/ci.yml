@@ -41,3 +41,9 @@ jobs:
 
       - name: Runtime smoke
         run: npm run smoke:runtime
+
+      - name: Pack dry run
+        run: npm pack --dry-run --json
+
+      - name: Diff check
+        run: git --no-pager diff --check

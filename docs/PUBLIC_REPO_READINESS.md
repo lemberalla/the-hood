@@ -16,6 +16,7 @@ It should not claim cloud routines, hosted execution, API-provider automation, a
 - Keep `.thehood/`, browser profile state, provider logs, local env files, package archives, and generated build output out of git.
 - Keep examples and fixtures synthetic. Do not publish real runtime artifacts or provider transcripts.
 - Verify a fresh clone path: `npm ci`, `npm run build`, `npm run smoke:mcp`, `npm run smoke:codex-config`, and `npm run smoke:runtime`.
+- Verify release packaging with `npm run release:check`.
 - Verify package contents with `npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json`.
 - Make README claims match current behavior. Mark API adapters, hosted UI, and automatic Codex app rendering beyond explicit agent board artifact payloads as planned unless implemented.
 - Keep ChatGPT MCP connector mode documented as experimental and optional. It depends on external ChatGPT custom connector availability and is not a public-preview blocker.
@@ -39,11 +40,9 @@ Before the first public release, run:
 
 ```bash
 npm ci
-npm run typecheck
-npm run build
-npm run smoke:mcp
-npm run smoke:codex-config
-npm run smoke:runtime
+npm run release:check
 npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json
 git --no-pager diff --check
 ```
+
+Publishing must happen through npm Trusted Publishing from the tag-triggered workflow. Do not publish locally and do not add npm tokens to the repo.
