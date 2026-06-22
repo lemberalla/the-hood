@@ -3,6 +3,10 @@
   "version": "0.1.0-preview.0",
   "description": "A local, provider-neutral runtime for governed software agent loops.",
   "type": "module",
+  "author": {
+    "name": "Oncel Cebeci",
+    "url": "https://www.oncelcebeci.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lemberalla/the-hood.git"

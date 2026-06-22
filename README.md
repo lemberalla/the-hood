@@ -295,6 +295,14 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Agent Instructions](AGENTS.md)
 
+## Maintainer
+
+Built and maintained by [Oncel Cebeci](https://www.oncelcebeci.com).
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
+
 ## Decisions
 
 - [0001: Runtime First With CLI And MCP](docs/decisions/0001-runtime-first-cli-and-mcp.md)
