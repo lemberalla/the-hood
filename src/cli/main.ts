@@ -91,6 +91,7 @@ import type { RunArtifact } from "../runtime/types.js";
 const helpText = `TheHood local agent runtime
 
 Usage:
+  thehood [--repo <path>]
   thehood init [--repo <path>]
   thehood setup [--repo <path>] [--json]
   thehood config show [--repo <path>] [--json]
@@ -1218,8 +1219,13 @@ const runCli = async (argv: string[]): Promise<void> => {
   const parsed = parseArgs(argv);
   const [command, ...args] = parsed.positionals;
 
-  if (!command || command === "help" || command === "--help") {
+  if (command === "help" || getBooleanOption(parsed.options, "help")) {
     process.stdout.write(helpText);
+    return;
+  }
+
+  if (!command) {
+    await handleUi([], parsed.options);
     return;
   }
 

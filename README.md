@@ -23,6 +23,7 @@ Status: developer preview. TheHood `v0.1.0-preview.0` is published as an npm pre
 
 ```bash
 npm install -g thehood@next
+thehood
 thehood doctor --repo .
 ```
 
