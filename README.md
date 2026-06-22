@@ -49,7 +49,7 @@ It supports:
 - runtime-derived agent board snapshots and dashboard payloads for Codex card-style agent visibility
 - optional repo-local Codex plugin scaffold for TheHood workflow guidance and MCP setup
 - runtime-owned team presets for Codex default, ChatGPT Pro orchestration, Claude second-judge, Spark plus Sonnet, Claude builder, and high-assurance Pro plus Claude setups
-- read-only loop recommendation that routes a plain-language goal into a recipe, completion contract draft, alternatives, and Codex card artifact
+- read-only loop recommendation that routes a plain-language goal into a recipe, recommended stack, completion contract draft, actions, alternatives, and Codex card artifact
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
 - local-only Pro access preflight so Codex can distinguish runtime autopilot, direct bridge readiness, host-policy blocks, and ChatGPT MCP connector handoff paths

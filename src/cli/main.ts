@@ -103,7 +103,7 @@ Usage:
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
-  thehood recommend-loop <goal> [--repo <path>] [--constraint <text>] [--max-iterations <n>] [--json]
+  thehood recommend-loop <goal> [--repo <path>] [--constraint <text>] [--acceptance <text>] [--validation <command>] [--allowed-path <path>] [--forbidden-change <text>] [--max-iterations <n>] [--json]
   thehood goal <goal> [--repo <path>] [--max-iterations <n>] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood plan <goal> [--repo <path>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood run <goal> [--repo <path>] [--mode <mode>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
@@ -714,6 +714,10 @@ const handleRecommendLoop = async (
     repoPath: repoFromOptions(options),
     goal,
     constraints: getStringListOption(options, "constraint"),
+    acceptanceCriteria: getStringListOption(options, "acceptance"),
+    validationCommands: getStringListOption(options, "validation"),
+    allowedPaths: getStringListOption(options, "allowedPath"),
+    forbiddenChanges: getStringListOption(options, "forbiddenChange"),
     ...(maxIterations === undefined ? {} : { maxIterations })
   });
 

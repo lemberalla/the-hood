@@ -17,9 +17,11 @@ The response contains:
 - recommended recipe
 - confidence
 - plain-English reason
+- recommended stack
 - completion contract draft
 - alternatives
 - `runAction` for the existing runtime tool
+- card actions
 - dashboard-shaped `artifact` for a Codex card
 
 Codex should render the recommendation as a decision card:
@@ -27,6 +29,10 @@ Codex should render the recommendation as a decision card:
 ```text
 Recommended loop: Build, Test, Fix
 Why: scoped code task with validation and likely repair cycles.
+
+Stack:
+- Build, Test, Fix
+- Verifier Loop
 
 Completion contract:
 - Goal
@@ -43,6 +49,8 @@ Actions:
 
 The "Run loop" action should invoke the existing runtime path from `runAction`, usually `thehood_orchestrate` with `auto_loop: true`. Runtime approvals, provider calls, edit gates, evidence capture, verifier review, and stop conditions still happen inside TheHood. The card is guidance, not authority.
 
+The "Edit contract" action should keep the user inside the recommendation step. The edited acceptance criteria, validation commands, allowed paths, forbidden changes, and iteration budget are passed back into `thehood_recommend_loop`; Codex should not mutate orchestration state or start a provider call while the user is still editing the contract.
+
 ## Terminal Flow
 
 The equivalent terminal inspection command is:
@@ -51,7 +59,19 @@ The equivalent terminal inspection command is:
 thehood recommend-loop "fix flaky checkout tests" --repo . --max-iterations 5
 ```
 
-This prints the same recommendation and contract draft. Users can still run the normal goal command:
+This prints the same recommendation, stack, contract draft, and actions. Contract edits can be supplied before the run starts:
+
+```bash
+thehood recommend-loop "prepare hood for public release" \
+  --repo . \
+  --acceptance "README claims match implemented behavior" \
+  --validation "npm run smoke:mcp" \
+  --allowed-path README.md \
+  --forbidden-change "Do not publish private run logs" \
+  --max-iterations 8
+```
+
+Users can still run the normal goal command:
 
 ```bash
 thehood goal "fix flaky checkout tests" --repo . --max-iterations 5

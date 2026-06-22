@@ -174,13 +174,17 @@ Input:
   "repo_path": "string",
   "goal": "string",
   "constraints": ["optional local-only constraints"],
+  "acceptance_criteria": ["optional edited contract criteria"],
+  "validation_commands": ["optional edited validation commands"],
+  "allowed_paths": ["optional edited allowed paths"],
+  "forbidden_changes": ["optional edited forbidden changes"],
   "max_iterations": 5
 }
 ```
 
-Output includes the recommended recipe, confidence, reason, alternatives, a completion contract draft, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a native loop-plan card.
+Output includes the recommended recipe, confidence, reason, recommended stack, alternatives, a completion contract draft, app card actions, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a native loop-plan card.
 
-Codex should call this before asking the user to choose a recipe name. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
+Codex should call this before asking the user to choose a recipe name. If the user edits the contract, call this tool again with the edited fields. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
 
 ### `thehood_agent_board`
 

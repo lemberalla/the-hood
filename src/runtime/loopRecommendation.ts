@@ -55,6 +55,26 @@ export interface LoopRecommendationAction {
   description: string;
 }
 
+export type LoopCardActionId = "run_loop" | "edit_contract" | "show_alternatives";
+export type LoopCardActionStyle = "primary" | "secondary";
+
+export interface LoopCardAction {
+  action: LoopCardActionId;
+  label: string;
+  style: LoopCardActionStyle;
+  description: string;
+  tool?: string;
+  arguments?: JsonObject;
+  commandHint?: string;
+}
+
+export interface LoopStackItem {
+  order: number;
+  recipe: LoopRecipe;
+  required: boolean;
+  purpose: string;
+}
+
 export interface LoopRecommendation {
   kind: "loop_recommendation";
   schemaVersion: 1;
@@ -62,10 +82,12 @@ export interface LoopRecommendation {
   goal: string;
   recommended: LoopRecipeScore;
   alternatives: LoopRecipeScore[];
+  stack: LoopStackItem[];
   confidence: LoopRecommendationConfidence;
   reason: string;
   contract: CompletionContractDraft;
   runAction: LoopRecommendationAction;
+  actions: LoopCardAction[];
   notes: string[];
   artifact: LoopRecommendationArtifact;
 }
@@ -82,6 +104,10 @@ interface RecommendLoopInput {
   goal: string;
   constraints?: string[];
   maxIterations?: number;
+  acceptanceCriteria?: string[];
+  validationCommands?: string[];
+  allowedPaths?: string[];
+  forbiddenChanges?: string[];
 }
 
 interface ScoringRule {
@@ -258,6 +284,34 @@ const recommendationReason = (score: LoopRecipeScore, confidence: LoopRecommenda
   return `${score.recipe.title} is the ${confidence}-confidence recommendation because ${signals}.`;
 };
 
+const stackIdsFor = (recipeId: LoopRecipeId): LoopRecipeId[] => {
+  switch (recipeId) {
+    case "completion-contract":
+      return ["completion-contract", "adversarial-review", "verifier-loop"];
+    case "adversarial-review":
+      return ["adversarial-review", "verifier-loop"];
+    case "quality-streak":
+      return ["quality-streak", "verifier-loop"];
+    case "anti-spin":
+      return ["anti-spin", "human-approval-queue"];
+    default:
+      return [recipeId];
+  }
+};
+
+const recommendationStack = (recipe: LoopRecipe): LoopStackItem[] =>
+  stackIdsFor(recipe.id).map((recipeId, index) => {
+    const stackRecipe = recipeById(recipeId);
+    return {
+      order: index + 1,
+      recipe: stackRecipe,
+      required: index === 0,
+      purpose: index === 0
+        ? "Primary loop shape selected for this goal."
+        : `Companion check: ${stackRecipe.purpose}`
+    };
+  });
+
 const packageScripts = async (repoPath: string): Promise<string[]> => {
   const packagePath = path.join(repoPath, "package.json");
   try {
@@ -343,14 +397,21 @@ const contractFor = async (
   repoPath: string,
   goal: string,
   recipe: LoopRecipe,
-  maxIterations: number
+  maxIterations: number,
+  input: RecommendLoopInput
 ): Promise<CompletionContractDraft> => ({
   goal,
-  acceptanceCriteria: acceptanceCriteriaFor(recipe),
-  validationCommands: await defaultValidationCommands(repoPath, recipe.id),
-  allowedPaths: ["Paths implied by the goal and approved runtime plan."],
+  acceptanceCriteria: input.acceptanceCriteria?.length
+    ? input.acceptanceCriteria
+    : acceptanceCriteriaFor(recipe),
+  validationCommands: input.validationCommands?.length
+    ? input.validationCommands
+    : await defaultValidationCommands(repoPath, recipe.id),
+  allowedPaths: input.allowedPaths?.length
+    ? input.allowedPaths
+    : ["Paths implied by the goal and approved runtime plan."],
   forbiddenChanges: [
-    "Unrelated files.",
+    ...(input.forbiddenChanges?.length ? input.forbiddenChanges : ["Unrelated files."]),
     "Secrets, credentials, browser profiles, or private run logs.",
     "Protected test, fixture, snapshot, or eval changes without explicit approval."
   ],
@@ -364,6 +425,9 @@ const constraintLines = (recipe: LoopRecipe, contract: CompletionContractDraft):
   `Loop recipe: ${recipe.id}`,
   `Loop purpose: ${recipe.purpose}`,
   `Required evidence: ${contract.requiredEvidence.join("; ")}`,
+  `Acceptance criteria: ${contract.acceptanceCriteria.join("; ")}`,
+  `Validation commands: ${contract.validationCommands.join("; ")}`,
+  `Allowed paths: ${contract.allowedPaths.join("; ")}`,
   `Stop conditions: ${contract.stopConditions.join("; ")}`,
   `Forbidden changes: ${contract.forbiddenChanges.join("; ")}`
 ];
@@ -372,6 +436,7 @@ const runActionFor = (
   repoPath: string,
   goal: string,
   recipe: LoopRecipe,
+  stack: LoopStackItem[],
   contract: CompletionContractDraft
 ): LoopRecommendationAction => ({
   tool: "thehood_orchestrate",
@@ -381,11 +446,38 @@ const runActionFor = (
     repo_path: repoPath,
     mode: "implement" satisfies RunMode,
     auto_loop: true,
-    constraints: constraintLines(recipe, contract)
+    constraints: [
+      `Loop stack: ${stack.map((item) => item.recipe.id).join(" -> ")}`,
+      ...constraintLines(recipe, contract)
+    ]
   }
 });
 
-const artifactRows = (recommendation: Omit<LoopRecommendation, "artifact">): JsonObject[] =>
+const cardActionsFor = (runAction: LoopRecommendationAction): LoopCardAction[] => [
+  {
+    action: "run_loop",
+    label: "Run loop",
+    style: "primary",
+    description: runAction.description,
+    tool: runAction.tool,
+    arguments: runAction.arguments
+  },
+  {
+    action: "edit_contract",
+    label: "Edit contract",
+    style: "secondary",
+    description: "Adjust acceptance criteria, validation commands, allowed paths, forbidden changes, or iteration budget before starting.",
+    commandHint: "Re-run recommend-loop with --acceptance, --validation, --allowed-path, --forbidden-change, or --max-iterations."
+  },
+  {
+    action: "show_alternatives",
+    label: "Show alternatives",
+    style: "secondary",
+    description: "Compare other loop choices without starting providers, edits, schedules, or external transfers."
+  }
+];
+
+const loopChoiceRows = (recommendation: Omit<LoopRecommendation, "artifact">): JsonObject[] =>
   [
     recommendation.recommended,
     ...recommendation.alternatives
@@ -401,6 +493,16 @@ const artifactRows = (recommendation: Omit<LoopRecommendation, "artifact">): Jso
     stopConditions: score.recipe.stopConditions.join("; ")
   }));
 
+const stackRows = (stack: LoopStackItem[]): JsonObject[] =>
+  stack.map((item) => ({
+    order: item.order,
+    recipe: item.recipe.id,
+    title: item.recipe.title,
+    status: item.recipe.status,
+    required: item.required,
+    purpose: item.purpose
+  }));
+
 const contractRows = (contract: CompletionContractDraft): JsonObject[] => [
   { field: "Goal", value: contract.goal },
   { field: "Acceptance Criteria", value: contract.acceptanceCriteria.join("; ") },
@@ -412,6 +514,17 @@ const contractRows = (contract: CompletionContractDraft): JsonObject[] => [
   { field: "Iteration Budget", value: String(contract.iterationBudget) },
   { field: "Stop Conditions", value: contract.stopConditions.join("; ") }
 ];
+
+const actionRows = (actions: LoopCardAction[]): JsonObject[] =>
+  actions.map((action, index) => ({
+    order: index + 1,
+    action: action.action,
+    label: action.label,
+    style: action.style,
+    tool: action.tool ?? "",
+    commandHint: action.commandHint ?? "",
+    description: action.description
+  }));
 
 const buildRecommendationArtifact = (
   recommendation: Omit<LoopRecommendation, "artifact">
@@ -439,9 +552,19 @@ const buildRecommendationArtifact = (
         tableId: "loop_recipes"
       },
       {
+        id: "stack",
+        type: "table",
+        tableId: "loop_stack"
+      },
+      {
         id: "contract",
         type: "table",
         tableId: "completion_contract"
+      },
+      {
+        id: "actions",
+        type: "table",
+        tableId: "card_actions"
       }
     ],
     tables: [
@@ -460,6 +583,19 @@ const buildRecommendationArtifact = (
         defaultSort: { field: "rank", direction: "asc" }
       },
       {
+        id: "loop_stack",
+        title: "Recommended Stack",
+        dataset: "loop_stack",
+        columns: [
+          { field: "order", header: "Order" },
+          { field: "title", header: "Loop" },
+          { field: "status", header: "Status" },
+          { field: "required", header: "Primary" },
+          { field: "purpose", header: "Purpose" }
+        ],
+        defaultSort: { field: "order", direction: "asc" }
+      },
+      {
         id: "completion_contract",
         title: "Completion Contract Draft",
         dataset: "completion_contract",
@@ -468,6 +604,19 @@ const buildRecommendationArtifact = (
           { field: "value", header: "Draft" }
         ],
         defaultSort: { field: "field", direction: "asc" }
+      },
+      {
+        id: "card_actions",
+        title: "Actions",
+        dataset: "card_actions",
+        columns: [
+          { field: "order", header: "Order" },
+          { field: "label", header: "Action" },
+          { field: "style", header: "Style" },
+          { field: "tool", header: "Tool" },
+          { field: "description", header: "Description" }
+        ],
+        defaultSort: { field: "order", direction: "asc" }
       }
     ]
   },
@@ -475,8 +624,10 @@ const buildRecommendationArtifact = (
     version: 1,
     status: "ready",
     datasets: {
-      loop_recipes: artifactRows(recommendation),
-      completion_contract: contractRows(recommendation.contract)
+      loop_recipes: loopChoiceRows(recommendation),
+      loop_stack: stackRows(recommendation.stack),
+      completion_contract: contractRows(recommendation.contract),
+      card_actions: actionRows(recommendation.actions)
     } satisfies Record<string, JsonValue>
   },
   sources: []
@@ -499,7 +650,9 @@ export const recommendLoop = async (input: RecommendLoopInput): Promise<LoopReco
     .slice(0, 3);
   const confidence = confidenceFor([recommended, ...alternatives]);
   const maxIterations = input.maxIterations ?? 5;
-  const contract = await contractFor(repoPath, goal, recommended.recipe, maxIterations);
+  const stack = recommendationStack(recommended.recipe);
+  const contract = await contractFor(repoPath, goal, recommended.recipe, maxIterations, input);
+  const runAction = runActionFor(repoPath, goal, recommended.recipe, stack, contract);
   const withoutArtifact: Omit<LoopRecommendation, "artifact"> = {
     kind: "loop_recommendation",
     schemaVersion: 1,
@@ -507,10 +660,12 @@ export const recommendLoop = async (input: RecommendLoopInput): Promise<LoopReco
     goal,
     recommended,
     alternatives,
+    stack,
     confidence,
     reason: recommendationReason(recommended, confidence),
     contract,
-    runAction: runActionFor(repoPath, goal, recommended.recipe, contract),
+    runAction,
+    actions: cardActionsFor(runAction),
     notes: [
       "The user does not need to know recipe IDs before asking for a loop.",
       "Recipe selection is read-only and does not start providers, edits, schedules, or external transfers.",

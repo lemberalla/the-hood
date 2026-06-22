@@ -31,6 +31,7 @@ thehood roles set implementer claude-code:sonnet
 thehood roles set verifier claude-code:sonnet
 thehood roles set critic claude-code:fable
 thehood recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
+thehood recommend-loop "Prepare public release" --repo . --acceptance "README claims match implemented behavior" --validation "npm run smoke:mcp" --allowed-path README.md --forbidden-change "Do not publish private run logs"
 thehood goal "Prepare release metadata" --repo . --max-iterations 5
 thehood run "Implement the requested change" --repo .
 thehood run "Implement the requested change" --repo . --loop
@@ -94,9 +95,11 @@ thehood roles set qa codex-cli:spark
 
 ## Loop Recommendation
 
-`thehood recommend-loop "<goal>" --repo . --max-iterations 5` is a read-only loop router. It recommends one public loop recipe, drafts a completion contract, shows alternatives, and returns the MCP/Codex `runAction` shape for the existing runtime path.
+`thehood recommend-loop "<goal>" --repo . --max-iterations 5` is a read-only loop router. It recommends one public loop recipe, returns a recommended stack, drafts a completion contract, shows alternatives, and returns the MCP/Codex `runAction` shape for the existing runtime path.
 
 Recommendation does not start a run, call model providers, edit files, create schedules, approve gates, or send context externally. It is meant to answer "which loop shape fits this outcome?" before `thehood goal` or `thehood_orchestrate` starts the governed runtime loop.
+
+The draft contract can be edited before a run starts with repeatable `--acceptance`, `--validation`, `--allowed-path`, and `--forbidden-change` flags. These options update only the recommendation output and returned runtime constraints; they do not grant permissions or bypass runtime approvals.
 
 ## Role Selection
 

@@ -703,6 +703,34 @@ const createRecommendLoopTool = (): McpTool => ({
             type: "string"
           }
         },
+        acceptance_criteria: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional edited acceptance criteria for the completion contract draft."
+        },
+        validation_commands: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional edited validation commands for the completion contract draft."
+        },
+        allowed_paths: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional edited allowed paths for the completion contract draft."
+        },
+        forbidden_changes: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional edited forbidden changes for the completion contract draft."
+        },
         max_iterations: {
           type: "number",
           description: "Optional positive integer for the drafted completion contract. Defaults to 5."
@@ -718,6 +746,10 @@ const createRecommendLoopTool = (): McpTool => ({
         repoPath: requiredString(args, "repo_path"),
         goal: requiredString(args, "goal"),
         constraints: optionalStringList(args, "constraints"),
+        acceptanceCriteria: optionalStringList(args, "acceptance_criteria"),
+        validationCommands: optionalStringList(args, "validation_commands"),
+        allowedPaths: optionalStringList(args, "allowed_paths"),
+        forbiddenChanges: optionalStringList(args, "forbidden_changes"),
         ...(maxIterations === undefined ? {} : { maxIterations })
       }));
     })

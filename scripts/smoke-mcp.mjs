@@ -249,6 +249,10 @@ const recommendLoopPath = await runMcp([
       arguments: {
         goal: "Use Hood loops to fix flaky checkout tests before preview release.",
         repo_path: repoPath,
+        acceptance_criteria: ["Preview docs describe the beta loop behavior honestly."],
+        validation_commands: ["npm run smoke:mcp"],
+        allowed_paths: ["README.md", "docs/LOOP_SELECTION_UX.md"],
+        forbidden_changes: ["Do not publish private run logs."],
         max_iterations: 5
       }
     }
@@ -258,10 +262,32 @@ const recommendLoopContent = recommendLoopPath[1].result.structuredContent;
 assert.equal(recommendLoopContent.kind, "loop_recommendation");
 assert.equal(recommendLoopContent.contract.iterationBudget, 5);
 assert.equal(recommendLoopContent.runAction.tool, "thehood_orchestrate");
+assert.ok(
+  recommendLoopContent.runAction.arguments.constraints.some((constraint) => constraint.startsWith("Loop stack:")),
+  "MCP loop recommendation should carry stack context into the runtime action"
+);
+assert.ok(
+  recommendLoopContent.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "MCP loop recommendation should expose a run-loop card action"
+);
+assert.ok(
+  recommendLoopContent.actions.some((action) => action.action === "edit_contract"),
+  "MCP loop recommendation should expose an edit-contract card action"
+);
 assert.equal(recommendLoopContent.artifact.surface, "dashboard");
 assert.equal(recommendLoopContent.artifact.manifest.title, "TheHood Loop Plan");
 assert.ok(Array.isArray(recommendLoopContent.artifact.manifest.blocks));
 assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.loop_recipes));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.loop_stack));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.card_actions));
+assert.ok(
+  recommendLoopContent.contract.acceptanceCriteria.includes("Preview docs describe the beta loop behavior honestly."),
+  "MCP loop recommendation should accept edited contract criteria"
+);
+assert.ok(
+  recommendLoopContent.contract.validationCommands.includes("npm run smoke:mcp"),
+  "MCP loop recommendation should accept edited validation commands"
+);
 assert.ok(
   recommendLoopContent.alternatives.some((candidate) => candidate.recipe.id === "completion-contract") ||
     recommendLoopContent.recommended.recipe.id === "completion-contract",

@@ -146,6 +146,11 @@ export const formatLoopRecommendation = (recommendation: LoopRecommendation): st
   `  recipe      ${formatRecipeScore(recommendation.recommended)}`,
   `  why         ${recommendation.reason}`,
   "",
+  "recommended stack:",
+  ...recommendation.stack.map((item) =>
+    `  ${item.order}. ${item.recipe.id} (${item.recipe.status}) ${item.required ? "primary" : "companion"}`
+  ),
+  "",
   "contract draft:",
   `  goal        ${recommendation.contract.goal}`,
   `  evidence    ${recommendation.contract.requiredEvidence.join("; ")}`,
@@ -159,6 +164,11 @@ export const formatLoopRecommendation = (recommendation: LoopRecommendation): st
   "run action:",
   `  tool        ${recommendation.runAction.tool}`,
   `  note        ${recommendation.runAction.description}`,
+  "",
+  "card actions:",
+  ...recommendation.actions.map((action) =>
+    `  ${action.label} ${action.style}${action.tool ? ` tool=${action.tool}` : ""}${action.commandHint ? ` hint=${action.commandHint}` : ""}`
+  ),
   "",
   ...recommendation.notes.map((note) => `  note        ${note}`)
 ].join("\n");

@@ -3042,12 +3042,67 @@ assert.ok(
   "loop recommendation should route a flaky release-facing goal to a useful recipe"
 );
 assert.equal(loopRecommendation.runAction.tool, "thehood_orchestrate");
+assert.ok(
+  loopRecommendation.runAction.arguments.constraints.some((constraint) => constraint.startsWith("Loop stack:")),
+  "loop recommendation run action should carry the selected stack into runtime constraints"
+);
+assert.ok(
+  loopRecommendation.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "loop recommendation should expose a Codex app run action"
+);
+assert.ok(
+  loopRecommendation.actions.some((action) => action.action === "edit_contract"),
+  "loop recommendation should expose a Codex app edit-contract action"
+);
 assert.equal(loopRecommendation.artifact.surface, "dashboard");
 assert.equal(loopRecommendation.artifact.manifest.title, "TheHood Loop Plan");
 assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_recipes));
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_stack));
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.card_actions));
 assert.ok(
   loopRecommendation.contract.validationCommands.includes("npm run typecheck"),
   "loop recommendation should use discovered package validation scripts"
+);
+const releaseLoopRecommendation = JSON.parse(
+  (await runCli([
+    "recommend-loop",
+    "prepare hood for the public release",
+    "--repo",
+    goalRepoPath,
+    "--acceptance",
+    "Public preview docs match implemented behavior.",
+    "--validation",
+    "npm run smoke:mcp",
+    "--allowed-path",
+    "README.md",
+    "--forbidden-change",
+    "Do not publish private run logs.",
+    "--max-iterations",
+    "8",
+    "--json"
+  ])).stdout
+);
+assert.equal(releaseLoopRecommendation.recommended.recipe.id, "completion-contract");
+assert.deepEqual(
+  releaseLoopRecommendation.stack.map((item) => item.recipe.id),
+  ["completion-contract", "adversarial-review", "verifier-loop"],
+  "release-facing loop recommendation should expose a completion/review/verify stack"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.acceptanceCriteria.includes("Public preview docs match implemented behavior."),
+  "edited acceptance criteria should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.validationCommands.includes("npm run smoke:mcp"),
+  "edited validation commands should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.allowedPaths.includes("README.md"),
+  "edited allowed paths should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.forbiddenChanges.includes("Do not publish private run logs."),
+  "edited forbidden changes should be reflected in the recommendation contract"
 );
 const goalResult = JSON.parse(
   (await runCli([
