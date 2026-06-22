@@ -1,5 +1,6 @@
 import { ProviderUnavailableError } from "../runtime/errors.js";
 import type { RoleAssignment } from "../runtime/types.js";
+import { chatGptAtlasProvider } from "./chatgptAtlas.js";
 import { chatGptWebProvider } from "./chatgptWeb.js";
 import { claudeCodeProvider } from "./claudeCode.js";
 import { codexCliProvider } from "./codexCli.js";
@@ -15,6 +16,10 @@ export const getProviderAdapter = (assignment: RoleAssignment): ProviderAdapter 
     return chatGptWebProvider;
   }
 
+  if (assignment.provider === chatGptAtlasProvider.id) {
+    return chatGptAtlasProvider;
+  }
+
   if (assignment.provider === codexCliProvider.id) {
     return codexCliProvider;
   }
@@ -24,6 +29,6 @@ export const getProviderAdapter = (assignment: RoleAssignment): ProviderAdapter 
   }
 
   throw new ProviderUnavailableError(
-    `Provider "${assignment.provider}" is not implemented yet. Use stub:<role>, chatgpt-web:chatgpt-pro, codex-cli:<model>, or claude-code:<model>.`
+    `Provider "${assignment.provider}" is not implemented yet. Use stub:<role>, chatgpt-web:chatgpt-pro, chatgpt-atlas:chatgpt-pro, codex-cli:<model>, or claude-code:<model>.`
   );
 };

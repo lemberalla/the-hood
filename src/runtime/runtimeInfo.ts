@@ -13,6 +13,7 @@ export const runtimeCapabilities = [
   "chatgpt_web_session_isolation",
   "chatgpt_web_auth_readiness",
   "chatgpt_browser_manager",
+  "chatgpt_atlas_computer_use_bridge",
   "cli_artifact_reads",
   "approval_phrase_enforcement",
   "final_report_artifacts",

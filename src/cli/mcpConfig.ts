@@ -32,6 +32,7 @@ export interface McpTunnelConfigReport {
 
 export interface McpConfigOptions {
   includeChatGptWeb?: boolean;
+  includeChatGptAtlas?: boolean;
   cdpUrl?: string;
 }
 
@@ -74,8 +75,14 @@ const chatGptEnv = (command: string, cdpUrl: string): Record<string, string> => 
   THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE: "1"
 });
 
-const localBridgePath = (cliPath: string | undefined): string =>
-  path.resolve(path.dirname(path.resolve(cliPath ?? "dist/cli/main.js")), "..", "bridges", "chatgptWebBridge.js");
+const chatGptAtlasEnv = (command: string, controllerCommand: string): Record<string, string> => ({
+  THEHOOD_CHATGPT_ATLAS_COMMAND: command,
+  THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND: controllerCommand,
+  THEHOOD_CHATGPT_ATLAS_TRANSPORT: "computer-use"
+});
+
+const localBridgePath = (cliPath: string | undefined, fileName: string): string =>
+  path.resolve(path.dirname(path.resolve(cliPath ?? "dist/cli/main.js")), "..", "bridges", fileName);
 
 const localMcpCommand = (cliPath: string | undefined): string =>
   [process.execPath, path.resolve(cliPath ?? "dist/cli/main.js"), "mcp"].map(shellQuote).join(" ");
@@ -114,9 +121,14 @@ export const getMcpConfigReport = (
     command: "thehood",
     args: ["mcp"],
     startupTimeoutSec: 120,
-    ...(options.includeChatGptWeb
+    ...(options.includeChatGptWeb || options.includeChatGptAtlas
       ? {
-          env: chatGptEnv("thehood-chatgpt-web-bridge", cdpUrl)
+          env: {
+            ...(options.includeChatGptWeb ? chatGptEnv("thehood-chatgpt-web-bridge", cdpUrl) : {}),
+            ...(options.includeChatGptAtlas
+              ? chatGptAtlasEnv("thehood-chatgpt-atlas-bridge", "thehood-chatgpt-atlas-controller")
+              : {})
+          }
         }
       : {})
   };
@@ -124,9 +136,17 @@ export const getMcpConfigReport = (
     command: process.execPath,
     args: [path.resolve(cliPath ?? "dist/cli/main.js"), "mcp"],
     startupTimeoutSec: 120,
-    ...(options.includeChatGptWeb
+    ...(options.includeChatGptWeb || options.includeChatGptAtlas
       ? {
-          env: chatGptEnv(localBridgePath(cliPath), cdpUrl)
+          env: {
+            ...(options.includeChatGptWeb ? chatGptEnv(localBridgePath(cliPath, "chatgptWebBridge.js"), cdpUrl) : {}),
+            ...(options.includeChatGptAtlas
+              ? chatGptAtlasEnv(
+                  localBridgePath(cliPath, "chatgptAtlasBridge.js"),
+                  localBridgePath(cliPath, "chatgptAtlasController.js")
+                )
+              : {})
+          }
         }
       : {})
   };

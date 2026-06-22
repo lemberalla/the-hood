@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 export interface CodexCliDiscoveredModel {
   slug: string;
@@ -19,6 +20,7 @@ export interface CodexCliModelDiscovery {
 }
 
 const maxCatalogBytes = 64 * 1024 * 1024;
+const nodeScriptExtensions = new Set([".js", ".mjs", ".cjs"]);
 
 const friendlyModelAliases: Record<string, string[]> = {
   spark: ["codex-spark"]
@@ -33,6 +35,11 @@ export const codexCliUsesDefaultModel = (model: string): boolean =>
 
 export const codexCliCommand = (): string =>
   process.env.THEHOOD_CODEX_COMMAND ?? "codex";
+
+const launchCommand = (command: string): { command: string; args: string[] } =>
+  nodeScriptExtensions.has(path.extname(command))
+    ? { command: process.execPath, args: [command] }
+    : { command, args: [] };
 
 const normalizeModelText = (value: string): string =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -103,7 +110,8 @@ const sanitizeModel = (value: unknown): CodexCliDiscoveredModel | undefined => {
 };
 
 export const discoverCodexCliModels = (command = codexCliCommand()): CodexCliModelDiscovery => {
-  const result = spawnSync(command, ["debug", "models"], {
+  const launch = launchCommand(command);
+  const result = spawnSync(launch.command, [...launch.args, "debug", "models"], {
     encoding: "utf8",
     env: process.env,
     maxBuffer: maxCatalogBytes

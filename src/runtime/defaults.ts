@@ -18,6 +18,12 @@ export const builtinProviders: Record<string, ProviderConfig> = {
     defaultAccessMode: "agent-bridge",
     browserProfile: "default"
   },
+  "chatgpt-atlas": {
+    enabled: true,
+    models: ["chatgpt-pro", "configured"],
+    accessModes: ["agent-bridge"],
+    defaultAccessMode: "agent-bridge"
+  },
   "openai-api": {
     enabled: false,
     models: ["configured"],
@@ -98,6 +104,9 @@ export const createDefaultConfig = (): TheHoodConfig => ({
       maxAutoApproveBytes: 200_000,
       rules: []
     }
+  },
+  preferences: {
+    chatGptProRoute: "auto"
   },
   providers: structuredClone(builtinProviders),
   roles: structuredClone(defaultRoles)

@@ -10,10 +10,15 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
 const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
+const chatGptAtlasBridgePath = path.join(root, "dist", "bridges", "chatgptAtlasBridge.js");
+const chatGptAtlasControllerPath = path.join(root, "dist", "bridges", "chatgptAtlasController.js");
 const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
+const nodeBinDir = path.dirname(process.execPath);
 const baseEnv = () => ({
   ...process.env,
+  PATH: [nodeBinDir, process.env.PATH].filter(Boolean).join(path.delimiter),
   THEHOOD_CHATGPT_WEB_COMMAND: "",
+  THEHOOD_CHATGPT_ATLAS_COMMAND: "",
   THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
   THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0",
   THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED: "0",
@@ -628,6 +633,23 @@ assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_TIMEOUT
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE"));
 assert.ok(chatGptMcpConfigResult.localToml.includes("startup_timeout_sec = 120"));
+const chatGptAtlasMcpConfig = await runCli(["mcp", "config", "--chatgpt-atlas", "--json"]);
+const chatGptAtlasMcpConfigResult = JSON.parse(chatGptAtlasMcpConfig.stdout);
+assert.equal(
+  chatGptAtlasMcpConfigResult.installed.env.THEHOOD_CHATGPT_ATLAS_COMMAND,
+  "thehood-chatgpt-atlas-bridge"
+);
+assert.equal(
+  chatGptAtlasMcpConfigResult.installed.env.THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND,
+  "thehood-chatgpt-atlas-controller"
+);
+assert.equal(chatGptAtlasMcpConfigResult.installed.env.THEHOOD_CHATGPT_ATLAS_TRANSPORT, "computer-use");
+assert.equal(chatGptAtlasMcpConfigResult.local.env.THEHOOD_CHATGPT_ATLAS_COMMAND, chatGptAtlasBridgePath);
+assert.equal(chatGptAtlasMcpConfigResult.local.env.THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND, chatGptAtlasControllerPath);
+assert.equal(chatGptAtlasMcpConfigResult.local.env.THEHOOD_CHATGPT_ATLAS_TRANSPORT, "computer-use");
+assert.ok(chatGptAtlasMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_ATLAS_COMMAND"));
+assert.ok(chatGptAtlasMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND"));
+assert.ok(chatGptAtlasMcpConfigResult.localToml.includes("THEHOOD_CHATGPT_ATLAS_TRANSPORT"));
 const bridgeSmokeSchemaPath = path.join(repoPath, "chatgpt-bridge-smoke.schema.json");
 await fs.writeFile(
   bridgeSmokeSchemaPath,
@@ -778,6 +800,103 @@ try {
     });
   });
 }
+const atlasDirectivePrompt = [
+  "Use Atlas for this smoke.",
+  "Runtime directive:",
+  JSON.stringify({
+    directiveAck: {
+      runId: "run_atlas_bridge_smoke",
+      nonce: "nonce_atlas_bridge_smoke",
+      responseField: "thehoodDirectiveAck"
+    }
+  }, null, 2)
+].join("\n\n");
+const atlasAgentResponse = JSON.stringify({
+  status: "ok",
+  summary: "parsed Atlas fake AgentResponse",
+  data: {
+    decision: {
+      action: "complete",
+      reason: "atlas fake bridge smoke",
+      thehoodDirectiveAck: {
+        runId: "run_atlas_bridge_smoke",
+        nonce: "nonce_atlas_bridge_smoke",
+        responseField: "thehoodDirectiveAck"
+      }
+    }
+  }
+});
+const atlasFakeOutput = JSON.parse((
+  await runNodeScript(
+    chatGptAtlasBridgePath,
+    [
+      "--schema",
+      bridgeSmokeSchemaPath,
+      "--transport",
+      "fake"
+    ],
+    atlasDirectivePrompt,
+    {
+      env: {
+        THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE: atlasAgentResponse
+      }
+    }
+  )
+).stdout);
+assert.equal(atlasFakeOutput.status, "ok");
+const staleAtlasAgentResponse = JSON.stringify({
+  status: "ok",
+  summary: "stale Atlas fake AgentResponse",
+  data: {
+    decision: {
+      action: "complete",
+      reason: "stale atlas fake bridge smoke",
+      thehoodDirectiveAck: {
+        runId: "run_atlas_bridge_smoke",
+        nonce: "stale_nonce",
+        responseField: "thehoodDirectiveAck"
+      }
+    }
+  }
+});
+const staleAtlasFakeOutput = JSON.parse((
+  await runNodeScript(
+    chatGptAtlasBridgePath,
+    [
+      "--schema",
+      bridgeSmokeSchemaPath,
+      "--transport",
+      "fake"
+    ],
+    atlasDirectivePrompt,
+    {
+      env: {
+        THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE: staleAtlasAgentResponse
+      }
+    }
+  )
+).stdout);
+assert.equal(staleAtlasFakeOutput.status, "failed");
+assert.ok(staleAtlasFakeOutput.summary.includes("stale directive"));
+const unconfiguredAtlasOutput = JSON.parse((
+  await runNodeScript(
+    chatGptAtlasBridgePath,
+    [
+      "--schema",
+      bridgeSmokeSchemaPath,
+      "--target",
+      "ChatGPT Atlas",
+      "--transport",
+      "computer-use"
+    ],
+    atlasDirectivePrompt,
+    {}
+  )
+).stdout);
+assert.equal(unconfiguredAtlasOutput.status, "blocked");
+assert.ok(unconfiguredAtlasOutput.summary.includes("atlas_target_not_confirmed"));
+assert.ok(unconfiguredAtlasOutput.summary.includes("Computer Use controller"));
+assert.ok(unconfiguredAtlasOutput.summary.includes("computer_use_command_not_configured"));
 const tunnelConfig = await runCli([
   "mcp",
   "tunnel",
@@ -828,6 +947,7 @@ await runCli(["init", "--repo", repoPath]);
 const initialConfig = JSON.parse((await runCli(["config", "show", "--repo", repoPath, "--json"])).stdout);
 assert.equal(initialConfig.defaults.maxIterations, 8);
 assert.equal(initialConfig.defaults.fanoutMaxItems, 8);
+assert.equal(initialConfig.providers["chatgpt-atlas"].enabled, true);
 const initialConfigText = await runCli(["config", "show", "--repo", repoPath]);
 assert.ok(initialConfigText.stdout.includes("fanoutMaxItems: 8"));
 const teamPresets = JSON.parse((await runCli(["teams", "--repo", repoPath, "--json"])).stdout);
@@ -861,6 +981,14 @@ const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
 assert.equal(doctorResult.runtime.version, packageJson.version);
+const versionReport = JSON.parse((await runCli(["version", "--json"])).stdout);
+assert.equal(versionReport.name, "thehood");
+assert.equal(versionReport.version, packageJson.version);
+assert.equal(versionReport.source, "local_checkout");
+assert.equal(versionReport.nodePath, process.execPath);
+assert.ok(versionReport.cliEntryPath.endsWith(path.join("dist", "cli", "main.js")));
+const versionText = await runCli(["--version"]);
+assert.ok(versionText.stdout.includes(`TheHood ${packageJson.version}`));
 assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
@@ -948,6 +1076,14 @@ const chatGptHealth = doctorResult.providers.find((provider) => provider.id === 
 assert.ok(chatGptHealth.accessModes.includes("agent-bridge"));
 assert.ok(chatGptHealth.accessModes.includes("mcp-connector"));
 assert.equal(chatGptHealth.modelPolicy, "passthrough");
+const chatGptAtlasHealth = doctorResult.providers.find((provider) => provider.id === "chatgpt-atlas");
+assert.equal(chatGptAtlasHealth.enabled, true);
+assert.equal(chatGptAtlasHealth.implemented, true);
+assert.deepEqual(chatGptAtlasHealth.accessModes, ["agent-bridge"]);
+assert.equal(chatGptAtlasHealth.modelPolicy, "passthrough");
+assert.ok(!chatGptAtlasHealth.issues.includes("provider_disabled"));
+assert.ok(chatGptAtlasHealth.issues.includes("atlas_target_not_confirmed"));
+assert.ok(chatGptAtlasHealth.issues.includes("computer_use_command_not_configured"));
 const codexHealth = doctorResult.providers.find((provider) => provider.id === "codex-cli");
 assert.equal(codexHealth.modelPolicy, "discovered");
 assert.equal(codexHealth.modelDiscovery.status, "available");
@@ -1048,7 +1184,9 @@ assert.equal(localExecution.kind, "local_agent_execution");
 assert.equal(localExecution.role, "critic");
 assert.equal(localExecution.provider, "codex-cli");
 assert.equal(localExecution.model, "default");
-assert.equal(localExecution.command, fakeCodexPath);
+assert.equal(localExecution.command, process.execPath);
+assert.equal(localExecution.commandLabel, fakeCodexPath);
+assert.equal(localExecution.args[0], fakeCodexPath);
 assert.equal(localExecution.commandMode, "read-only");
 assert.equal(localExecution.workspaceMode, "target_checkout");
 assert.equal(localExecution.sandbox, "read-only");
@@ -1128,7 +1266,9 @@ const claudeWrapperExecutionArtifact = claudeWrapperContinue.run.artifacts.find(
 assert.ok(claudeWrapperExecutionArtifact, "claude wrapper smoke should write a provider invocation artifact");
 const claudeWrapperExecution = JSON.parse(await fs.readFile(claudeWrapperExecutionArtifact.ref, "utf8"));
 assert.equal(claudeWrapperExecution.provider, "claude-code");
-assert.equal(claudeWrapperExecution.command, fakeClaudePath);
+assert.equal(claudeWrapperExecution.command, process.execPath);
+assert.equal(claudeWrapperExecution.commandLabel, fakeClaudePath);
+assert.equal(claudeWrapperExecution.args[0], fakeClaudePath);
 assert.equal(claudeWrapperExecution.responseParsed, true);
 assert.equal(claudeWrapperExecution.responseStatus, "ok");
 
@@ -1198,11 +1338,13 @@ const staleConfig = JSON.parse(await fs.readFile(staleConfigPath, "utf8"));
 delete staleConfig.roles.qa;
 staleConfig.providers["codex-cli"].models = ["default"];
 staleConfig.providers["claude-code"].models = ["default"];
+staleConfig.providers["chatgpt-atlas"].enabled = false;
 staleConfig.providers.stub.models = ["orchestrator", "planner", "researcher", "implementer", "verifier", "critic"];
 await fs.writeFile(staleConfigPath, `${JSON.stringify(staleConfig, null, 2)}\n`, "utf8");
 const staleConfigDoctor = JSON.parse((await runCli(["doctor", "--repo", repoPath, "--json"])).stdout);
 const staleCodexProvider = staleConfigDoctor.providers.find((provider) => provider.id === "codex-cli");
 const staleClaudeProvider = staleConfigDoctor.providers.find((provider) => provider.id === "claude-code");
+const staleAtlasProvider = staleConfigDoctor.providers.find((provider) => provider.id === "chatgpt-atlas");
 const staleStubProvider = staleConfigDoctor.providers.find((provider) => provider.id === "stub");
 const staleQaHealth = staleConfigDoctor.roles.find((role) => role.role === "qa");
 assert.ok(staleCodexProvider.models.includes("spark"), "stale repo config should not hide built-in codex spark model");
@@ -1214,6 +1356,8 @@ assert.ok(
   staleCodexProvider.models.includes("configured"),
   "stale repo config should not hide built-in codex configured model passthrough"
 );
+assert.equal(staleAtlasProvider.enabled, true, "legacy disabled Atlas seed should migrate to enabled");
+assert.ok(!staleAtlasProvider.issues.includes("provider_disabled"));
 assert.ok(
   staleClaudeProvider.models.includes("sonnet"),
   "stale repo config should not hide built-in Claude Sonnet alias"
@@ -1286,6 +1430,23 @@ const unconfirmedDoctorResult = JSON.parse(unconfirmedDoctor.stdout);
 const unconfirmedChatGptProvider = unconfirmedDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
 assert.equal(unconfirmedChatGptProvider.commandFound, true);
 assert.deepEqual(unconfirmedChatGptProvider.issues, ["model_not_confirmed"]);
+const aliasBridgeDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
+  env: {
+    THEHOOD_CHATGPT_WEB_COMMAND: "thehood-chatgpt-web-bridge",
+    THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
+    THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0"
+  }
+});
+const aliasBridgeDoctorResult = JSON.parse(aliasBridgeDoctor.stdout);
+const aliasBridgeChatGptProvider = aliasBridgeDoctorResult.providers.find((provider) => provider.id === "chatgpt-web");
+assert.equal(aliasBridgeChatGptProvider.commandFound, true);
+assert.deepEqual(aliasBridgeChatGptProvider.issues, ["model_not_confirmed"]);
+const defaultProRoute = JSON.parse(
+  (await runCli(["pro-route", "--repo", repoPath, "--json"])).stdout
+);
+assert.equal(defaultProRoute.preference, "auto");
+assert.equal(defaultProRoute.status, "user_choice_required");
+assert.ok(defaultProRoute.prompt.includes("Chrome"));
 const cdpServer = createCdpSmokeServer({
   url: "https://chatgpt.com/",
   title: "ChatGPT",
@@ -1302,6 +1463,23 @@ const readyDoctor = await runCli(["doctor", "--repo", repoPath, "--json"], {
     THEHOOD_CHATGPT_WEB_CDP_URL: `http://127.0.0.1:${cdpAddress.port}`
   }
 });
+const readyAutoProRoute = JSON.parse(
+  (await runCli(["pro-route", "--repo", repoPath, "--json"], {
+    env: {
+      THEHOOD_CHATGPT_WEB_COMMAND: chatGptBridgePath,
+      THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "1",
+      THEHOOD_CHATGPT_WEB_CDP_URL: `http://127.0.0.1:${cdpAddress.port}`
+    }
+  })).stdout
+);
+assert.equal(readyAutoProRoute.preference, "auto");
+assert.equal(readyAutoProRoute.status, "user_choice_required");
+assert.equal(readyAutoProRoute.selectedRoute, undefined);
+assert.equal(
+  readyAutoProRoute.candidates.find((candidate) => candidate.route === "chatgpt-web").status,
+  "ready"
+);
+assert.ok(readyAutoProRoute.reason.includes("No ChatGPT Pro route default is saved"));
 const browserStatus = JSON.parse(
   (await runCli(["browser", "status", "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`, "--json"])).stdout
 );
@@ -1332,6 +1510,8 @@ const explicitSettingsCrew = await runCli(["ui", "settings", "crew", "--repo", r
 assert.ok(explicitSettingsCrew.stdout.includes("CREW ASSIGNMENTS"));
 const settingsProviders = await runCli(["ui", "settings", "providers", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsProviders.stdout.includes("PROVIDER BAY"));
+assert.ok(settingsProviders.stdout.includes("CHATGPT PRO ROUTE"));
+assert.ok(settingsProviders.stdout.includes("./dist/cli/main.js pro-route set atlas"));
 const settingsBudgets = await runCli(["ui", "settings", "budgets", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsBudgets.stdout.includes("max iterations"));
 assert.ok(settingsBudgets.stdout.includes("fanout max items"));
@@ -1349,8 +1529,10 @@ assert.ok(settingsCommands.stdout.includes("Source-Of-Truth Commands"));
 assert.ok(settingsCommands.stdout.includes("Underlying Commands"));
 assert.ok(settingsCommands.stdout.includes("Crew Role Commands"));
 assert.ok(settingsCommands.stdout.includes("./dist/cli/main.js teams apply codex-default"));
+assert.ok(settingsCommands.stdout.includes("./dist/cli/main.js pro-route set mcp"));
 const settingsAll = await runCli(["ui", "settings", "all", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`]);
 assert.ok(settingsAll.stdout.includes("Editable In Config"));
+assert.ok(settingsAll.stdout.includes("preferences.chatGptProRoute"));
 const settingsJson = JSON.parse(
   (await runCli(["ui", "settings", "crew", "--repo", repoPath, "--cdp-url", `http://127.0.0.1:${cdpAddress.port}`, "--json"])).stdout
 );
@@ -1375,6 +1557,32 @@ const uiTransferPolicy = JSON.parse(
   (await runCli(["ui", "set", "external-transfers", "manual", "--repo", uiAliasRepoPath, "--json"])).stdout
 );
 assert.equal(uiTransferPolicy.externalTransfers.mode, "manual");
+const uiProRoute = JSON.parse(
+  (await runCli(["ui", "set", "chatgpt-pro-route", "atlas", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(uiProRoute.preferences.chatGptProRoute, "chatgpt-atlas");
+assert.equal(uiProRoute.providers["chatgpt-atlas"].enabled, true);
+const atlasReadyDoctor = JSON.parse((await runCli(["doctor", "--repo", uiAliasRepoPath, "--json"], {
+  env: {
+    THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED: "1",
+    THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND: fakeCodexPath
+  }
+})).stdout);
+const atlasReadyProvider = atlasReadyDoctor.providers.find((provider) => provider.id === "chatgpt-atlas");
+assert.equal(atlasReadyProvider.enabled, true);
+assert.equal(atlasReadyProvider.command, "thehood-chatgpt-atlas-bridge");
+assert.equal(atlasReadyProvider.commandFound, true);
+assert.deepEqual(atlasReadyProvider.issues, []);
+const configuredProRoute = JSON.parse(
+  (await runCli(["pro-route", "set", "mcp", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(configuredProRoute.preference, "mcp-connector");
+assert.equal(configuredProRoute.selectedRoute, "mcp-connector");
+const configProRoute = JSON.parse(
+  (await runCli(["config", "set", "chatgpt-pro-route", "chrome", "--repo", uiAliasRepoPath, "--json"])).stdout
+);
+assert.equal(configProRoute.preferences.chatGptProRoute, "chatgpt-web");
+assert.equal(configProRoute.providers["chatgpt-web"].enabled, true);
 const uiTeam = JSON.parse(
   (await runCli(["ui", "team", "codex-default", "--repo", uiAliasRepoPath, "--json"])).stdout
 );
@@ -1485,6 +1693,27 @@ const blockedChatGptContinue = JSON.parse((await runCli(["continue", blockedChat
 assert.equal(blockedChatGptContinue.run.state, "awaiting_approval");
 assert.equal(blockedChatGptContinue.providerResponses[0].status, "blocked");
 assert.ok(blockedChatGptContinue.run.approvalReason.includes("ChatGPT Web bridge command is not configured"));
+const explicitOverrideRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-explicit-override-smoke-"));
+await runCli(["init", "--repo", explicitOverrideRepoPath]);
+await runCli(["roles", "set", "planner", "stub:planner", "--repo", explicitOverrideRepoPath]);
+const explicitOrchestratorPlan = JSON.parse(
+  (
+    await runCli([
+      "plan",
+      "explicit orchestrator override should win with planner configured",
+      "--repo",
+      explicitOverrideRepoPath,
+      "--orchestrator",
+      "chatgpt-web:chatgpt-pro",
+      "--json"
+    ])
+  ).stdout
+);
+assert.equal(explicitOrchestratorPlan.preferredRole, "orchestrator");
+const explicitOrchestratorGate = JSON.parse(
+  (await runCli(["continue", explicitOrchestratorPlan.runId, "--repo", explicitOverrideRepoPath, "--json"])).stdout
+);
+assert.ok(explicitOrchestratorGate.run.approvalReason.includes("Invoking chatgpt-web:chatgpt-pro"));
 await runCli(["exec", "missing-run", "--repo", repoPath, "--", "git", "init"], { expectExitCode: 1 });
 
 const chatGptBridgeSchemaPath = path.join(repoPath, "chatgpt-bridge.schema.json");
@@ -2070,7 +2299,6 @@ const fakeExternalBridgeLogPath = path.join(repoPath, "fake-external-chatgpt.log
 await fs.writeFile(
   fakeExternalBridgePath,
   [
-    "#!/usr/bin/env node",
     "import fs from 'node:fs/promises';",
     "const logPath = process.env.THEHOOD_FAKE_CHATGPT_LOG;",
     "const schemaArgIndex = process.argv.indexOf('--schema');",
@@ -2169,7 +2397,6 @@ await fs.writeFile(
   ].join("\n"),
   "utf8"
 );
-await fs.chmod(fakeExternalBridgePath, 0o755);
 const fakeExternalEnv = {
   THEHOOD_CHATGPT_WEB_COMMAND: fakeExternalBridgePath,
   THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath,
@@ -2241,6 +2468,14 @@ assert.deepEqual(remoteContextCompleted.providerResponses.map((response) => resp
 assert.deepEqual((await fs.readFile(fakeExternalBridgeLogPath, "utf8")).trim().split("\n"), [
   "remote-context"
 ]);
+const remoteContextInvocationArtifact = remoteContextCompleted.run.artifacts.find(
+  (artifact) => artifact.kind === "provider_invocation"
+);
+assert.ok(remoteContextInvocationArtifact, "ChatGPT Web run should attach a provider invocation artifact");
+const remoteContextInvocation = JSON.parse(await fs.readFile(remoteContextInvocationArtifact.ref, "utf8"));
+assert.equal(remoteContextInvocation.command, process.execPath);
+assert.equal(remoteContextInvocation.commandLabel, fakeExternalBridgePath);
+assert.equal(remoteContextInvocation.args[0], fakeExternalBridgePath);
 const remoteContextArtifact = remoteContextCompleted.run.artifacts.find((artifact) => artifact.kind === "remote_context");
 assert.ok(remoteContextArtifact, "clean pushed GitHub repo should attach a refs-only remote context artifact");
 assert.ok(
@@ -2907,10 +3142,10 @@ assert.deepEqual(evidenceResult.protectedChanges, [
   }
 ]);
 
-const command = await runCli(["exec", run.runId, "--repo", repoPath, "--json", "--", "node", "--version"]);
+const command = await runCli(["exec", run.runId, "--repo", repoPath, "--json", "--", process.execPath, "--version"]);
 const commandResult = JSON.parse(command.stdout);
 assert.equal(commandResult.event.exitCode, 0);
-assert.equal(commandResult.event.command, "node");
+assert.equal(commandResult.event.command, process.execPath);
 assert.ok(commandResult.event.stdoutRef.endsWith(".stdout.txt"));
 
 await runCli(["exec", run.runId, "--repo", repoPath, "--", "rm", "src/app.ts"], {

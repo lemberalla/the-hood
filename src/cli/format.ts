@@ -10,6 +10,7 @@ import type { BrowserStartResult, BrowserStatus, BrowserStopResult } from "../ru
 import type { RunCommandResult } from "../runtime/commandRunner.js";
 import type { McpConfigReport, McpTunnelConfigReport } from "./mcpConfig.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
+import { chatGptProRouteLabel, type ChatGptProRouteResolution } from "../runtime/proRoute.js";
 import type { GitEvidenceResult } from "../runtime/gitEvidence.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RoleRosterItem } from "../runtime/roleRoster.js";
@@ -43,6 +44,23 @@ export interface CliSetupReport {
   installedUiCommand: string;
   notes: string[];
 }
+
+export interface CliVersionReport {
+  name: "thehood";
+  version: string;
+  source: "local_checkout" | "installed_package";
+  cliEntryPath: string;
+  packageRoot: string;
+  nodePath: string;
+}
+
+export const formatCliVersionReport = (report: CliVersionReport): string => [
+  `TheHood ${report.version}`,
+  `source: ${report.source}`,
+  `cli: ${report.cliEntryPath}`,
+  `package: ${report.packageRoot}`,
+  `node: ${report.nodePath}`
+].join("\n");
 
 const quoteArg = (value: string): string =>
   /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
@@ -213,6 +231,9 @@ export const formatConfig = (config: TheHoodConfig): string => [
   `  editRequiresApproval: ${config.defaults.editRequiresApproval}`,
   `  networkRequiresApproval: ${config.defaults.networkRequiresApproval}`,
   "",
+  "preferences:",
+  `  chatGptProRoute: ${config.preferences.chatGptProRoute}`,
+  "",
   "approval policy:",
   `  mode: ${config.approvalPolicy.mode}`,
   `  externalTransfers: ${config.approvalPolicy.externalTransfers.mode}`,
@@ -223,6 +244,28 @@ export const formatConfig = (config: TheHoodConfig): string => [
     .split("\n")
     .map((line) => `  ${line}`)
     .join("\n")
+].join("\n");
+
+export const formatChatGptProRouteResolution = (resolution: ChatGptProRouteResolution): string => [
+  "ChatGPT Pro Route",
+  `  preference  ${resolution.preference} (${chatGptProRouteLabel(resolution.preference)})`,
+  `  status      ${resolution.status}`,
+  ...(resolution.selectedRoute
+    ? [`  selected    ${resolution.selectedRoute} (${chatGptProRouteLabel(resolution.selectedRoute)})`]
+    : []),
+  `  reason      ${resolution.reason}`,
+  `  prompt      ${resolution.prompt}`,
+  "",
+  "routes:",
+  ...resolution.candidates.map((candidate) => {
+    const issues = candidate.issues.length > 0 ? ` issues=${candidate.issues.join(",")}` : "";
+    const command = candidate.command ? ` command=${candidate.command}` : "";
+    return `  ${candidate.route}: ${candidate.status} ${candidate.label} mode=${candidate.accessMode}${command}${issues}`;
+  }),
+  "",
+  "set default:",
+  ...resolution.candidates.map((candidate) => `  ${candidate.setCommand}`),
+  "  thehood pro-route set auto"
 ].join("\n");
 
 const formatStringList = (label: string, values: unknown): string[] =>

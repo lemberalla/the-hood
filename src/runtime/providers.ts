@@ -20,6 +20,7 @@ export interface ProviderDescriptor extends ProviderConfig {
 
 const defaultAccessModesByProvider = new Map<string, ProviderAccessMode[]>([
   ["chatgpt-web", ["agent-bridge", "mcp-connector"]],
+  ["chatgpt-atlas", ["agent-bridge"]],
   ["openai-api", ["api-agent"]],
   ["anthropic-api", ["api-agent"]],
   ["codex-cli", ["agent-bridge"]],

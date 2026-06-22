@@ -4,7 +4,8 @@ import { createDefaultConfig } from "./defaults.js";
 import { InputError } from "./errors.js";
 import { ensureLocalStateIgnored, type LocalStateIgnoreResult } from "./localStateIgnore.js";
 import { getProjectPaths } from "./paths.js";
-import type { ProviderConfig, RoleMap, TheHoodConfig } from "./types.js";
+import { chatGptProRoutes } from "./types.js";
+import type { ProviderConfig, RoleMap, RuntimePreferences, TheHoodConfig } from "./types.js";
 
 export interface InitConfigResult {
   configPath: string;
@@ -43,6 +44,15 @@ const mergeProvider = (
       }
     : override;
 
+const isLegacyDisabledChatGptAtlasSeed = (providerId: string, provider: ProviderConfig): boolean =>
+  providerId === "chatgpt-atlas" &&
+  provider.enabled === false &&
+  provider.defaultAccessMode === "agent-bridge" &&
+  JSON.stringify(provider.models) === JSON.stringify(["chatgpt-pro", "configured"]) &&
+  JSON.stringify(provider.accessModes ?? []) === JSON.stringify(["agent-bridge"]) &&
+  provider.apiKeyEnv === undefined &&
+  provider.browserProfile === undefined;
+
 const mergeProviders = (
   base: TheHoodConfig["providers"],
   override: TheHoodConfig["providers"] | undefined
@@ -54,10 +64,30 @@ const mergeProviders = (
   const merged = { ...base };
 
   for (const [providerId, provider] of Object.entries(override)) {
-    merged[providerId] = mergeProvider(base[providerId], provider);
+    const migratedProvider = isLegacyDisabledChatGptAtlasSeed(providerId, provider)
+      ? { ...provider, enabled: true }
+      : provider;
+    merged[providerId] = mergeProvider(base[providerId], migratedProvider);
   }
 
   return merged;
+};
+
+const mergePreferences = (
+  base: RuntimePreferences,
+  override: Partial<RuntimePreferences> | undefined
+): RuntimePreferences => {
+  const chatGptProRoute = override?.chatGptProRoute ?? base.chatGptProRoute;
+
+  if (!(chatGptProRoutes as readonly string[]).includes(chatGptProRoute)) {
+    throw new InputError(`preferences.chatGptProRoute must be one of: ${chatGptProRoutes.join(", ")}.`);
+  }
+
+  return {
+    ...base,
+    ...(override ?? {}),
+    chatGptProRoute
+  };
 };
 
 const mergeConfig = (base: TheHoodConfig, override: Partial<TheHoodConfig>): TheHoodConfig => ({
@@ -81,6 +111,7 @@ const mergeConfig = (base: TheHoodConfig, override: Partial<TheHoodConfig>): The
         base.approvalPolicy.externalTransfers.rules
     }
   },
+  preferences: mergePreferences(base.preferences, override.preferences),
   providers: mergeProviders(base.providers, override.providers),
   roles: mergeRoles(base.roles, override.roles)
 });

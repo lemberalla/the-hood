@@ -12,6 +12,10 @@ process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL = "0";
 process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_CDP_URL = "http://127.0.0.1:9";
+process.env.THEHOOD_CHATGPT_ATLAS_COMMAND = "";
+process.env.THEHOOD_CHATGPT_ATLAS_TRANSPORT = "";
+process.env.THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED = "0";
+process.env.THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND = "";
 
 const runCommand = async (args) => {
   const child = spawn(process.execPath, [cliPath, ...args], {
@@ -322,7 +326,33 @@ const proAccessPath = await runMcp([
 ]);
 const proAccessContent = proAccessPath[1].result.structuredContent;
 assert.equal(proAccessContent.kind, "pro_access_preflight");
-assert.equal(proAccessContent.provider, "chatgpt-web:chatgpt-pro");
+assert.equal(proAccessContent.provider, null);
+assert.equal(proAccessContent.preferred_provider, null);
+assert.equal(proAccessContent.route_choice_required, true);
+assert.equal(proAccessContent.context_choice_required, true);
+assert.equal(proAccessContent.pro_route.preference, "auto");
+assert.equal(proAccessContent.pro_route.status, "user_choice_required");
+assert.equal(proAccessContent.repo_context_policy.route_choice_and_context_choice_are_separate, true);
+assert.equal(proAccessContent.repo_context_policy.repo_visibility.default_gate, "user_choice_required");
+assert.ok(
+  proAccessContent.repo_context_policy.repo_visibility.user_choices.some(
+    (choice) => choice.id === "approve_local_context_transfer"
+  ),
+  "pro access preflight should include bounded local context as a context choice"
+);
+assert.ok(
+  proAccessContent.repo_context_policy.repo_visibility.user_choices.some(
+    (choice) => choice.id === "abstract_no_repo_context_prompt"
+  ),
+  "pro access preflight should include no-repo-context fallback as a context choice"
+);
+assert.ok(proAccessContent.recommended_paths.some((path) => path.id === "atlas_computer_use_bridge"));
+const chooseContextPath = proAccessContent.recommended_paths.find((path) => path.id === "choose_context_mode_after_route");
+assert.equal(chooseContextPath.status, "required_before_direct_browser_pro_call");
+assert.ok(
+  chooseContextPath.user_choices.some((choice) => choice.id === "cancel_external_model_access"),
+  "route choice path should include cancel as a context choice"
+);
 assert.equal(proAccessContent.codex_host_policy_boundary.status, "outside_thehood_runtime_control");
 assert.equal(proAccessContent.bridge.github_connector_confirmed, false);
 assert.ok(
@@ -337,6 +367,42 @@ assert.ok(
   "pro access preflight should return direct bridge readiness"
 );
 assert.equal(proAccessContent.provider_response_count, undefined);
+
+const atlasProAccessRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-mcp-atlas-pro-access-smoke-"));
+await runRawCommand("git", ["init"], atlasProAccessRepoPath);
+await runCommand(["init", "--repo", atlasProAccessRepoPath]);
+await runCommand(["pro-route", "set", "atlas", "--repo", atlasProAccessRepoPath]);
+const atlasProAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_pro_access",
+      arguments: {
+        repo_path: atlasProAccessRepoPath,
+        goal: "Say hi through Atlas with no repo context."
+      }
+    }
+  }
+]);
+const atlasProAccessContent = atlasProAccessPath[1].result.structuredContent;
+assert.equal(atlasProAccessContent.provider, "chatgpt-atlas:chatgpt-pro");
+assert.equal(atlasProAccessContent.preferred_provider, "chatgpt-atlas:chatgpt-pro");
+assert.equal(atlasProAccessContent.route_choice_required, false);
+assert.equal(atlasProAccessContent.pro_route.selectedRoute, "chatgpt-atlas");
+assert.equal(atlasProAccessContent.bridge.provider, "chatgpt-atlas");
+assert.equal(atlasProAccessContent.bridge.status, "not_ready");
+assert.equal(atlasProAccessContent.bridge.command, "thehood-chatgpt-atlas-bridge");
+assert.equal(atlasProAccessContent.bridge.command_found, true);
+assert.equal(atlasProAccessContent.bridge.github_connector_confirmed, null);
+assert.ok(atlasProAccessContent.bridge.issues.includes("atlas_target_not_confirmed"));
+assert.ok(atlasProAccessContent.bridge.issues.includes("computer_use_command_not_configured"));
+const atlasRecommendedPath = atlasProAccessContent.recommended_paths.find(
+  (path) => path.id === "atlas_computer_use_bridge"
+);
+assert.equal(atlasRecommendedPath.status, "selected");
 
 const modelAccessPath = await runMcp([
   ...baseMessages,

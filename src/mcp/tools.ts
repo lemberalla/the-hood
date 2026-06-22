@@ -2,6 +2,7 @@ import { loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { buildAgentBoard, type AgentBoard, type AgentBoardAction, type AgentBoardCard } from "../runtime/agentBoard.js";
 import { buildAgentBoardArtifact } from "../runtime/agentBoardArtifact.js";
+import { resolveChatGptProRoute } from "../runtime/proRoute.js";
 import { recommendLoop } from "../runtime/loopRecommendation.js";
 import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
@@ -1491,11 +1492,44 @@ const createProAccessTool = (): McpTool => ({
       const config = await loadConfig(repoPath);
       const health = await inspectRuntimeHealth(config);
       const chatGpt = health.providers.find((provider) => provider.id === "chatgpt-web");
+      const proRoute = resolveChatGptProRoute(config, health, repoPath);
+      const selectedDirectRoute = proRoute.selectedRoute === "chatgpt-atlas"
+        ? "chatgpt-atlas"
+        : "chatgpt-web";
+      const selectedBridgeProvider = health.providers.find((provider) => provider.id === selectedDirectRoute);
+      const repoVisibility = modelAccessRepoVisibility(
+        await inspectRemoteRepoContext(repoPath, {
+          provider: "chatgpt-web",
+          model: "chatgpt-pro"
+        })
+      );
+      const repoContextUserChoices: JsonValue[] = Array.isArray(repoVisibility.user_choices)
+        ? repoVisibility.user_choices
+        : [];
       const goal = optionalString(args, "goal");
       const constraints = optionalStringList(args, "constraints");
-      const bridgeIssues = chatGpt?.issues ?? ["provider_not_configured:chatgpt-web"];
-      const bridgeReady = Boolean(chatGpt?.enabled && chatGpt.implemented && bridgeIssues.length === 0);
-      const proAssignment = "chatgpt-web:chatgpt-pro";
+      const bridgeIssues = selectedBridgeProvider?.issues ?? [`provider_not_configured:${selectedDirectRoute}`];
+      const bridgeReady = Boolean(
+        selectedBridgeProvider?.enabled &&
+        selectedBridgeProvider.implemented &&
+        bridgeIssues.length === 0
+      );
+      const proAssignmentForRoute = (route: typeof proRoute.selectedRoute): string | null => {
+        if (route === "chatgpt-web") {
+          return "chatgpt-web:chatgpt-pro";
+        }
+
+        if (route === "chatgpt-atlas") {
+          return "chatgpt-atlas:chatgpt-pro";
+        }
+
+        if (route === "mcp-connector") {
+          return "mcp-connector";
+        }
+
+        return null;
+      };
+      const proAssignment = proAssignmentForRoute(proRoute.selectedRoute);
       const connectorPrompt = [
         "Use TheHood as the local runtime and repo gateway.",
         "Do not rely on stale ChatGPT conversation context.",
@@ -1513,7 +1547,20 @@ const createProAccessTool = (): McpTool => ({
       return {
         kind: "pro_access_preflight",
         provider: proAssignment,
+        preferred_provider: proAssignment,
+        route_choice_required: proRoute.status === "user_choice_required",
+        context_choice_required: repoVisibility.default_gate === "user_choice_required",
         repo_path: repoPath,
+        pro_route: proRoute as unknown as JsonObject,
+        repo_context_policy: {
+          kind: "pro_route_context_policy",
+          route_choice_and_context_choice_are_separate: true,
+          rule:
+            "After the user chooses Chrome/Web, Atlas/Computer Use, or MCP connector, evaluate repo context separately. A dirty checkout is not a route-selection failure; present repo_visibility.user_choices before sending local repo context to a browser or API Pro route.",
+          user_prompt:
+            "This checkout needs a repo-context decision before Pro sees project evidence: commit/push checkpoint, approve bounded local context transfer, use no-repo-context prompt, or cancel.",
+          repo_visibility: repoVisibility
+        },
         runtime_policy: {
           approval_mode: config.approvalPolicy.mode,
           external_transfers: config.approvalPolicy.externalTransfers.mode,
@@ -1523,10 +1570,16 @@ const createProAccessTool = (): McpTool => ({
             config.approvalPolicy.externalTransfers.mode === "auto_low_risk"
         },
         bridge: {
+          provider: selectedDirectRoute,
           status: bridgeReady ? "ready" : "not_ready",
-          command: chatGpt?.command ?? null,
-          github_connector_confirmed: chatGptWebGitHubConnectorConfirmed(),
-          github_connector_confirmation_env: "THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED",
+          command: selectedBridgeProvider?.command ?? null,
+          command_found: selectedBridgeProvider?.commandFound ?? null,
+          github_connector_confirmed: selectedDirectRoute === "chatgpt-web"
+            ? chatGptWebGitHubConnectorConfirmed()
+            : null,
+          github_connector_confirmation_env: selectedDirectRoute === "chatgpt-web"
+            ? "THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED"
+            : null,
           issues: bridgeIssues
         },
         codex_host_policy_boundary: {
@@ -1534,9 +1587,18 @@ const createProAccessTool = (): McpTool => ({
           summary:
             "TheHood autopilot can auto-approve TheHood runtime gates, but it cannot override a Codex or tenant policy that forbids disclosure to an external provider.",
           retry_guidance:
-            "If Codex rejects a chatgpt-web consult as an external disclosure, do not ask for the same approval again. Use connector mode or an abstract no-repo-context prompt."
+            "If Codex rejects a direct browser-backed Pro consult as an external disclosure before TheHood can run, do not treat the selected route as failed solely because the checkout is dirty. Present repo_context_policy.repo_visibility.user_choices, use connector mode, or use an abstract no-repo-context prompt."
         },
         recommended_paths: [
+          {
+            id: "choose_context_mode_after_route",
+            status: repoVisibility.default_gate === "user_choice_required"
+              ? "required_before_direct_browser_pro_call"
+              : "remote_context_available",
+            description:
+              "Route choice decides how to reach Pro. It does not approve repo-context disclosure. After Chrome/Web or Atlas is selected, present the repo context choices before sending bounded local repo evidence.",
+            user_choices: repoContextUserChoices
+          },
           {
             id: "chatgpt_mcp_connector",
             status: "recommended_when_codex_blocks_external_disclosure",
@@ -1544,6 +1606,15 @@ const createProAccessTool = (): McpTool => ({
               "Open ChatGPT Pro with TheHood as an MCP connector. ChatGPT requests bounded repo/run evidence through TheHood tools instead of Codex sending repo context to Pro.",
             setup_command: "node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local",
             handoff_prompt: connectorPrompt
+          },
+          {
+            id: "atlas_computer_use_bridge",
+            status: proRoute.selectedRoute === "chatgpt-atlas"
+              ? "selected"
+              : proRoute.candidates.find((candidate) => candidate.route === "chatgpt-atlas")?.status ?? "not_ready",
+            description:
+              "Use the packaged ChatGPT Atlas bridge plus a trusted local Computer Use controller. TheHood still owns provider invocation gates, repo-context transfer manifests, response validation, and artifacts.",
+            setup_command: "node dist/cli/main.js pro-route set atlas --repo <repo-path>"
           },
           {
             id: "codex_agent_bridge",

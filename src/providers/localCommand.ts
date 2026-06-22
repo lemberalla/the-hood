@@ -16,6 +16,8 @@ import type { JsonObject, JsonValue, ProviderWaitTarget, RunArtifact, RuntimeRol
 export interface LocalAgentCommandSpec {
   providerId: string;
   command: string;
+  commandArgs?: string[];
+  commandLabel?: string;
   buildArgs: BuildLocalAgentArgs;
   timeoutMs?: number;
 }
@@ -39,6 +41,23 @@ export interface FallbackResponseInput {
 const defaultTimeoutMs = 10 * 60 * 1000;
 
 const directEditAllowed = (): boolean => process.env.THEHOOD_ALLOW_DIRECT_EDIT === "1";
+
+const nodeScriptExtensions = new Set([".js", ".mjs", ".cjs"]);
+
+export const isNodeScriptCommand = (command: string): boolean =>
+  nodeScriptExtensions.has(path.extname(command));
+
+export const normalizeLocalAgentCommandSpec = (
+  spec: LocalAgentCommandSpec
+): LocalAgentCommandSpec =>
+  isNodeScriptCommand(spec.command)
+    ? {
+        ...spec,
+        command: process.execPath,
+        commandArgs: [spec.command, ...(spec.commandArgs ?? [])],
+        commandLabel: spec.commandLabel ?? spec.command
+      }
+    : spec;
 
 interface ProcessResult {
   exitCode: number;
@@ -573,7 +592,7 @@ const providerWaitTarget = (
 ): ProviderWaitTarget => ({
   kind: "local_command",
   label: `${spec.providerId} command for ${request.role}`,
-  command: path.basename(spec.command),
+  command: path.basename(spec.commandLabel ?? spec.command),
   workspaceMode: workspace.mode,
   args: args.map((_arg, index) => providerWaitArg(args, index))
 });
@@ -609,6 +628,7 @@ const writeLocalAgentExecutionArtifact = async (
     provider: input.spec.providerId,
     model: input.request.assignment.model,
     command: input.spec.command,
+    ...(input.spec.commandLabel ? { commandLabel: input.spec.commandLabel } : {}),
     args: input.args.map(redactText),
     commandMode: commandMode(input.request),
     workspaceMode: input.workspace.mode,
@@ -663,6 +683,7 @@ const writeLocalAgentExecutionArtifact = async (
           provider: input.spec.providerId,
           model: input.request.assignment.model,
           command: input.spec.command,
+          ...(input.spec.commandLabel ? { commandLabel: input.spec.commandLabel } : {}),
           workspaceMode: input.workspace.mode,
           commandMode: commandMode(input.request),
           ...(sandbox ? { sandbox } : {}),
@@ -685,8 +706,9 @@ const writeLocalAgentExecutionArtifact = async (
 
 export const runLocalAgentCommand = async (
   request: AgentRequest,
-  spec: LocalAgentCommandSpec
+  inputSpec: LocalAgentCommandSpec
 ): Promise<AgentResponse> => {
+  const spec = normalizeLocalAgentCommandSpec(inputSpec);
   const workspace = await prepareWorkspace(request);
 
   if (isFallbackResponse(workspace)) {
@@ -697,11 +719,12 @@ export const runLocalAgentCommand = async (
   const timeoutMs = spec.timeoutMs ?? defaultTimeoutMs;
   const schema = buildAgentResponseSchema(request);
   const schemaFile = await writeSchemaFile(spec.providerId, schema);
-  const args = spec.buildArgs(request, {
+  const builtArgs = spec.buildArgs(request, {
     schema,
     schemaPath: schemaFile.path,
     workspacePath: workspace.path
   });
+  const args = [...(spec.commandArgs ?? []), ...builtArgs];
   const startedAt = nowIso();
   const startedMs = Date.now();
   const child = spawn(spec.command, args, {

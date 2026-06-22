@@ -17,7 +17,9 @@
   "homepage": "https://github.com/lemberalla/the-hood#readme",
   "bin": {
     "thehood": "dist/cli/main.js",
-    "thehood-chatgpt-web-bridge": "dist/bridges/chatgptWebBridge.js"
+    "thehood-chatgpt-web-bridge": "dist/bridges/chatgptWebBridge.js",
+    "thehood-chatgpt-atlas-bridge": "dist/bridges/chatgptAtlasBridge.js",
+    "thehood-chatgpt-atlas-controller": "dist/bridges/chatgptAtlasController.js"
   },
   "files": [
     "dist",

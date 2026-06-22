@@ -45,6 +45,8 @@ const requiredPaths = [
   "dist/cli/main.js",
   "dist/mcp/server.js",
   "dist/bridges/chatgptWebBridge.js",
+  "dist/bridges/chatgptAtlasBridge.js",
+  "dist/bridges/chatgptAtlasController.js",
   "docs/PUBLIC_REPO_READINESS.md",
   "docs/NPM_PUBLISHING.md",
   "examples/stub-demo/README.md"

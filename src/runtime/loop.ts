@@ -341,9 +341,10 @@ const readOnlyDelegateRoles = new Set<RuntimeRole>([
   "citation"
 ]);
 
-const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
+const providersRequiringRepoContextApproval = new Set(["chatgpt-web", "chatgpt-atlas", "openai-api", "anthropic-api"]);
 const readOnlyProvidersRequiringInvocationApproval = new Set([
   "anthropic-api",
+  "chatgpt-atlas",
   "chatgpt-web",
   "claude-code",
   "codex-cli",

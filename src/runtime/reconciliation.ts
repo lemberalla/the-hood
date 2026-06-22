@@ -42,7 +42,7 @@ interface ProgressPacketTransferReview {
   gated?: ReconcileRunResult;
 }
 
-const providersRequiringProgressPacketApproval = new Set(["chatgpt-web", "openai-api", "anthropic-api"]);
+const providersRequiringProgressPacketApproval = new Set(["chatgpt-web", "chatgpt-atlas", "openai-api", "anthropic-api"]);
 
 const createEvent = (type: string, message: string, data?: JsonObject): RunEvent => ({
   id: newId("event"),

@@ -4,7 +4,10 @@ import path from "node:path";
 import { inspectBrowser } from "./browserManager.js";
 import { listProvidersWithRuntimeModels } from "./providers.js";
 import { runtimeInfo, type RuntimeInfo } from "./runtimeInfo.js";
+import { resolveChatGptAtlasBridgeCommand, chatGptAtlasBridgeBin } from "../providers/chatgptAtlas.js";
 import { codexCliModelAvailable, resolveCodexCliModel, type CodexCliModelDiscovery } from "../providers/codexCliModels.js";
+import { resolveChatGptWebBridgeCommand } from "../providers/chatgptWeb.js";
+import { isNodeScriptCommand } from "../providers/localCommand.js";
 import type { ProviderDescriptor, ProviderModelPolicy } from "./providers.js";
 import type { ProviderAccessMode, RoleAssignment, RuntimeRole, TheHoodConfig } from "./types.js";
 
@@ -42,11 +45,15 @@ export interface RuntimeHealthReport {
   roles: RoleHealth[];
 }
 
-const implementedProviderIds = new Set(["stub", "chatgpt-web", "codex-cli", "claude-code"]);
+const implementedProviderIds = new Set(["stub", "chatgpt-web", "chatgpt-atlas", "codex-cli", "claude-code"]);
 
 const commandForProvider = (providerId: string): string | undefined => {
   if (providerId === "chatgpt-web") {
     return process.env.THEHOOD_CHATGPT_WEB_COMMAND;
+  }
+
+  if (providerId === "chatgpt-atlas") {
+    return process.env.THEHOOD_CHATGPT_ATLAS_COMMAND?.trim() || chatGptAtlasBridgeBin;
   }
 
   if (providerId === "codex-cli") {
@@ -80,7 +87,28 @@ const canExecute = async (filePath: string): Promise<boolean> => {
   }
 };
 
+const canRead = async (filePath: string): Promise<boolean> => {
+  try {
+    await fs.access(filePath, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const resolveBridgeCommand = (command: string): string =>
+  resolveChatGptAtlasBridgeCommand(resolveChatGptWebBridgeCommand(command));
+
 const commandExists = async (command: string): Promise<boolean> => {
+  const resolvedCommand = resolveBridgeCommand(command);
+  if (isNodeScriptCommand(resolvedCommand)) {
+    return canRead(resolvedCommand);
+  }
+
+  if (resolvedCommand !== command) {
+    return commandExists(resolvedCommand);
+  }
+
   if (command.includes("/") || command.includes("\\")) {
     return canExecute(command);
   }
@@ -155,7 +183,32 @@ const modelAvailability = (
 };
 
 const bridgeIssues = (providerId: string, command?: string): string[] =>
-  providerId === "chatgpt-web" && !command ? ["bridge_command_not_configured"] : [];
+  (providerId === "chatgpt-web" || providerId === "chatgpt-atlas") && !command
+    ? ["bridge_command_not_configured"]
+    : [];
+
+const chatGptAtlasTargetConfirmed = (): boolean =>
+  process.env.THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED === "1";
+
+const chatGptAtlasFakeTransportConfigured = (): boolean =>
+  process.env.THEHOOD_CHATGPT_ATLAS_TRANSPORT === "fake" ||
+  Boolean(process.env.THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE) ||
+  Boolean(process.env.THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE_FILE);
+
+const chatGptAtlasIssues = (command?: string): string[] => {
+  if (!command) {
+    return ["bridge_command_not_configured"];
+  }
+
+  if (chatGptAtlasFakeTransportConfigured()) {
+    return [];
+  }
+
+  return [
+    ...(chatGptAtlasTargetConfirmed() ? [] : ["atlas_target_not_confirmed"]),
+    ...(process.env.THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND ? [] : ["computer_use_command_not_configured"])
+  ];
+};
 
 const chatGptModelConfirmed = (): boolean =>
   process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED === "1" ||
@@ -226,7 +279,11 @@ export const inspectRuntimeHealth = async (config: TheHoodConfig): Promise<Runti
 
     providerIssueChecks.set(
       provider.id,
-      provider.id === "chatgpt-web" ? await chatGptWebIssues(command) : bridgeIssues(provider.id, command)
+      provider.id === "chatgpt-web"
+        ? await chatGptWebIssues(command)
+        : provider.id === "chatgpt-atlas"
+          ? chatGptAtlasIssues(command)
+          : bridgeIssues(provider.id, command)
     );
   }
 

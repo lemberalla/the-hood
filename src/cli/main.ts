@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { initConfig, loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectBrowser, startBrowser, stopBrowser, type BrowserManagerOptions } from "../runtime/browserManager.js";
 import { runRuntimeCommand } from "../runtime/commandRunner.js";
@@ -17,6 +19,11 @@ import { startMcpServer } from "../mcp/server.js";
 import { readRunArtifact, type ReadArtifactResult } from "../runtime/artifacts.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
 import { listProvidersWithRuntimeModels } from "../runtime/providers.js";
+import {
+  applyChatGptProRoutePreference,
+  parseChatGptProRoute,
+  resolveChatGptProRoute
+} from "../runtime/proRoute.js";
 import { assertRoleInvariants } from "../runtime/permissions.js";
 import { reconcileRun } from "../runtime/reconciliation.js";
 import { buildRoleRoster } from "../runtime/roleRoster.js";
@@ -24,6 +31,7 @@ import { parseRole, parseRoleAssignment } from "../runtime/role-assignment.js";
 import { getRunInsights } from "../runtime/runInsights.js";
 import { runMonitorFromRuns } from "../runtime/runMonitor.js";
 import { getProjectPaths } from "../runtime/paths.js";
+import { runtimeInfo } from "../runtime/runtimeInfo.js";
 import { summonAgent } from "../runtime/summons.js";
 import { applyTeamPreset, getTeamPreset, listTeamPresets, teamPresetIds } from "../runtime/teamPresets.js";
 import {
@@ -41,6 +49,7 @@ import {
   type ApprovalPolicyMode,
   type ExternalTransferApprovalMode,
   type RoleMap,
+  type RuntimeRole,
   type RunMode
 } from "../runtime/types.js";
 import {
@@ -55,7 +64,9 @@ import {
   formatBrowserStartResult,
   formatBrowserStatus,
   formatBrowserStopResult,
+  formatChatGptProRouteResolution,
   formatCliSetupReport,
+  formatCliVersionReport,
   formatConfig,
   formatAdvanceRunResult,
   formatAgentBoard,
@@ -77,7 +88,8 @@ import {
   formatRunSummary,
   formatSummonAgentResult,
   printJson,
-  type CliSetupReport
+  type CliSetupReport,
+  type CliVersionReport
 } from "./format.js";
 import {
   renderApprovalInbox,
@@ -92,10 +104,13 @@ const helpText = `TheHood local agent runtime
 
 Usage:
   thehood [--repo <path>]
+  thehood version [--json]
   thehood init [--repo <path>]
   thehood setup [--repo <path>] [--json]
   thehood config show [--repo <path>] [--json]
   thehood config set max-iterations|fanout-max-items <n> [--repo <path>] [--json]
+  thehood config set chatgpt-pro-route auto|chrome|atlas|mcp [--repo <path>] [--json]
+  thehood pro-route [show|set auto|chrome|atlas|mcp] [--repo <path>] [--json]
   thehood providers [--repo <path>] [--json]
   thehood doctor [--repo <path>] [--json]
   thehood models [--repo <path>] [--json]
@@ -130,7 +145,7 @@ Usage:
   thehood browser stop [--port <n>] [--profile <name>] [--profile-path <path>] [--json]
   thehood ui [approvals|settings [overview|crew|providers|budgets|safety|browser|commands|all]] [--repo <path>] [--port <n>] [--cdp-url <url>] [--approve <run-id>] [--reject <run-id>] [--revise <run-id>] [--json]
   thehood mcp
-  thehood mcp config [--json] [--chatgpt-web] [--cdp-url <url>]
+  thehood mcp config [--json] [--chatgpt-web] [--chatgpt-atlas] [--cdp-url <url>]
   thehood mcp tunnel [--profile <name>] [--tunnel-id <id>] [--json]
 
 Role override options for plan/run:
@@ -154,7 +169,7 @@ Common team presets:
   spark-plus-sonnet | claude-builder | pro-claude-high-assurance
 
 Model examples:
-  codex-cli:spark | chatgpt-web:chatgpt-pro | chatgpt-web:configured
+  codex-cli:spark | chatgpt-web:chatgpt-pro | chatgpt-atlas:chatgpt-pro
   claude-code:sonnet | claude-code:fable | claude-code:mythos
 `;
 
@@ -168,8 +183,31 @@ const shellQuote = (value: string): string =>
   /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 
 const currentCliEntryPath = (): string => {
-  const entry = process.argv[1];
-  return entry ? path.resolve(entry) : path.resolve("dist/cli/main.js");
+  return fileURLToPath(import.meta.url);
+};
+
+const pathExists = async (targetPath: string): Promise<boolean> => {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const buildCliVersionReport = async (): Promise<CliVersionReport> => {
+  const cliEntryPath = currentCliEntryPath();
+  const packageRoot = path.resolve(path.dirname(cliEntryPath), "..", "..");
+  const source = await pathExists(path.join(packageRoot, ".git")) ? "local_checkout" : "installed_package";
+
+  return {
+    name: "thehood",
+    version: runtimeInfo.version,
+    source,
+    cliEntryPath,
+    packageRoot,
+    nodePath: process.execPath
+  };
 };
 
 const buildCliSetupReport = (options: Record<string, CliOptionValue>): CliSetupReport => {
@@ -239,6 +277,22 @@ const parseRoleOverrides = (options: Record<string, CliOptionValue>): RoleMap =>
   }
 
   return overrides;
+};
+
+const preferredRoleForReadOnlyRun = (mode: RunMode, overrides: RoleMap): RuntimeRole | undefined => {
+  if (mode === "plan") {
+    return overrides.planner ? "planner" : overrides.orchestrator ? "orchestrator" : undefined;
+  }
+
+  if (mode === "research") {
+    return overrides.researcher ? "researcher" : overrides.orchestrator ? "orchestrator" : undefined;
+  }
+
+  if (mode === "review") {
+    return overrides.critic ? "critic" : overrides.orchestrator ? "orchestrator" : undefined;
+  }
+
+  return undefined;
 };
 
 const parseDecision = (value: string): ApprovalDecision => {
@@ -529,12 +583,46 @@ const handleConfig = async (
         fanoutMaxItems
       }
     };
+  } else if (key === "chatgpt-pro-route") {
+    updated = applyChatGptProRoutePreference(config, parseChatGptProRoute(value));
   } else {
-    throw new InputError("Use: thehood config set max-iterations|fanout-max-items <positive-integer>");
+    throw new InputError("Use: thehood config set max-iterations|fanout-max-items <positive-integer> or chatgpt-pro-route auto|chrome|atlas|mcp");
   }
 
   await writeConfig(repoPath, updated);
   shouldPrintJson(options) ? printJson(updated) : process.stdout.write(`${formatConfig(updated)}\n`);
+};
+
+const proRouteResolution = async (repoPath: string) => {
+  const config = await loadConfig(repoPath);
+  const health = await inspectRuntimeHealth(config);
+
+  return resolveChatGptProRoute(config, health, repoPath);
+};
+
+const handleProRoute = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const repoPath = repoFromOptions(options);
+  const subcommand = args[0] ?? "show";
+
+  if (subcommand === "show") {
+    const resolution = await proRouteResolution(repoPath);
+    shouldPrintJson(options) ? printJson(resolution) : process.stdout.write(`${formatChatGptProRouteResolution(resolution)}\n`);
+    return;
+  }
+
+  if (subcommand === "set") {
+    const route = parseChatGptProRoute(args[1]);
+    const config = await loadConfig(repoPath);
+    await writeConfig(repoPath, applyChatGptProRoutePreference(config, route));
+    const resolution = await proRouteResolution(repoPath);
+    shouldPrintJson(options) ? printJson(resolution) : process.stdout.write(`${formatChatGptProRouteResolution(resolution)}\n`);
+    return;
+  }
+
+  throw new InputError("Use: thehood pro-route [show|set auto|chrome|atlas|mcp]");
 };
 
 const handleProviders = async (options: Record<string, CliOptionValue>): Promise<void> => {
@@ -679,11 +767,14 @@ const handleCreateRun = async (
   const mode = command === "plan" ? "plan" : parseMode(getStringOption(options, "mode"), "implement");
   const shouldLoop = command === "goal" || getBooleanOption(options, "loop");
   const maxIterations = parsePositiveIntegerOption(options, "maxIterations");
+  const roleOverrides = parseRoleOverrides(options);
+  const preferredRole = preferredRoleForReadOnlyRun(mode, roleOverrides);
   const run = await createRun({
     repoPath: repoFromOptions(options),
     goal,
     mode,
-    roleOverrides: parseRoleOverrides(options),
+    roleOverrides,
+    ...(preferredRole ? { preferredRole } : {}),
     constraints: getStringListOption(options, "constraint"),
     ...(maxIterations === undefined ? {} : { maxIterations })
   });
@@ -1021,6 +1112,7 @@ const handleMcp = async (
     const cdpUrl = getStringOption(options, "cdpUrl");
     const report = getMcpConfigReport(process.argv[1], {
       includeChatGptWeb: getBooleanOption(options, "chatgptWeb"),
+      includeChatGptAtlas: getBooleanOption(options, "chatgptAtlas"),
       ...(cdpUrl ? { cdpUrl } : {})
     });
     shouldPrintJson(options) ? printJson(report) : process.stdout.write(`${formatMcpConfigReport(report)}\n`);
@@ -1084,7 +1176,7 @@ const handleUi = async (
     const value = args[2];
 
     if (!key || !value || args.length > 3) {
-      throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value>.");
+      throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items|chatgpt-pro-route <value>.");
     }
 
     if (key === "approval-mode") {
@@ -1097,12 +1189,12 @@ const handleUi = async (
       return;
     }
 
-    if (key === "max-iterations" || key === "fanout-max-items") {
+    if (key === "max-iterations" || key === "fanout-max-items" || key === "chatgpt-pro-route") {
       await handleConfig(["set", key, value], options);
       return;
     }
 
-    throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items <value>.");
+    throw new InputError("Usage: thehood ui set approval-mode|external-transfers|max-iterations|fanout-max-items|chatgpt-pro-route <value>.");
   }
 
   if (subcommand === "team") {
@@ -1224,6 +1316,12 @@ const runCli = async (argv: string[]): Promise<void> => {
     return;
   }
 
+  if (command === "version" || getBooleanOption(parsed.options, "version")) {
+    const versionReport = await buildCliVersionReport();
+    shouldPrintJson(parsed.options) ? printJson(versionReport) : process.stdout.write(`${formatCliVersionReport(versionReport)}\n`);
+    return;
+  }
+
   if (!command) {
     await handleUi([], parsed.options);
     return;
@@ -1238,6 +1336,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "config":
       await handleConfig(args, parsed.options);
+      return;
+    case "pro-route":
+      await handleProRoute(args, parsed.options);
       return;
     case "providers":
     case "models":

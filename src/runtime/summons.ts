@@ -59,6 +59,7 @@ const summonableRoles: RuntimeRole[] = [
 
 const readOnlyProvidersRequiringInvocationApproval = new Set([
   "anthropic-api",
+  "chatgpt-atlas",
   "chatgpt-web",
   "claude-code",
   "codex-cli",

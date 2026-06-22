@@ -1,8 +1,22 @@
-import { createFallbackAgentResponse, runLocalAgentCommand } from "./localCommand.js";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  createFallbackAgentResponse,
+  normalizeLocalAgentCommandSpec,
+  runLocalAgentCommand
+} from "./localCommand.js";
 import type { LocalAgentCommandContext } from "./localCommand.js";
 import type { AgentRequest, ProviderAdapter } from "./types.js";
 
+const chatGptWebBridgeBin = "thehood-chatgpt-web-bridge";
+
 const bridgeCommand = (): string | undefined => process.env.THEHOOD_CHATGPT_WEB_COMMAND;
+
+export const bundledChatGptWebBridgePath = (): string =>
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "bridges", "chatgptWebBridge.js");
+
+export const resolveChatGptWebBridgeCommand = (command: string): string =>
+  command === chatGptWebBridgeBin ? bundledChatGptWebBridgePath() : command;
 
 const buildChatGptWebArgs = (request: AgentRequest, context: LocalAgentCommandContext): string[] => [
   "--model",
@@ -24,10 +38,11 @@ export const chatGptWebProvider: ProviderAdapter = {
       });
     }
 
-    return runLocalAgentCommand(request, {
+    return runLocalAgentCommand(request, normalizeLocalAgentCommandSpec({
       providerId: "chatgpt-web",
-      command,
+      command: resolveChatGptWebBridgeCommand(command),
+      commandLabel: command,
       buildArgs: buildChatGptWebArgs
-    });
+    }));
   }
 };

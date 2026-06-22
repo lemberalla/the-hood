@@ -9,6 +9,10 @@ import type {
 import type { BrowserStatus } from "../runtime/browserManager.js";
 import type { RuntimeHealthReport } from "../runtime/doctor.js";
 import type { ProviderDescriptor } from "../runtime/providers.js";
+import {
+  chatGptProRouteLabel,
+  resolveChatGptProRoute
+} from "../runtime/proRoute.js";
 import type { RoleRosterItem } from "../runtime/roleRoster.js";
 import type { RunMonitorItem } from "../runtime/runMonitor.js";
 import type { TeamPreset } from "../runtime/teamPresets.js";
@@ -257,6 +261,9 @@ const teamApplyCommand = (repoPath: string, presetId: string): string =>
 
 const configSetCommand = (repoPath: string, key: string, value: string | number): string =>
   cliCommand(repoPath, ["config", "set", key, String(value)]);
+
+const proRouteSetCommand = (repoPath: string, route: string): string =>
+  cliCommand(repoPath, ["pro-route", "set", route]);
 
 const approvalModeCommand = (repoPath: string, mode: string): string =>
   cliCommand(repoPath, ["approvals", "policy", "set", "mode", mode]);
@@ -1023,6 +1030,24 @@ const settingsSafetyLines = (input: SettingsInput, width: number): string[] => [
   ])
 ];
 
+const settingsProRouteLines = (input: SettingsInput, width: number): string[] => {
+  const resolution = resolveChatGptProRoute(input.config, input.health, input.repoPath);
+  const valueWidth = Math.max(18, width - 18);
+  const selected = resolution.selectedRoute
+    ? `${resolution.selectedRoute} (${chatGptProRouteLabel(resolution.selectedRoute)})`
+    : "ask user";
+
+  return [
+    tableRow([["preference", 15], [truncateEnd(`${resolution.preference} (${chatGptProRouteLabel(resolution.preference)})`, valueWidth), valueWidth]]),
+    tableRow([["resolved", 15], [truncateEnd(`${resolution.status} -> ${selected}`, valueWidth), valueWidth]]),
+    tableRow([["why", 15], [truncateEnd(resolution.reason, valueWidth), valueWidth]]),
+    tableRow([["set chrome", 15], [truncateEnd(proRouteSetCommand(input.repoPath, "chrome"), valueWidth), valueWidth]]),
+    tableRow([["set atlas", 15], [truncateEnd(proRouteSetCommand(input.repoPath, "atlas"), valueWidth), valueWidth]]),
+    tableRow([["set mcp", 15], [truncateEnd(proRouteSetCommand(input.repoPath, "mcp"), valueWidth), valueWidth]]),
+    tableRow([["set auto", 15], [truncateEnd(proRouteSetCommand(input.repoPath, "auto"), valueWidth), valueWidth]])
+  ];
+};
+
 const settingsProviderRows = (input: SettingsInput, width: number): string[] => {
   const modelsWidth = Math.max(14, width - 58);
 
@@ -1067,6 +1092,11 @@ const settingsActionDeckLines = (input: SettingsInput, width: number): string[] 
   "  Budgets",
   `    ${configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
   `    ${configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
+  "  ChatGPT Pro Route",
+  `    ${proRouteSetCommand(input.repoPath, "chrome")}`,
+  `    ${proRouteSetCommand(input.repoPath, "atlas")}`,
+  `    ${proRouteSetCommand(input.repoPath, "mcp")}`,
+  `    ${proRouteSetCommand(input.repoPath, "auto")}`,
   "  Team",
   ...input.teamPresets.map((preset) => `    ${teamApplyCommand(input.repoPath, preset.id)}`),
   "  Browser",
@@ -1085,6 +1115,10 @@ const settingsUnderlyingCommandLines = (input: SettingsInput, width: number): st
   `  ${approvalModeCommand(input.repoPath, "autopilot")}`,
   `  ${configSetCommand(input.repoPath, "max-iterations", input.config.defaults.maxIterations)}`,
   `  ${configSetCommand(input.repoPath, "fanout-max-items", input.config.defaults.fanoutMaxItems)}`,
+  `  ${proRouteSetCommand(input.repoPath, "chrome")}`,
+  `  ${proRouteSetCommand(input.repoPath, "atlas")}`,
+  `  ${proRouteSetCommand(input.repoPath, "mcp")}`,
+  `  ${proRouteSetCommand(input.repoPath, "auto")}`,
   `  ${externalTransferModeCommand(input.repoPath, "manual")}`,
   `  ${externalTransferModeCommand(input.repoPath, "auto-low-risk")}`,
   `  ${browserCommand("status")}`,
@@ -1099,6 +1133,7 @@ const settingsUnderlyingCommandLines = (input: SettingsInput, width: number): st
   "",
   "Editable In Config",
   `  ${truncateMiddle(input.configPath, width - 4)}`,
+  "  preferences.chatGptProRoute",
   "  approvalPolicy.externalTransfers.maxAutoApproveBytes",
   "  approvalPolicy.externalTransfers.rules",
   "  defaults.editRequiresApproval",
@@ -1117,7 +1152,7 @@ const settingsCommandDeckLines = (input: SettingsInput, width: number): string[]
 const settingsPageDescription: Record<SettingsPageId, string> = {
   overview: "compact status and page menu",
   crew: "role assignments and set commands",
-  providers: "provider states and available models",
+  providers: "provider states and Pro route",
   budgets: "iteration and fan-out limits",
   safety: "approval policy and protected rails",
   browser: "ChatGPT Web bridge status",
@@ -1134,11 +1169,13 @@ const settingsSummaryLines = (input: SettingsInput, width: number): string[] => 
   const readyCrew = input.roleRoster.filter((role) => rosterState(role) === "ready").length;
   const enabledProviders = input.providers.filter((provider) => provider.enabled).length;
   const readyProviders = input.providers.filter((provider) => provider.enabled && providerState(input.health, provider.id) === "ready").length;
+  const proRoute = resolveChatGptProRoute(input.config, input.health, input.repoPath);
 
   return [
     ...settingsOverviewLines(input, width),
     `policy ${modeLabel(input.config.approvalPolicy.mode)}  transfers ${modeLabel(input.config.approvalPolicy.externalTransfers.mode)}`,
     `crew ${readyCrew}/${input.roleRoster.length} ready  providers ${readyProviders}/${enabledProviders} ready`,
+    `pro route ${proRoute.selectedRoute ?? proRoute.preference}  ${proRoute.status}`,
     `budgets max iterations ${input.config.defaults.maxIterations}  fanout ${input.config.defaults.fanoutMaxItems}`,
     `hard stops protected tests, secret-risk transfers, destructive/dependency/network commands`
   ];
@@ -1208,6 +1245,9 @@ const renderSettingsCrew = (input: SettingsInput, width: number, useColor: boole
 const renderSettingsProviders = (input: SettingsInput, width: number, useColor: boolean): string => {
   const innerWidth = width - 4;
   const lines = [
+    "CHATGPT PRO ROUTE",
+    ...settingsProRouteLines(input, innerWidth),
+    "",
     "PROVIDER BAY",
     ...settingsProviderRows(input, innerWidth)
   ];
@@ -1290,6 +1330,9 @@ const settingsWide = (input: SettingsInput, width: number, useColor: boolean): s
     "",
     ...policy,
     "",
+    "CHATGPT PRO ROUTE",
+    ...settingsProRouteLines(input, innerWidth),
+    "",
     ...bridge,
     "",
     ...settingsUnderlyingCommandLines(input, innerWidth)
@@ -1319,6 +1362,9 @@ const settingsCompact = (input: SettingsInput, width: number, useColor: boolean)
     "",
     "SAFETY RAILS",
     ...settingsSafetyLines(input, innerWidth),
+    "",
+    "CHATGPT PRO ROUTE",
+    ...settingsProRouteLines(input, innerWidth),
     "",
     "PROVIDER BAY",
     ...settingsProviderRows(input, innerWidth),

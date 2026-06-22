@@ -46,6 +46,9 @@ export type RoleMap = Partial<Record<RuntimeRole, RoleAssignment>>;
 export const providerAccessModes = ["agent-bridge", "api-agent", "mcp-connector"] as const;
 export type ProviderAccessMode = (typeof providerAccessModes)[number];
 
+export const chatGptProRoutes = ["auto", "chatgpt-web", "chatgpt-atlas", "mcp-connector"] as const;
+export type ChatGptProRoute = (typeof chatGptProRoutes)[number];
+
 export interface RuntimeDefaults {
   maxIterations: number;
   fanoutMaxItems: number;
@@ -79,6 +82,10 @@ export interface ApprovalPolicy {
   externalTransfers: ExternalTransferApprovalPolicy;
 }
 
+export interface RuntimePreferences {
+  chatGptProRoute: ChatGptProRoute;
+}
+
 export interface ProviderConfig {
   enabled: boolean;
   models: string[];
@@ -91,6 +98,7 @@ export interface ProviderConfig {
 export interface TheHoodConfig {
   version: 1;
   defaults: RuntimeDefaults;
+  preferences: RuntimePreferences;
   approvalPolicy: ApprovalPolicy;
   providers: Record<string, ProviderConfig>;
   roles: RoleMap;
