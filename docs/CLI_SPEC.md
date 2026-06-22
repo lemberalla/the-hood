@@ -342,7 +342,7 @@ It checks:
 
 ## TUI Command
 
-`thehood ui --repo .` prints the branded terminal dashboard shell. It reads runtime health, role mapping, browser readiness, approval inbox, and a derived run monitor from existing runtime APIs; it does not own orchestration logic. The run monitor shows active provider waits, approval gates, transfer gates, completed runs, crew lane trails, revision trails when present, and reviewer/tester/QA/critic ownership lanes from runtime evidence.
+`thehood --repo .` prints the branded terminal dashboard shell by default. `thehood ui --repo .` is the explicit equivalent. The dashboard reads runtime health, role mapping, browser readiness, approval inbox, and a derived run monitor from existing runtime APIs; it does not own orchestration logic. The run monitor shows active provider waits, approval gates, transfer gates, completed runs, crew lane trails, revision trails when present, and reviewer/tester/QA/critic ownership lanes from runtime evidence.
 
 The dashboard also includes an approval inbox. `thehood ui approvals --repo .` prints pending manual approval gates with the runtime reason, suggested approval message, related artifacts, and button-style approve/reject/revise/resume commands. It also shows recent autopilot approvals separately so operators can see what was auto-approved, why it qualified, and which artifact or transfer manifest was involved. The same inbox includes recent agent handoffs so operators can see which runtime lane handed work to the next lane or to an approval gate.
 
