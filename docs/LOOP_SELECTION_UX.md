@@ -22,9 +22,12 @@ The response contains:
 - alternatives
 - `runAction` for the existing runtime tool
 - card actions
+- renderer-facing `card`
 - dashboard-shaped `artifact` for a Codex card
 
-Codex should render the recommendation as a decision card:
+Codex should render `card` directly when present. `artifact.manifest` and `artifact.snapshot` are the dashboard/table fallback for hosts that do not understand the card shape.
+
+The card should read like this:
 
 ```text
 Recommended loop: Build, Test, Fix
@@ -50,6 +53,19 @@ Actions:
 The "Run loop" action should invoke the existing runtime path from `runAction`, usually `thehood_orchestrate` with `auto_loop: true`. Runtime approvals, provider calls, edit gates, evidence capture, verifier review, and stop conditions still happen inside TheHood. The card is guidance, not authority.
 
 The "Edit contract" action should keep the user inside the recommendation step. The edited acceptance criteria, validation commands, allowed paths, forbidden changes, and iteration budget are passed back into `thehood_recommend_loop`; Codex should not mutate orchestration state or start a provider call while the user is still editing the contract.
+
+## Codex MCP Refresh
+
+After local development changes, a fresh MCP server launch should expose `thehood_recommend_loop`. Existing Codex threads may keep the tool schema they already loaded, so a thread can still look stale even after `npm run build` succeeds.
+
+Validate the fresh server path with:
+
+```bash
+npm run build
+npm run smoke:codex-config
+```
+
+If the smoke passes but the current Codex conversation still lacks `thehood_recommend_loop`, start a new Codex thread or reload the app/session so Codex reconnects to the MCP server.
 
 ## Terminal Flow
 

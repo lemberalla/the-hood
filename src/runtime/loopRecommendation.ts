@@ -68,6 +68,26 @@ export interface LoopCardAction {
   commandHint?: string;
 }
 
+export interface LoopRecommendationCardSection {
+  id: string;
+  title: string;
+  items: string[];
+}
+
+export interface LoopRecommendationCardBadge {
+  label: string;
+  value: string;
+}
+
+export interface LoopRecommendationCard {
+  title: string;
+  subtitle: string;
+  badges: LoopRecommendationCardBadge[];
+  sections: LoopRecommendationCardSection[];
+  actions: LoopCardAction[];
+  rendererHint: string;
+}
+
 export interface LoopStackItem {
   order: number;
   recipe: LoopRecipe;
@@ -88,6 +108,7 @@ export interface LoopRecommendation {
   contract: CompletionContractDraft;
   runAction: LoopRecommendationAction;
   actions: LoopCardAction[];
+  card: LoopRecommendationCard;
   notes: string[];
   artifact: LoopRecommendationArtifact;
 }
@@ -526,6 +547,50 @@ const actionRows = (actions: LoopCardAction[]): JsonObject[] =>
     description: action.description
   }));
 
+const cardFor = (
+  score: LoopRecipeScore,
+  confidence: LoopRecommendationConfidence,
+  reason: string,
+  stack: LoopStackItem[],
+  contract: CompletionContractDraft,
+  actions: LoopCardAction[]
+): LoopRecommendationCard => ({
+  title: `Recommended loop: ${score.recipe.title}`,
+  subtitle: reason,
+  badges: [
+    { label: "Confidence", value: confidence },
+    { label: "Recipe", value: score.recipe.id },
+    { label: "Status", value: score.recipe.status }
+  ],
+  sections: [
+    {
+      id: "stack",
+      title: "Stack",
+      items: stack.map((item) =>
+        `${item.order}. ${item.recipe.title}${item.required ? " (primary)" : " (companion)"}`
+      )
+    },
+    {
+      id: "contract",
+      title: "Completion Contract",
+      items: [
+        `Goal: ${contract.goal}`,
+        `Evidence: ${contract.requiredEvidence.join("; ")}`,
+        `Validation: ${contract.validationCommands.join("; ")}`,
+        `Stops: ${contract.stopConditions.join("; ")}`,
+        `Budget: ${contract.iterationBudget}`
+      ]
+    },
+    {
+      id: "boundaries",
+      title: "Boundaries",
+      items: contract.forbiddenChanges
+    }
+  ],
+  actions,
+  rendererHint: "Render this card first. Use artifact.manifest and artifact.snapshot as the table/dashboard fallback."
+});
+
 const buildRecommendationArtifact = (
   recommendation: Omit<LoopRecommendation, "artifact">
 ): LoopRecommendationArtifact => ({
@@ -653,6 +718,8 @@ export const recommendLoop = async (input: RecommendLoopInput): Promise<LoopReco
   const stack = recommendationStack(recommended.recipe);
   const contract = await contractFor(repoPath, goal, recommended.recipe, maxIterations, input);
   const runAction = runActionFor(repoPath, goal, recommended.recipe, stack, contract);
+  const actions = cardActionsFor(runAction);
+  const reason = recommendationReason(recommended, confidence);
   const withoutArtifact: Omit<LoopRecommendation, "artifact"> = {
     kind: "loop_recommendation",
     schemaVersion: 1,
@@ -662,10 +729,11 @@ export const recommendLoop = async (input: RecommendLoopInput): Promise<LoopReco
     alternatives,
     stack,
     confidence,
-    reason: recommendationReason(recommended, confidence),
+    reason,
     contract,
     runAction,
-    actions: cardActionsFor(runAction),
+    actions,
+    card: cardFor(recommended, confidence, reason, stack, contract, actions),
     notes: [
       "The user does not need to know recipe IDs before asking for a loop.",
       "Recipe selection is read-only and does not start providers, edits, schedules, or external transfers.",

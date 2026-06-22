@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "TheHood",
     "shortDescription": "Run Codex through TheHood's local runtime",
-    "longDescription": "Adds TheHood workflow guidance and MCP wiring so Codex can inspect runtime roles, agent boards, approvals, artifacts, and run state without owning orchestration.",
+    "longDescription": "Adds TheHood workflow guidance and MCP wiring so Codex can inspect runtime roles, recommend loop cards, show agent boards, approvals, artifacts, and run state without owning orchestration.",
     "developerName": "TheHood",
     "category": "Developer Tools",
     "capabilities": [
@@ -33,6 +33,7 @@
     "termsOfServiceURL": "https://github.com/lemberalla/the-hood/blob/main/LICENSE",
     "defaultPrompt": [
       "Show the TheHood agent board.",
+      "Use Hood loops for this task.",
       "Run this task through TheHood.",
       "Check TheHood runtime readiness."
     ],

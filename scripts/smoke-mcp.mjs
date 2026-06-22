@@ -274,6 +274,15 @@ assert.ok(
   recommendLoopContent.actions.some((action) => action.action === "edit_contract"),
   "MCP loop recommendation should expose an edit-contract card action"
 );
+assert.ok(recommendLoopContent.card.title.startsWith("Recommended loop:"));
+assert.ok(
+  recommendLoopContent.card.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "MCP loop recommendation card should expose the runtime run action directly"
+);
+assert.ok(
+  recommendLoopContent.card.sections.some((section) => section.id === "contract"),
+  "MCP loop recommendation card should include a completion contract section"
+);
 assert.equal(recommendLoopContent.artifact.surface, "dashboard");
 assert.equal(recommendLoopContent.artifact.manifest.title, "TheHood Loop Plan");
 assert.ok(Array.isArray(recommendLoopContent.artifact.manifest.blocks));

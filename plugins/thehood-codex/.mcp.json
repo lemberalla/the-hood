@@ -2,7 +2,7 @@
   "mcpServers": {
     "thehood": {
       "title": "TheHood Runtime",
-      "description": "Local TheHood runtime tools for roles, runs, approvals, artifacts, and agent board visibility.",
+      "description": "Local TheHood runtime tools for loop recommendations, roles, runs, approvals, artifacts, and agent board visibility.",
       "command": "thehood",
       "args": [
         "mcp"

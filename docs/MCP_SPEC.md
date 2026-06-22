@@ -182,9 +182,9 @@ Input:
 }
 ```
 
-Output includes the recommended recipe, confidence, reason, recommended stack, alternatives, a completion contract draft, app card actions, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a native loop-plan card.
+Output includes the recommended recipe, confidence, reason, recommended stack, alternatives, a completion contract draft, app card actions, renderer-facing `card`, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a loop-plan fallback when it does not consume `card` directly.
 
-Codex should call this before asking the user to choose a recipe name. If the user edits the contract, call this tool again with the edited fields. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
+Codex should call this before asking the user to choose a recipe name. Render `card` first when present, and use `artifact` as the generic dashboard/table fallback. If the user edits the contract, call this tool again with the edited fields. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
 
 ### `thehood_agent_board`
 

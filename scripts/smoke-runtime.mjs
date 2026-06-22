@@ -3054,6 +3054,15 @@ assert.ok(
   loopRecommendation.actions.some((action) => action.action === "edit_contract"),
   "loop recommendation should expose a Codex app edit-contract action"
 );
+assert.equal(loopRecommendation.card.title.startsWith("Recommended loop:"), true);
+assert.ok(
+  loopRecommendation.card.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "loop recommendation card should expose the runtime run action directly"
+);
+assert.ok(
+  loopRecommendation.card.sections.some((section) => section.id === "contract"),
+  "loop recommendation card should include a completion contract section"
+);
 assert.equal(loopRecommendation.artifact.surface, "dashboard");
 assert.equal(loopRecommendation.artifact.manifest.title, "TheHood Loop Plan");
 assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_recipes));
