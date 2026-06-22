@@ -4,9 +4,9 @@ TheHood coordinates local tools, provider credentials, browser sessions, source 
 
 ## Reporting
 
-Private vulnerability reporting should be enabled before the repository is made public.
+Private vulnerability reporting is enabled for the public repository.
 
-Until a private reporting channel is configured, do not publish exploit details in public issues. Share only a minimal, non-sensitive description and request a private contact path.
+Use GitHub private vulnerability reporting for security-sensitive issues. Do not publish exploit details, secrets, provider transcripts, browser state, private run artifacts, or reproduction steps that expose private data in public issues. Public issues should include only a minimal, non-sensitive description.
 
 ## Sensitive Areas
 
@@ -28,4 +28,3 @@ Security-sensitive code includes:
 - Do not bypass provider access controls.
 - Fail closed when permissions or provider identity are uncertain.
 - Require approval for destructive commands and protected file changes.
-
