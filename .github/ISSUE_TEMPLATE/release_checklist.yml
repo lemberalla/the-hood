@@ -27,7 +27,7 @@ body:
         - label: npm run smoke:mcp
         - label: npm run smoke:codex-config
         - label: npm run smoke:runtime
-        - label: npm pack --dry-run --json
+        - label: npm run pack:check
         - label: git --no-pager diff --check
         - label: clean git status
   - type: checkboxes

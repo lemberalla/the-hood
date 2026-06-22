@@ -30,14 +30,14 @@ forbidden_changes:
 acceptance_criteria:
   - package version is 0.1.0-preview.0
   - release:check exists and uses existing smoke commands
-  - npm pack dry-run succeeds
+  - package manifest check succeeds
 validation:
   - npm run typecheck
   - npm run build
   - npm run smoke:mcp
   - npm run smoke:codex-config
   - npm run smoke:runtime
-  - npm pack --dry-run --json
+  - npm run pack:check
   - git --no-pager diff --check
 stop_condition: verifier approves or asks user to resolve a release boundary
 iteration_budget: 5

@@ -10,7 +10,7 @@
 - [ ] `npm run smoke:mcp`
 - [ ] `npm run smoke:codex-config`
 - [ ] `npm run smoke:runtime` or documented why it was skipped
-- [ ] `npm pack --dry-run --json` if package contents changed
+- [ ] `npm run pack:check` if package contents changed
 - [ ] `git --no-pager diff --check`
 
 ## Safety
