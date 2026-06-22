@@ -1,8 +1,46 @@
 # TheHood
 
+<p align="center">
+  <img src="docs/assets/thehood-wordmark.svg" alt="TheHood ASCII wordmark" width="760">
+</p>
+
+<p align="center">
+  <strong>Local runtime for governed software goal loops.</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/thehood"><img alt="npm next" src="https://img.shields.io/npm/v/thehood/next?label=npm%40next&color=f97316"></a>
+  <a href="https://github.com/lemberalla/the-hood/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lemberalla/the-hood/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="package.json"><img alt="Node >=22" src="https://img.shields.io/badge/node-%3E%3D22-339933.svg"></a>
+</p>
+
 TheHood is a local, provider-neutral agent runtime for running serious multi-agent software work from Codex, a CLI, and eventually a small macOS menubar companion.
 
-Status: developer preview. TheHood is preparing for `v0.1.0-preview.0` as a local CLI/MCP runtime for governed software goal loops. It is useful for early adopters who are comfortable with local tools, explicit approval boundaries, and experimental provider wiring. It is not a hosted agent service, cloud scheduler, or polished app platform.
+Status: developer preview. TheHood `v0.1.0-preview.0` is published as an npm preview package for early adopters who are comfortable with local tools, explicit approval boundaries, and experimental provider wiring. It is not a hosted agent service, cloud scheduler, or polished app platform.
+
+## Install
+
+```bash
+npm install -g thehood@next
+thehood doctor --repo .
+```
+
+Or try it without installing:
+
+```bash
+npx thehood@next doctor --repo .
+```
+
+TheHood requires Node.js 22 or newer.
+
+## Important Guidelines
+
+- Treat `thehood@next` as a developer preview, not a stable production service.
+- Keep `.thehood/`, `.thehood-browser.json`, provider logs, local env files, and private run artifacts out of git.
+- Models suggest; the runtime enforces permissions, approvals, evidence capture, and final status.
+- Keep implementer and verifier roles separate. Verifier and critic roles should stay read-only.
+- Use ChatGPT Web and MCP connector paths as optional, user-configured experiments until they are promoted to stable surfaces.
 
 The core idea is simple:
 
