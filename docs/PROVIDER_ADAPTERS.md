@@ -18,6 +18,8 @@ Access mode is not an authority boundary. The runtime still owns repo access, pe
 
 `chatgpt-web` supports both `agent-bridge` and `mcp-connector` paths. The agent bridge sends a runtime directive to the ChatGPT Web bridge. MCP connector mode lets ChatGPT call TheHood tools such as repo search, file read, run status, and artifact read through a connector or Secure MCP Tunnel.
 
+`chatgpt-atlas` is an experimental `agent-bridge` provider for a local Computer Use transport. The adapter invokes the packaged `thehood-chatgpt-atlas-bridge` command by default and passes the runtime directive through stdin. The bridge owns the Atlas request protocol, fail-closed parsing, directive acknowledgement checks, and deterministic fake transport. For real desktop use, the bridge delegates UI control to a trusted local Computer Use controller command that operates the user-selected ChatGPT Atlas window, verifies the requested model, and returns a verified controller result envelope containing the normalized `AgentResponse`.
+
 ## Adapter Interface
 
 Each adapter should support:
@@ -154,6 +156,7 @@ Included bridge:
 - Set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` or pass `--close-target-on-failure` to restore cleanup after failed ingestion.
 - Requires ChatGPT responses to echo the current directive acknowledgement in the role payload, so schema-valid answers from stale browser/project context fail closed.
 - Fails closed with a schema-compatible `blocked` or `failed` response when browser access, selectors, model confirmation, or response parsing fails.
+- Launches configured `.js`, `.mjs`, and `.cjs` bridge commands through the current Node executable, and resolves the installed `thehood-chatgpt-web-bridge` alias to the bundled bridge path, so MCP hosts do not depend on `env node` or PATH for the bridge script itself.
 
 Rules:
 
@@ -179,6 +182,62 @@ Risk:
 - Browser UI changes can break automation.
 - Output extraction can be brittle.
 - Terms and product behavior may change.
+
+## ChatGPT Atlas Computer Use Adapter
+
+Purpose:
+
+- Let a user route planning or research work to a visible ChatGPT Atlas session when no Codex-native Atlas plugin is available.
+- Keep Atlas behind the same TheHood provider gates, artifacts, provider waits, and response contract as other browser-backed providers.
+
+Current implementation:
+
+- Provider id: `chatgpt-atlas`
+- Default models: `chatgpt-pro` or `configured`
+- Model policy: `passthrough`
+- Enabled by default and setup-gated in built-in config.
+- Uses `thehood-chatgpt-atlas-bridge` by default; `THEHOOD_CHATGPT_ATLAS_COMMAND` remains an override for custom bridge builds.
+- Real Computer Use transport requires `THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1` after the user selects and confirms the intended Atlas window.
+- Real Computer Use transport uses the packaged `thehood-chatgpt-atlas-controller` in generated MCP config; `THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND` remains an override for custom controllers.
+- Fake transport for deterministic smoke tests uses `THEHOOD_CHATGPT_ATLAS_TRANSPORT=fake` plus `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE` or `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE_FILE`.
+- Sends the runtime directive as stdin.
+- Passes `--model <model>`, `--schema <schema-path>`, `--target "ChatGPT Atlas"`, and `--transport computer-use` to the bridge command.
+- Includes `modelSelection` in the bridge request. For `chatgpt-pro`, the controller must verify or select an acceptable Pro label before posting the prompt.
+- Launches configured `.js`, `.mjs`, and `.cjs` bridge commands through the current Node executable so Computer Use bridge scripts do not rely on shebang resolution inside MCP host environments.
+- Expects stdout to contain a `thehood_chatgpt_atlas_computer_use_result` envelope with `model`, `modelVerified`, optional `observedModel`, and the normalized `AgentResponse` in `response`.
+- Returns `blocked` when the provider is disabled, the target window is not confirmed, or no Computer Use controller is configured.
+- Returns `blocked` when a real Computer Use controller returns a raw `AgentResponse` without model verification.
+- Rejects schema-valid but stale provider output when the response does not echo the current directive acknowledgement.
+
+Computer Use controller protocol:
+
+- Command: `THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND`
+- Packaged command: `thehood-chatgpt-atlas-controller`
+- Args: `--target <target> --model <model> --schema <schema-path> --timeout-ms <n>`
+- Stdin: JSON object with `kind: "thehood_chatgpt_atlas_computer_use_request"`, `target`, `model`, `modelSelection`, `transport`, `timeoutMs`, `requiredDataKey`, `prompt`, and `directiveAck`.
+- Stdout: a JSON object with `kind: "thehood_chatgpt_atlas_computer_use_result"`, `schemaVersion: 1`, `model`, `modelVerified`, optional `observedModel`, and `response`.
+- The controller must operate only the selected Atlas window and must fail closed if the target changes, the requested model cannot be selected or verified, the composer is not ready, ChatGPT is still generating, or the response cannot be extracted safely.
+
+Rules:
+
+- Use a visible, user-selected ChatGPT Atlas window.
+- Treat Computer Use as a transport, not as runtime authority.
+- Do not bypass access controls, subscriptions, provider UI warnings, or the user's confirmation boundaries.
+- Do not upload files, navigate to unrelated external sites, save browser credentials, alter account settings, or transmit sensitive data unless the user explicitly approves that concrete action.
+- Keep provider invocation, repo-context transfer, progress-packet transfer, and response validation owned by TheHood runtime.
+- Fail closed when the bridge command cannot confirm the active Atlas target, cannot verify the requested model before posting, cannot post the directive, cannot see a complete answer, or cannot return the current directive acknowledgement.
+
+Best roles:
+
+- planner
+- researcher
+- orchestrator for narrow advisory loops
+
+Risk:
+
+- Atlas UI and model selector behavior may change.
+- Computer Use can click/type in a real local app, so risky UI actions require action-time user confirmation.
+- The bridge command must not log cookies, local storage, browser profile data, or private account state.
 
 ## ChatGPT MCP Connector Mode
 

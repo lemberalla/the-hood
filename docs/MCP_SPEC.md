@@ -66,6 +66,8 @@ Run `thehood mcp config` or `node dist/cli/main.js mcp config` to print installe
 
 Run `thehood mcp config --chatgpt-web` after launching a debug Chrome profile and selecting the intended ChatGPT model to print snippets with the ChatGPT Web bridge environment variables included.
 
+Run `thehood mcp config --chatgpt-atlas` to print snippets with the packaged ChatGPT Atlas bridge and controller commands included. Real Atlas desktop use still requires selecting the intended Atlas window and setting `THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1`; the packaged controller selects or verifies the requested model before posting. `--chatgpt-web` and `--chatgpt-atlas` can be combined when one MCP server should expose both direct Pro routes.
+
 ## Tools
 
 Implemented tools:
@@ -159,7 +161,11 @@ Input:
 }
 ```
 
-Output includes current TheHood approval policy, ChatGPT Web bridge readiness, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, and recommended paths for ChatGPT MCP connector mode, direct Codex agent-bridge mode, or an abstract no-repo-context Pro prompt.
+Output includes current TheHood approval policy, ChatGPT Pro route resolution, repo-context policy, ChatGPT Web bridge readiness, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, and recommended paths for ChatGPT MCP connector mode, direct Codex agent-bridge mode, Atlas Computer Use bridge mode, or an abstract no-repo-context Pro prompt.
+
+When `route_choice_required` is true or `pro_route.status` is `user_choice_required`, MCP clients should ask the user which ChatGPT Pro route to use before invoking Pro: Chrome/Web bridge, Atlas/Computer Use, or MCP connector. A ready Chrome bridge is only a candidate until the user picks it or saves it with `thehood pro-route set chrome`. Atlas may be selectable before it is ready; if the packaged bridge is present but the target or controller is missing, present those readiness issues instead of silently falling back to Chrome.
+
+Route choice and repo-context choice are separate. After the user picks Chrome/Web or Atlas, if `context_choice_required` is true or `repo_context_policy.repo_visibility.default_gate` is `user_choice_required`, MCP clients should present `repo_context_policy.repo_visibility.user_choices`: commit and push a checkpoint, approve bounded local context transfer, use a no-repo-context prompt, or cancel. Do not treat Atlas or Chrome as blocked solely because the checkout is dirty.
 
 If Codex rejects a direct Pro consult as an external disclosure, do not ask the user to approve the same blocked action again. Call `thehood_pro_access`, then use connector mode or a no-repo-context prompt.
 

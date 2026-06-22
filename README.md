@@ -24,6 +24,7 @@ Status: developer preview. TheHood `v0.1.0-preview.0` is published as an npm pre
 ```bash
 npm install -g thehood@next
 thehood
+thehood version
 thehood doctor --repo .
 ```
 
@@ -41,7 +42,7 @@ TheHood requires Node.js 22 or newer.
 - Keep `.thehood/`, `.thehood-browser.json`, provider logs, local env files, and private run artifacts out of git.
 - Models suggest; the runtime enforces permissions, approvals, evidence capture, and final status.
 - Keep implementer and verifier roles separate. Verifier and critic roles should stay read-only.
-- Use ChatGPT Web and MCP connector paths as optional, user-configured experiments until they are promoted to stable surfaces.
+- Use ChatGPT Web, ChatGPT Atlas, and MCP connector paths as optional, user-configured experiments until they are promoted to stable surfaces.
 
 The core idea is simple:
 
@@ -63,7 +64,7 @@ The first product surface is a CLI plus an MCP server. The macOS menubar app sho
 - Approval gates, protected test/fixture/snapshot/eval classification, isolated patch capture, and runtime-owned integration reports.
 - Runtime-owned evidence: command logs, git status/diff snapshots, provider invocation artifacts, final reports, progress packets, review lanes, revision packets, and agent board snapshots.
 - Same-run summons and bounded fan-out as read-only sidecar evidence, not acceptance votes.
-- ChatGPT Web bridge and ChatGPT MCP connector guidance as experimental, user-configured provider paths.
+- ChatGPT Web bridge, bundled ChatGPT Atlas bridge with a local Computer Use controller protocol, and ChatGPT MCP connector guidance as experimental provider paths.
 
 ## Planned Or Experimental
 
@@ -122,6 +123,7 @@ It supports:
 - guarded local CLI adapters for Codex CLI and Claude Code
 - runtime-owned local agent execution artifacts for Codex CLI and Claude Code command invocations
 - bridge-backed ChatGPT Web adapter for ChatGPT Pro orchestration
+- shipped-enabled ChatGPT Atlas adapter backed by the packaged `thehood-chatgpt-atlas-bridge` command and a user-configured local Computer Use controller
 - provider access-mode metadata for agent bridges, API agents, and MCP connectors
 - persistent TheHood Chrome profile manager for the ChatGPT Web bridge
 - ChatGPT Web auth and composer readiness checks before bridge calls are marked ready
@@ -140,7 +142,7 @@ It supports:
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
 - read-only MCP repo gateway tools for tree, search, file reads, git status, and git diff
 
-ChatGPT Web is wired through a user-configured bridge command. API provider adapters are not wired to external models yet, though OpenAI and Anthropic API key env names are represented in provider config for future adapters. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses. Codex CLI discovers live model slugs, while ChatGPT Web and Claude Code expose configured/custom model passthrough so users can select newly available model aliases without waiting for a TheHood release.
+ChatGPT Web is wired through a user-configured bridge command. ChatGPT Atlas is represented as an enabled-by-default, setup-gated provider backed by the packaged `thehood-chatgpt-atlas-bridge` command; that bridge invokes a trusted local Computer Use controller command to operate the selected Atlas window, verify the requested model, and return a schema-bound `AgentResponse` inside a controller result envelope. API provider adapters are not wired to external models yet, though OpenAI and Anthropic API key env names are represented in provider config for future adapters. Local Codex CLI and Claude Code adapters can be selected by role and must return schema-bound responses. Codex CLI discovers live model slugs, while ChatGPT Web, ChatGPT Atlas, and Claude Code expose configured/custom model passthrough so users can select newly available model aliases without waiting for a TheHood release.
 
 Users can choose model owners per role:
 
@@ -152,13 +154,16 @@ node dist/cli/main.js teams apply spark-plus-sonnet --repo .
 node dist/cli/main.js teams apply pro-claude-high-assurance --repo .
 ```
 
-Users can choose between two ChatGPT Pro paths:
+Users can choose between three ChatGPT Pro routes:
 
-- `agent-bridge`: TheHood invokes the ChatGPT Web bridge as an orchestrator or planner.
+- `chatgpt-web`: TheHood invokes the ChatGPT Web bridge as an orchestrator or planner.
+- `chatgpt-atlas`: TheHood invokes the packaged Atlas bridge, which then calls a trusted local Computer Use controller for a visible ChatGPT Atlas session.
 - `mcp-connector`: ChatGPT connects to TheHood as an MCP connector and uses TheHood's repo/run tools directly.
 
 Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
+`thehood pro-route` controls the default route for ChatGPT Pro only. It does not make every TheHood task use Pro or Atlas; normal roles remain Codex-first unless the user asks for Pro or changes role assignments.
 For connector mode, generate the local setup guide with `thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local`, keep Secure MCP Tunnel running, and validate from a fresh ChatGPT conversation with `thehood_doctor` plus a read-only repo gateway tool. This is separate from the `chatgpt-web` agent bridge and does not use Chrome/CDP bridge environment variables.
+For Atlas mode, `thehood pro-route set atlas --repo .` saves Atlas as the preferred Pro route and uses `thehood-chatgpt-atlas-bridge` by default. Atlas ships enabled, and `thehood mcp config --chatgpt-atlas` wires the packaged `thehood-chatgpt-atlas-controller`; real desktop use still requires selecting the intended Atlas window and setting `THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1`. The controller receives the requested model plus selector labels in the bridge request, must select or verify Pro before posting the prompt, and must return a verified controller result envelope containing the normalized `AgentResponse`. CI and local bridge smoke tests can use `THEHOOD_CHATGPT_ATLAS_TRANSPORT=fake` with `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE` or `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE_FILE`; fake transport is for deterministic tests only.
 When Codex or a tenant policy blocks a direct external disclosure to ChatGPT Web, that is outside TheHood autopilot. Use `thehood_pro_access` to get the local bridge status and a connector-mode handoff instead of repeating approval prompts.
 For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos can use remote refs only when the target provider route is verified. For `chatgpt-web`, TheHood treats remote refs as the default only when the active bridge GitHub connector surface is confirmed; otherwise it presents connector setup, explicit local context approval, no-repo-context, or cancel paths.
 
@@ -186,6 +191,8 @@ node dist/cli/main.js agent-board --repo .
 node dist/cli/main.js agent-board --repo . --artifact --json
 node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
+node dist/cli/main.js pro-route --repo .
+node dist/cli/main.js pro-route set atlas --repo .
 node dist/cli/main.js roles --repo .
 node dist/cli/main.js recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
 node dist/cli/main.js goal "Prepare release metadata" --repo . --max-iterations 5
@@ -233,7 +240,7 @@ Local runtime
   owns state, permissions, logs, worktrees, approvals, and test gates
 
 Provider adapters
-  connect to ChatGPT Pro, OpenAI API, Anthropic API, Codex, Claude Code, and local models
+  connect to ChatGPT Pro, ChatGPT Atlas via Computer Use, OpenAI API, Anthropic API, Codex, Claude Code, and local models
 
 MCP connector mode
   lets ChatGPT, Codex, or another MCP host call TheHood's runtime and repo tools

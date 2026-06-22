@@ -69,6 +69,7 @@ Then use the opt-in config generator:
 
 ```bash
 node dist/cli/main.js mcp config --chatgpt-web
+node dist/cli/main.js mcp config --chatgpt-atlas
 ```
 
 This adds:
@@ -81,6 +82,14 @@ This adds:
 
 Use `--cdp-url <url>` if Chrome is listening on a different DevTools endpoint.
 
+The Atlas config adds:
+
+- `THEHOOD_CHATGPT_ATLAS_COMMAND=thehood-chatgpt-atlas-bridge` for installed packages, or the local `dist/bridges/chatgptAtlasBridge.js` path for local builds
+- `THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND=thehood-chatgpt-atlas-controller` for installed packages, or the local `dist/bridges/chatgptAtlasController.js` path for local builds
+- `THEHOOD_CHATGPT_ATLAS_TRANSPORT=computer-use`
+
+This wires the packaged bridge and controller. Before real Atlas desktop use, select the intended Atlas window and set `THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1`. The controller receives a JSON bridge request on stdin, must select or verify the requested model before posting the prompt, and must return a verified controller result envelope with the normalized `AgentResponse` inside. Use `THEHOOD_CHATGPT_ATLAS_TRANSPORT=fake` with `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE` or `THEHOOD_CHATGPT_ATLAS_FAKE_RESPONSE_FILE` only for deterministic local tests.
+
 Before starting the Codex app, check the local bridge readiness:
 
 ```bash
@@ -89,6 +98,8 @@ npm run smoke:codex-config -- --config ~/.codex/config.toml --repo /path/to/repo
 ```
 
 For `chatgpt-web`, `doctor` verifies that the bridge command is configured and executable, the model confirmation guard is enabled, Chrome DevTools is reachable, a ChatGPT tab is visible, the page is authenticated, and the composer is ready. Common issues are `bridge_command_not_configured`, `model_not_confirmed`, `cdp_unreachable`, `chatgpt_tab_not_found`, `chatgpt_auth_required`, `chatgpt_composer_not_ready`, and `chatgpt_page_uninspectable`.
+
+For `chatgpt-atlas`, `doctor` verifies that the packaged bridge command is present, the selected target has been confirmed, and a local Computer Use controller command is configured. Atlas ships enabled by default, so common issues are `atlas_target_not_confirmed`, `computer_use_command_not_configured`, and `command_not_found`.
 
 For `codex-cli`, `doctor` asks the installed Codex CLI for its current model catalog with `codex debug models`. TheHood keeps only sanitized model metadata, resolves friendly assignments such as `codex-cli:spark` against that live catalog, and reports `model_not_available:<model>` when a custom role assignment is not supported by the current CLI/account.
 
@@ -131,7 +142,7 @@ Codex can request renderable agent visibility by calling `thehood_agent_board` w
 
 Codex can inspect the general model-access path by calling `thehood_model_access`. This is a local-only preflight: it does not call Claude, Codex CLI, ChatGPT, or API providers and does not send repo context externally. Use it before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. Dirty or unpushed repos should show the user choices returned by the preflight: commit and push a checkpoint, approve bounded local context/diff transfer, use no-repo-context strategy, or cancel. Clean pushed GitHub repos should default to remote refs only when the preflight reports the provider route as confirmed; for `chatgpt-web`, unconfirmed bridge GitHub connector access still requires user choice. If host policy blocks the direct call, present the returned compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
 
-Codex can inspect the Pro access path by calling `thehood_pro_access`. This is a local-only preflight: it does not call ChatGPT Pro and does not send repo context externally. Use it when a direct `chatgpt-web` consult is rejected by Codex host policy, when bridge readiness is unclear, or when the right answer is to switch to ChatGPT MCP connector mode instead of asking for the same approval again.
+Codex can inspect the Pro access path by calling `thehood_pro_access`. This is a local-only preflight: it does not call ChatGPT Pro and does not send repo context externally. Use it when a direct `chatgpt-web` consult is rejected by Codex host policy, when bridge readiness is unclear, or when the right answer is to switch to ChatGPT MCP connector mode instead of asking for the same approval again. If it returns `route_choice_required` or `pro_route.status: "user_choice_required"`, ask the user whether to use Chrome/Web bridge, Atlas/Computer Use, or MCP connector before calling Pro. After the user picks Chrome/Web or Atlas, if it returns `context_choice_required` or `repo_context_policy.repo_visibility.default_gate: "user_choice_required"`, show the repo-context choices from `repo_context_policy.repo_visibility.user_choices` instead of treating the route as blocked by the dirty checkout.
 
 First verification sequence from a Codex chat:
 
@@ -270,6 +281,18 @@ export THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS=1
 ```
 
 By default, TheHood runtime calls use one ChatGPT target per run. The first bridge call creates and verifies a fresh composer, then later ChatGPT Web calls in the same run reuse that target instead of opening a new chat after every Pro answer. The bridge still requires the visible response to echo the current `directiveAck` inside the role payload, so stale project or conversation context fails closed. Calls without a run id keep the older one-target-per-call lifecycle: close after a successfully parsed response, keep the target open when browser access, parsing, acknowledgement, or timeout handling fails. Set `THEHOOD_CHATGPT_WEB_REUSE_CHAT=1` only when intentionally debugging against the current conversation, set `THEHOOD_CHATGPT_WEB_RUN_SCOPED_TARGETS=0` to disable run-scoped target reuse, and set `THEHOOD_CHATGPT_WEB_KEEP_TARGET_ON_FAILURE=0` only when you want failed bridge calls to clean up their temporary tabs.
+
+`chatgpt-atlas` uses the packaged Atlas bridge by default:
+
+```bash
+export THEHOOD_CHATGPT_ATLAS_COMMAND=thehood-chatgpt-atlas-bridge
+export THEHOOD_CHATGPT_ATLAS_TRANSPORT=computer-use
+export THEHOOD_CHATGPT_ATLAS_TARGET="ChatGPT Atlas"
+export THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1
+export THEHOOD_CHATGPT_ATLAS_COMPUTER_USE_COMMAND=thehood-chatgpt-atlas-controller
+```
+
+The controller protocol is intentionally narrow. The bridge invokes the controller with `--target`, `--model`, `--schema`, and `--timeout-ms`, sends a JSON object on stdin containing the requested model, selector labels, TheHood prompt, and directive acknowledgement, and accepts only a verified controller result envelope containing a normalized `AgentResponse` that echoes the current directive acknowledgement. If the target is not confirmed, the controller is missing, the target changes, the requested model cannot be verified before posting, ChatGPT is still generating, or the output is stale/unparseable, the bridge returns `blocked` or `failed` rather than falling back to another provider.
 
 Example persistent role assignment:
 

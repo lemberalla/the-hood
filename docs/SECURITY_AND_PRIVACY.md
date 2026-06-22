@@ -39,7 +39,7 @@ Rules:
 
 ## Browser-Based Providers
 
-The ChatGPT Web adapter is sensitive because it depends on a user-authenticated browser session.
+The ChatGPT Web adapter is sensitive because it depends on a user-authenticated browser session. The ChatGPT Atlas adapter is additionally sensitive because the packaged Atlas bridge can delegate to a local Computer Use controller against a visible local app window.
 
 Rules:
 
@@ -51,8 +51,11 @@ Rules:
 - Detect model availability visibly and fail if uncertain.
 - Capture only visible model outputs needed for the run.
 - Do not invoke ChatGPT Web for repo work until the user explicitly approves that provider invocation.
-- Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer or has configured low-risk external transfer auto-approval.
+- Do not invoke ChatGPT Atlas for repo work until the user explicitly approves that provider invocation.
+- Do not send bounded repo context back to ChatGPT Web or ChatGPT Atlas until the user explicitly approves that external context transfer or has configured low-risk external transfer auto-approval.
 - For clean pushed GitHub repos, ChatGPT Web may receive a refs-only `remote_context` artifact instead of local file excerpts only after the active bridge GitHub connector surface is confirmed. The directive tells ChatGPT to use its GitHub connector at the exact commit; it does not grant TheHood new GitHub access, attach ChatGPT apps, or bypass the user's ChatGPT connector permissions.
+- Computer Use-backed Atlas controllers must treat UI actions as live local actions. They must not upload files, accept risky browser/app prompts, save credentials, alter account settings, or transmit sensitive data unless the user explicitly approves that concrete next action.
+- The packaged Atlas bridge must fail closed when the target is not confirmed, the controller is missing, the active target changes, the requested model was not verified before posting, the response cannot be extracted safely, or the response does not echo the current directive acknowledgement.
 - In autopilot mode, treat the user-configured approval policy as the approval source and still fail closed on secret-risk transfers, protected test changes, destructive commands, dependency installs, and dirty-checkout integration blockers.
 - Runtime-owned revision packets may route fixable reviewer findings back to the implementer, but unsafe critic feedback, verifier `ask_user` or `abort`, and protected-path gates must still stop for review.
 

@@ -8,10 +8,14 @@ The working command name is `thehood`.
 
 ```bash
 thehood init
+thehood version
 thehood setup
 thehood config show
 thehood config set max-iterations 8
 thehood config set fanout-max-items 4
+thehood config set chatgpt-pro-route auto|chrome|atlas|mcp
+thehood pro-route
+thehood pro-route set auto|chrome|atlas|mcp
 thehood models
 thehood providers
 thehood doctor
@@ -365,6 +369,7 @@ thehood approvals policy set mode manual|auto-low-risk|autopilot --repo .
 thehood approvals policy set external-transfers manual|auto-low-risk --repo .
 thehood config set max-iterations 8 --repo .
 thehood config set fanout-max-items 4 --repo .
+thehood pro-route set chrome|atlas|mcp|auto --repo .
 thehood teams apply codex-default|pro-orchestrator|claude-critic|claude-second-judge|spark-plus-sonnet|claude-builder|pro-claude-high-assurance --repo .
 thehood roles set verifier codex-cli:spark --repo .
 thehood browser status
@@ -373,6 +378,10 @@ thehood browser stop
 ```
 
 The settings UI displays and routes these controls. It does not create a new orchestration path, bypass role invariants, or weaken approval gates.
+
+`thehood pro-route` inspects the saved ChatGPT Pro route preference and current route readiness. The default `auto` preference means no route default is saved, so TheHood should ask the user how to reach Pro even when Chrome is the only currently ready direct bridge. `thehood pro-route set chrome|atlas|mcp|auto --repo .` changes only the default Pro route; it does not make every role use Pro. Atlas ships as an enabled provider and uses the packaged `thehood-chatgpt-atlas-bridge` command by default. Generated Atlas MCP config also wires `thehood-chatgpt-atlas-controller`; the route remains not ready for real desktop use until the selected Atlas target is confirmed with `THEHOOD_CHATGPT_ATLAS_TARGET_CONFIRMED=1`. Deterministic tests can use `THEHOOD_CHATGPT_ATLAS_TRANSPORT=fake`.
+
+`thehood mcp config --chatgpt-atlas` prints MCP env snippets for the packaged Atlas bridge. `--chatgpt-web` can be combined with `--chatgpt-atlas` when the same MCP server should expose both bridge routes.
 
 ## ChatGPT MCP Tunnel Helper
 

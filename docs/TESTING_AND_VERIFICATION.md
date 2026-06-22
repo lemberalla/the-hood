@@ -42,6 +42,7 @@ Current implementation:
 - After validation evidence is captured, the runtime attaches a `review_routing` artifact that classifies implementation risk and records which subjective review lanes are required or skipped.
 - Provider calls attach typed provider-wait records and `provider_wait` artifacts before a provider response is accepted. Active waits should be checked through run status before retrying a long-running browser or bridge-backed provider call.
 - Local command providers such as Codex CLI and Claude Code attach redacted stdout/stderr `log` artifacts plus compact `provider_invocation` artifacts with command, role, provider/model, workspace mode, sandbox or permission mode, exit code, timeout state, output lengths and refs, parse status, and isolated patch refs when present.
+- ChatGPT Atlas bridge coverage must use deterministic fake transport in automated tests. Real Atlas desktop Computer Use validation is a manual gated check because it controls an authenticated local app window.
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
 - Completed runs attach a runtime-owned final report artifact with command, artifact, and approval refs.
