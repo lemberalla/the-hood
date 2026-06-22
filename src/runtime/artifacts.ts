@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { ensureLocalStateIgnored } from "./localStateIgnore.js";
 import { getProjectPaths } from "./paths.js";
 import { loadRun } from "./store.js";
 import { InputError, PermissionDeniedError } from "./errors.js";
@@ -37,6 +38,7 @@ export const writeRunArtifact = async (input: WriteArtifactInput): Promise<RunAr
   const artifactDir = path.join(getProjectPaths(input.repoPath).artifactsDir, input.runId, input.kind);
   const artifactPath = path.join(artifactDir, safeArtifactName(input.name));
 
+  await ensureLocalStateIgnored(input.repoPath);
   await fs.mkdir(artifactDir, { recursive: true });
   await fs.writeFile(artifactPath, input.content, "utf8");
 

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { ensureLocalStateIgnored } from "./localStateIgnore.js";
 import { getProjectPaths } from "./paths.js";
 import type { RunRecord } from "./types.js";
 
@@ -10,6 +11,7 @@ const getRunDir = (repoPath: string, runId: string): string =>
 
 export const saveRun = async (run: RunRecord): Promise<void> => {
   const runDir = getRunDir(run.repoPath, run.runId);
+  await ensureLocalStateIgnored(run.repoPath);
   await fs.mkdir(runDir, { recursive: true });
   await fs.writeFile(path.join(runDir, runFileName), `${JSON.stringify(run, null, 2)}\n`, "utf8");
 };

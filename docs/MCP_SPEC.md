@@ -12,7 +12,9 @@ thehood mcp
 
 The current implementation uses the MCP stdio transport: newline-delimited JSON-RPC messages over stdin/stdout. It implements initialization, `tools/list`, `tools/call`, and `ping`.
 
-For ChatGPT Web, use ChatGPT Developer Mode with an MCP connector. For private local repos, prefer OpenAI Secure MCP Tunnel pointing at the stdio command:
+## ChatGPT Developer Mode Connector
+
+For ChatGPT Web/Pro as an MCP host, use ChatGPT Developer Mode with an MCP connector. For private local repos, prefer OpenAI Secure MCP Tunnel pointing at the local TheHood stdio command:
 
 ```bash
 tunnel-client init \
@@ -27,6 +29,14 @@ tunnel-client run --profile thehood-local
 
 Then create a ChatGPT connector using the tunnel connection and enable it in a new conversation. In that mode, ChatGPT can call TheHood's exact repo and run tools instead of receiving a prebuilt summary.
 
+Validate connector mode from a fresh ChatGPT conversation by asking ChatGPT to use the TheHood connector to call:
+
+1. `thehood_doctor` for the target `repo_path`.
+2. `thehood_repo_tree` or `thehood_repo_read_file` for a harmless path.
+3. `thehood_pro_access` when ChatGPT should understand the available Pro bridge and MCP connector handoff paths.
+
+Successful connector validation proves only that ChatGPT can reach TheHood MCP and receive bounded tool results. It does not run a live TheHood orchestration, approve provider calls, or replace runtime verification.
+
 The CLI can print the same tunnel setup shape:
 
 ```bash
@@ -35,6 +45,8 @@ node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
 ```
 
 Use the local-build command while developing TheHood so the tunnel points at the current checkout's `dist/cli/main.js`.
+
+This connector path is separate from the `chatgpt-web` agent bridge. Connector mode does not use the TheHood-managed Chrome profile, CDP, or `THEHOOD_CHATGPT_WEB_*` environment variables. The bridge path is for Codex or TheHood asking the runtime to invoke ChatGPT Web; connector mode is for ChatGPT acting as the MCP host and asking TheHood for repo/run evidence through tools.
 
 References:
 
@@ -62,6 +74,7 @@ Implemented tools:
 - `thehood_roles`
 - `thehood_model_access`
 - `thehood_pro_access`
+- `thehood_recommend_loop`
 - `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
@@ -128,7 +141,7 @@ Output includes current TheHood approval policy, provider/model readiness, repo 
 Repo visibility drives the default UX:
 
 - Dirty or unpushed repos require a user choice: commit and push a checkpoint first, approve bounded local context or diff transfer, use no-repo-context strategy, or cancel.
-- Clean pushed GitHub repos default to remote refs when the provider supports that route. For `chatgpt-web`, TheHood should prefer ChatGPT's GitHub connector at the exact commit instead of sending local file contents through Codex.
+- Clean pushed GitHub repos default to remote refs only when the provider route is verified. For `chatgpt-web`, TheHood should prefer ChatGPT's GitHub connector at the exact commit only when the active ChatGPT Web bridge GitHub connector surface is confirmed; otherwise the preflight should present connector setup, explicit local context approval, no-repo-context, or cancel paths.
 
 If Codex rejects a direct model-backed call as an external disclosure, do not ask the user to type a fresh long approval phrase. Present the model-access approval packet, show the exact approval text in a fenced `text` block if the user accepts, or switch to no-repo-context or connector mode.
 
@@ -149,6 +162,29 @@ Input:
 Output includes current TheHood approval policy, ChatGPT Web bridge readiness, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, and recommended paths for ChatGPT MCP connector mode, direct Codex agent-bridge mode, or an abstract no-repo-context Pro prompt.
 
 If Codex rejects a direct Pro consult as an external disclosure, do not ask the user to approve the same blocked action again. Call `thehood_pro_access`, then use connector mode or a no-repo-context prompt.
+
+### `thehood_recommend_loop`
+
+Recommend a loop recipe and draft a completion contract without invoking providers, starting a run, editing files, creating schedules, or sending context externally.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "goal": "string",
+  "constraints": ["optional local-only constraints"],
+  "acceptance_criteria": ["optional edited contract criteria"],
+  "validation_commands": ["optional edited validation commands"],
+  "allowed_paths": ["optional edited allowed paths"],
+  "forbidden_changes": ["optional edited forbidden changes"],
+  "max_iterations": 5
+}
+```
+
+Output includes the recommended recipe, confidence, reason, recommended stack, alternatives, a completion contract draft, app card actions, renderer-facing `card`, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a loop-plan fallback when it does not consume `card` directly.
+
+Codex should call this before asking the user to choose a recipe name. Render `card` first when present, and use `artifact` as the generic dashboard/table fallback. If the user edits the contract, call this tool again with the edited fields. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
 
 ### `thehood_agent_board`
 
@@ -645,7 +681,7 @@ Input:
 Recommended flow inside a Codex chat:
 
 1. Call `thehood_doctor` to check available provider adapters and local CLI commands.
-2. Call `thehood_model_access` before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, present the user choices from the preflight. If the repo is clean and pushed, use the remote GitHub refs default when the provider supports it. If host policy rejects a direct call, present the compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
+2. Call `thehood_model_access` before Claude/Codex/GPT/Pro consults, fan-outs, or orchestrations that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, present the user choices from the preflight. If the repo is clean and pushed, use the remote GitHub refs default only when the preflight reports the provider route as confirmed; for `chatgpt-web`, unconfirmed bridge GitHub connector access still requires user choice. If host policy rejects a direct call, present the compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
 3. Call `thehood_pro_access` before a direct `chatgpt-web` consult when the user asks for Pro from Codex and ChatGPT Web bridge readiness or ChatGPT MCP connector handoff details matter.
 4. Call `thehood_assign_roles` when the user wants persistent role ownership, such as Pro as orchestrator, Claude as critic/verifier, Claude as implementer, or Spark plus Sonnet role separation.
 5. Call `thehood_consult`, `thehood_summon`, or `thehood_fanout` to bring in read-only agents such as a critic, QA tester, or Claude second judge; use `thehood_continue` with `approval: "none"` when no manual approval gate is active so runtime autopilot can auto-approve bounded provider gates when policy allows.

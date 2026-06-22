@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Getting Started - TheHood</title>
+    <meta name="description" content="Build TheHood locally and run the synthetic public-preview stub demo.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a aria-current="page" href="getting-started.html">Get Started</a>
+          <a href="loops.html">Loops</a>
+          <a href="provider-matrix.html">Providers</a>
+          <a href="security.html">Security</a>
+          <a href="contributing.html">Contributing</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a aria-current="page" href="getting-started.html">Getting Started</a>
+        <a href="loops.html">Goal Loops</a>
+        <a href="provider-matrix.html">Provider Matrix</a>
+        <a href="security.html">Security</a>
+        <a href="contributing.html">Contributing</a>
+        <a href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Local preview</p>
+        <h1>Getting Started</h1>
+        <p>The public preview is designed to work from a local checkout first. After npm publishing, the same commands should work through the `thehood` binary.</p>
+
+        <h2>Build</h2>
+        <div class="terminal"><pre><code>npm install
+npm run build
+npm run smoke:runtime
+npm run smoke:mcp</code></pre></div>
+
+        <h2>Initialize A Repo</h2>
+        <div class="terminal"><pre><code>node dist/cli/main.js init --repo .
+node dist/cli/main.js doctor --repo .
+node dist/cli/main.js roster --repo .</code></pre></div>
+
+        <h2>Run The Synthetic Demo</h2>
+        <p>The stub demo proves loop mechanics without external providers.</p>
+        <div class="terminal"><pre><code>DEMO_REPO="$(mktemp -d)"
+node dist/cli/main.js init --repo "$DEMO_REPO"
+node dist/cli/main.js approvals policy set mode autopilot --repo "$DEMO_REPO"
+cat &gt; "$DEMO_REPO/package.json" &lt;&lt;'JSON'
+{
+  "scripts": {
+    "typecheck": "node -e \"process.stdout.write('demo validation ok\\n')\""
+  }
+}
+JSON
+node dist/cli/main.js goal "Synthetic demo: prove a governed local loop can complete" \
+  --repo "$DEMO_REPO" \
+  --orchestrator stub:orchestrator \
+  --implementer stub:implementer \
+  --qa stub:qa \
+  --verifier stub:verifier \
+  --critic stub:critic \
+  --max-iterations 5 \
+  --json</code></pre></div>
+
+        <h2>Expected Result</h2>
+        <ul>
+          <li>The run reaches `completed`.</li>
+          <li>The verifier approves runtime evidence.</li>
+          <li>The validation summary reports zero failed commands.</li>
+          <li>No external model, browser bridge, API provider, or MCP connector is used.</li>
+        </ul>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `docs/DEMO.md` and `examples/stub-demo/README.md`.</div></footer>
+  </body>
+</html>

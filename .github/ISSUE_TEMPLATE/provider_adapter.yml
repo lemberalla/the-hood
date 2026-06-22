@@ -1,0 +1,50 @@
+name: Provider adapter
+description: Propose or track a provider adapter
+labels:
+  - provider-adapter
+body:
+  - type: dropdown
+    id: provider-mode
+    attributes:
+      label: Provider mode
+      options:
+        - agent-bridge
+        - api-agent
+        - mcp-connector
+        - local command
+        - local model
+    validations:
+      required: true
+  - type: textarea
+    id: auth
+    attributes:
+      label: Auth and secret handling
+      description: Where do credentials live, how are they redacted, and what must never be logged?
+    validations:
+      required: true
+  - type: textarea
+    id: permissions
+    attributes:
+      label: Permissions and approval gates
+      description: Explain provider invocation, external transfer, filesystem, and command boundaries.
+    validations:
+      required: true
+  - type: textarea
+    id: schema
+    attributes:
+      label: Output schema
+      description: How will responses normalize into TheHood AgentResponse contracts?
+    validations:
+      required: true
+  - type: textarea
+    id: failure
+    attributes:
+      label: Failure behavior
+      description: How should the adapter fail closed?
+  - type: textarea
+    id: test-plan
+    attributes:
+      label: Test plan
+      description: Include smoke/integration checks and docs updates.
+    validations:
+      required: true

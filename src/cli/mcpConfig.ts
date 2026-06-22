@@ -153,11 +153,14 @@ export const getMcpTunnelConfigReport = (
       "Enable ChatGPT Developer Mode in Settings -> Apps & Connectors -> Advanced settings.",
       "Create a connector and choose Tunnel as the connection type.",
       "Select the tunnel id used above, then create or refresh the connector.",
-      "In a new chat, open the + menu, choose More, and enable the TheHood connector."
+      "In a new chat, open the + menu, choose More, and enable the TheHood connector.",
+      "Validate the connector by asking ChatGPT to call thehood_doctor for your repo_path, then a read-only repo gateway tool such as thehood_repo_tree."
     ],
     notes: [
       "Keep tunnel-client run active while ChatGPT uses the connector.",
       "TheHood remains the local runtime and repo gateway; ChatGPT receives only tool results it calls.",
+      "This MCP connector path is separate from the chatgpt-web agent bridge and does not use Chrome, CDP, or THEHOOD_CHATGPT_WEB_* variables.",
+      "Use trusted MCP hosts for private repos because connector tool results can disclose repo and run data.",
       "Prefer the local build command while developing this checkout, and the installed command after publishing the package."
     ]
   };

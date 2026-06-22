@@ -1,0 +1,45 @@
+name: Release checklist
+description: Track a release candidate checklist
+labels:
+  - release
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: v0.1.0-preview.0
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA
+    validations:
+      required: true
+  - type: checkboxes
+    id: validation
+    attributes:
+      label: Validation
+      options:
+        - label: npm ci
+        - label: npm run typecheck
+        - label: npm run build
+        - label: npm run smoke:mcp
+        - label: npm run smoke:codex-config
+        - label: npm run smoke:runtime
+        - label: npm pack --dry-run --json
+        - label: git --no-pager diff --check
+        - label: clean git status
+  - type: checkboxes
+    id: manual
+    attributes:
+      label: Manual external settings
+      options:
+        - label: branch protection enabled
+        - label: CI required before merge
+        - label: force-push disabled on main
+        - label: private vulnerability reporting enabled
+        - label: secret scanning or push protection enabled if available
+        - label: npm Trusted Publisher configured
+        - label: package install tested from a clean environment
+        - label: website deployed

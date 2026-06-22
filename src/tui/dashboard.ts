@@ -96,13 +96,11 @@ const wideMasthead = [
   "   ╚═╝   ╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝"
 ];
 
-const compactMasthead = [
-  " _______ _          _   _                 _ ",
-  "|__   __| |        | | | |               | |",
-  "   | |  | |__   ___| |_| | ___   ___   __| |",
-  "   | |  | '_ \\ / _ \\  _  |/ _ \\ / _ \\ / _` |",
-  "   | |  | | | |  __/ | | | (_) | (_) | (_| |",
-  "   |_|  |_| |_|\\___|_| |_|\\___/ \\___/ \\__,_|"
+const mastheadSubtitles = [
+  "repo = neighborhood  •  agents = crew  •  runs = jobs  •  approvals = checkpoints  •  verifier = closer",
+  "repo = neighborhood  •  agents = crew  •  runs = jobs  •  approvals = checkpoints",
+  "repo = neighborhood  •  agents = crew  •  runs = jobs",
+  "repo = neighborhood  •  agents = crew"
 ];
 
 const markLines = [
@@ -407,16 +405,20 @@ const buildView = (input: DashboardInput): DashboardView => {
   };
 };
 
+const mastheadSubtitle = (width: number): string => {
+  const subtitle = mastheadSubtitles.find((candidate) => textLength(candidate) <= width);
+  const fallback = mastheadSubtitles[mastheadSubtitles.length - 1] ?? "";
+  return subtitle ?? truncateEnd(fallback, width);
+};
+
 const renderMasthead = (width: number, useColor: boolean): string => {
-  const lines = width >= 90 ? wideMasthead : compactMasthead;
-  const subtitle = width >= 90
-    ? "repo = neighborhood  •  agents = crew  •  runs = jobs  •  approvals = checkpoints  •  verifier = closer"
-    : "repo=neighborhood  •  agents=crew  •  runs=jobs  •  approvals=checkpoints";
+  const bodyWidth = width - 4;
+  const subtitle = mastheadSubtitle(bodyWidth);
   const body = [
     "",
-    ...lines.map((line) => centered(line, width - 4)),
+    ...wideMasthead.map((line) => centered(line, bodyWidth)),
     "",
-    centered(truncateEnd(subtitle, width - 4), width - 4)
+    centered(subtitle, bodyWidth)
   ];
 
   return style(frame("THEHOOD", body, width, false, "amber"), "amber", useColor);

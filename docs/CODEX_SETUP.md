@@ -33,6 +33,29 @@ The command prints two TOML snippets:
 
 Use one snippet in Codex's MCP server configuration.
 
+## ChatGPT MCP Connector Mode
+
+This path is for ChatGPT Web/Pro acting as an MCP host. It is not the `chatgpt-web` browser bridge that Codex can ask TheHood to invoke.
+
+Generate deterministic Secure MCP Tunnel guidance for both installed and local-build commands:
+
+```bash
+thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+```
+
+Use the local-build command while developing this checkout so ChatGPT reaches the current `dist/cli/main.js`. The helper does not start the tunnel, install `tunnel-client`, configure ChatGPT, or contact OpenAI; it only prints the command shape TheHood expects.
+
+After running `tunnel-client init`, `tunnel-client doctor --profile thehood-local --explain`, and `tunnel-client run --profile thehood-local`, create the ChatGPT connector from the tunnel connection and enable it in a new ChatGPT conversation.
+
+First connector validation from ChatGPT:
+
+1. Ask ChatGPT to call `thehood_doctor` for the target `repo_path`.
+2. Ask ChatGPT to call `thehood_repo_tree` or `thehood_repo_read_file` for a harmless path.
+3. Ask ChatGPT to call `thehood_pro_access` when it needs the Pro bridge readiness and connector-mode handoff options.
+
+TheHood remains the local runtime and repo gateway in connector mode. ChatGPT receives only bounded tool results it calls, and private repos should use trusted MCP hosts because repo and run data can be disclosed through those results.
+
 For ChatGPT Pro through the included browser bridge, start the TheHood-managed browser profile and select the intended model:
 
 ```bash
@@ -79,6 +102,7 @@ After restart, the TheHood server should expose these tools:
 - `thehood_roles`
 - `thehood_model_access`
 - `thehood_pro_access`
+- `thehood_recommend_loop`
 - `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
@@ -97,11 +121,15 @@ After restart, the TheHood server should expose these tools:
 
 When developing TheHood itself, rebuild and restart the Codex app or MCP session before validating newly changed tool output. Existing Codex chats can keep an already-started MCP server process alive, so code changes may pass `smoke:codex-config` while the current chat still shows the previous tool behavior.
 
-Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `multi_model_team_presets`, `provider_model_passthrough`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, `critic_trigger_artifacts`, `pro_access_preflight`, `model_access_preflight`, `codex_agent_board`, and `codex_agent_board_artifact`, the chat is still connected to an older MCP server process.
+Use `thehood_doctor` as the in-chat stale-server check. Current builds report `runtime.capabilities`; if Codex does not show expected capabilities such as `structured_mcp_next_actions`, `approval_artifact_next_actions`, `protected_integrated_patch_gate`, `cli_artifact_reads`, `approval_phrase_enforcement`, `final_report_artifacts`, `mcp_final_report_next_action`, `canonical_memory_rehydration`, `provider_directive_ack`, `local_agent_execution_artifacts`, `max_iteration_enforcement`, `validation_command_capture`, `review_routing_policy`, `chatgpt_browser_manager`, `chatgpt_web_bridge_fail_fast`, `chatgpt_web_session_isolation`, `chatgpt_web_auth_readiness`, `branded_tui_shell`, `operator_next_actions`, `loop_responsibility_schedule`, `crew_lane_trail`, `revision_trail`, `runtime_loop_runner`, `autopilot_approval_policy`, `mcp_autopilot_continue_guidance`, `run_status_insights`, `same_run_agent_summons`, `bounded_same_run_fanout`, `runtime_team_presets`, `multi_model_team_presets`, `loop_recommendation_router`, `codex_loop_plan_artifact`, `provider_model_passthrough`, `configurable_budget_envelopes`, `model_assisted_qa_tester`, `critic_trigger_artifacts`, `pro_access_preflight`, `model_access_preflight`, `codex_agent_board`, and `codex_agent_board_artifact`, the chat is still connected to an older MCP server process.
+
+Codex can recommend a loop shape before starting work by calling `thehood_recommend_loop`. The tool is read-only and returns a recommended recipe, recommended stack, draft completion contract, alternatives, editable card actions, renderer-facing `card`, `runAction`, and dashboard payload for a loop-plan card. Recommendation does not call providers, edit files, approve gates, or start schedules; accepting the card should invoke the returned runtime action.
+
+When developing locally, build the runtime and run `npm run smoke:codex-config` to verify a fresh MCP launch exposes current tools. Existing Codex conversations may keep a previously loaded tool schema; if the smoke passes but the current thread does not show `thehood_recommend_loop`, start a new Codex thread or reload the Codex app/session so it reconnects to TheHood.
 
 Codex can request renderable agent visibility by calling `thehood_agent_board` with `include_artifact: true`. The returned `artifact.manifest` and `artifact.snapshot` are dashboard payloads derived from runtime state and can be passed to an available Codex artifact renderer. Rendering remains a display layer: it does not schedule agents, approve gates, or grant tools.
 
-Codex can inspect the general model-access path by calling `thehood_model_access`. This is a local-only preflight: it does not call Claude, Codex CLI, ChatGPT, or API providers and does not send repo context externally. Use it before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. Dirty or unpushed repos should show the user choices returned by the preflight: commit and push a checkpoint, approve bounded local context/diff transfer, use no-repo-context strategy, or cancel. Clean pushed GitHub repos should default to remote refs when the provider supports that route. If host policy blocks the direct call, present the returned compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
+Codex can inspect the general model-access path by calling `thehood_model_access`. This is a local-only preflight: it does not call Claude, Codex CLI, ChatGPT, or API providers and does not send repo context externally. Use it before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. Dirty or unpushed repos should show the user choices returned by the preflight: commit and push a checkpoint, approve bounded local context/diff transfer, use no-repo-context strategy, or cancel. Clean pushed GitHub repos should default to remote refs only when the preflight reports the provider route as confirmed; for `chatgpt-web`, unconfirmed bridge GitHub connector access still requires user choice. If host policy blocks the direct call, present the returned compact approval packet with `approval_packet.copyable_text_block` as a fenced `text` block, or switch to no-repo-context or connector mode.
 
 Codex can inspect the Pro access path by calling `thehood_pro_access`. This is a local-only preflight: it does not call ChatGPT Pro and does not send repo context externally. Use it when a direct `chatgpt-web` consult is rejected by Codex host policy, when bridge readiness is unclear, or when the right answer is to switch to ChatGPT MCP connector mode instead of asking for the same approval again.
 
@@ -109,7 +137,7 @@ First verification sequence from a Codex chat:
 
 1. Call `thehood_doctor` for the target repo and confirm active roles have no issues.
 2. Call `thehood_roles` or `thehood_agent_board` and confirm the agent roster shows the intended orchestrator, implementer, QA, verifier, and critic owners.
-3. Call `thehood_model_access` before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned user choices. If the repo is clean and pushed, use the remote GitHub refs default when supported. If Codex host policy blocks external disclosure, use the returned compact approval packet and show `approval_packet.copyable_text_block` in a fenced `text` block, or switch to no-repo-context or connector mode.
+3. Call `thehood_model_access` before external model-backed consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned user choices. If the repo is clean and pushed, use the remote GitHub refs default only when the preflight reports the provider route as confirmed. If Codex host policy blocks external disclosure, use the returned compact approval packet and show `approval_packet.copyable_text_block` in a fenced `text` block, or switch to no-repo-context or connector mode.
 4. Call `thehood_pro_access` before direct Pro consults from Codex when ChatGPT Web bridge readiness or connector-mode handoff details matter.
 5. Call `thehood_plan` for a harmless read-only goal.
 6. Call `thehood_continue` with `approval: "none"` for that run. In manual mode, confirm it stops for explicit approval before invoking the configured read-only provider, which is Codex CLI by default. In autopilot mode, confirm provider invocation is auto-approved and recorded as `approval_auto_approved`.
@@ -159,7 +187,7 @@ After Codex can see TheHood tools:
 
 1. Ask Codex to call `thehood_doctor` for the repo.
 2. Ask Codex to call `thehood_agent_board` and inspect the visible agent cards before changing any role owner.
-3. Ask Codex to call `thehood_model_access` before Claude/Codex/GPT/Pro consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned choices. If the repo is clean and pushed, use the remote GitHub refs default when supported. If Codex host policy rejects direct external disclosure, use the returned compact approval packet, show `approval_packet.copyable_text_block` in a fenced `text` block, or use no-repo-context fallback / connector-mode handoff instead of repeating a long custom approval sentence.
+3. Ask Codex to call `thehood_model_access` before Claude/Codex/GPT/Pro consults or fan-outs that may disclose repo context, progress packets, memory, or runtime artifacts. If the repo is dirty or unpushed, show the returned choices. If the repo is clean and pushed, use the remote GitHub refs default only when the preflight reports the provider route as confirmed. If Codex host policy rejects direct external disclosure, use the returned compact approval packet, show `approval_packet.copyable_text_block` in a fenced `text` block, or use no-repo-context fallback / connector-mode handoff instead of repeating a long custom approval sentence.
 4. Ask Codex to call `thehood_pro_access` before direct ChatGPT Pro consults when you need ChatGPT Web bridge readiness or ChatGPT MCP connector handoff details.
 5. Ask Codex to call `thehood_consult` or `thehood_fanout` with read-only guest roles. When no manual gate is active, Codex should continue with `approval: "none"` and let TheHood autopilot auto-approve bounded provider gates when policy allows.
 6. Use `thehood_orchestrate` for implementation work.

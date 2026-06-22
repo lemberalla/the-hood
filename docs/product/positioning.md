@@ -16,6 +16,7 @@ TheHood is not a hidden bridge that lets Codex silently spend another provider's
 - Claude second judge: Claude is a simple way to challenge Codex or Pro output with an independent model family, or to act as the user's preferred builder/reviewer.
 - Visible Pro escalation: Pro is used deliberately for strategic planning, product judgment, reconciliation, critique, and high-reputation review.
 - Connector fallback: when direct Pro calls are blocked by Codex or tenant host policy, ChatGPT MCP connector mode is the safe handoff path.
+- Trusted MCP host preview: ChatGPT Developer Mode can reach a local TheHood MCP server through Secure MCP Tunnel, while TheHood still owns repo access, approvals, logs, and verification gates.
 
 ## Tradeoff
 

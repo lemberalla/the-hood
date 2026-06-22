@@ -41,3 +41,9 @@ jobs:
 
       - name: Runtime smoke
         run: npm run smoke:runtime
+
+      - name: Pack manifest check
+        run: npm run pack:check
+
+      - name: Diff check
+        run: git --no-pager diff --check

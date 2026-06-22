@@ -1,8 +1,16 @@
 {
   "name": "thehood",
-  "version": "0.0.0",
-  "description": "A local, provider-neutral agent runtime for orchestrating multi-agent software work.",
+  "version": "0.1.0-preview.0",
+  "description": "A local, provider-neutral runtime for governed software agent loops.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lemberalla/the-hood.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lemberalla/the-hood/issues"
+  },
+  "homepage": "https://github.com/lemberalla/the-hood#readme",
   "bin": {
     "thehood": "dist/cli/main.js",
     "thehood-chatgpt-web-bridge": "dist/bridges/chatgptWebBridge.js"
@@ -13,6 +21,7 @@
     "LICENSE",
     "PRIVACY.md",
     "docs",
+    "examples",
     "SECURITY.md",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md"
@@ -20,6 +29,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/prepare-bin.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run typecheck && npm run build && npm run smoke:mcp && npm run smoke:codex-config && npm run smoke:runtime",
+    "release:check": "npm test && npm run pack:check && git --no-pager diff --check",
+    "pack:check": "node scripts/verify-pack-manifest.mjs",
     "smoke:codex-config": "node scripts/smoke-codex-config.mjs",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
     "smoke:runtime": "node scripts/smoke-runtime.mjs",

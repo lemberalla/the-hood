@@ -48,6 +48,7 @@ const configPath = path.resolve(
   configOption ?? defaultConfigPath
 );
 let repoPath = path.resolve(repoOption ?? root);
+const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -353,6 +354,7 @@ const initialize = responses.find((response) => response.id === 1);
 const toolsList = responses.find((response) => response.id === 2);
 const doctor = responses.find((response) => response.id === 3);
 assert.equal(initialize.result.serverInfo.name, "thehood");
+assert.equal(initialize.result.serverInfo.version, packageJson.version);
 
 const toolNames = toolsList.result.tools.map((tool) => tool.name);
 for (const expectedTool of [
@@ -360,6 +362,7 @@ for (const expectedTool of [
   "thehood_roles",
   "thehood_model_access",
   "thehood_pro_access",
+  "thehood_recommend_loop",
   "thehood_agent_board",
   "thehood_assign_roles",
   "thehood_plan",
@@ -405,6 +408,8 @@ for (const expectedCapability of [
   "run_status_insights",
   "same_run_agent_summons",
   "bounded_same_run_fanout",
+  "loop_recommendation_router",
+  "codex_loop_plan_artifact",
   "pro_access_preflight",
   "model_access_preflight",
   "codex_agent_board",

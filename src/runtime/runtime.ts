@@ -25,6 +25,7 @@ export interface CreateRunInput {
   roleOverrides?: RoleMap;
   preferredRole?: RuntimeRole;
   constraints?: string[];
+  maxIterations?: number;
 }
 
 const createEvent = (type: string, message: string, data?: JsonObject): RunEvent => ({
@@ -129,7 +130,7 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     ...(input.preferredRole ? { preferredRole: input.preferredRole } : {}),
     roleMapping,
     constraints: input.constraints ?? [],
-    maxIterations: config.defaults.maxIterations,
+    maxIterations: input.maxIterations ?? config.defaults.maxIterations,
     approvalRequired: initial.approvalRequired,
     artifacts: [
       {

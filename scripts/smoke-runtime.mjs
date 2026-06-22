@@ -10,11 +10,13 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
 const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
+const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 const baseEnv = () => ({
   ...process.env,
   THEHOOD_CHATGPT_WEB_COMMAND: "",
   THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED: "0",
   THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL: "0",
+  THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED: "0",
   THEHOOD_CHATGPT_WEB_CDP_URL: "http://127.0.0.1:9"
 });
 const { chooseRepoContextRoute, parseGitHubRemoteUrl } = await import(
@@ -406,6 +408,12 @@ const runLocalCommand = async (command, args, cwd) => {
   };
 };
 
+const assertLocalStateExclude = async (repoPath) => {
+  const exclude = await fs.readFile(path.join(repoPath, ".git", "info", "exclude"), "utf8");
+  assert.ok(exclude.includes(".thehood/"), "local git exclude should ignore .thehood/");
+  assert.ok(exclude.includes(".thehood-browser.json"), "local git exclude should ignore .thehood-browser.json");
+};
+
 assert.deepEqual(parseGitHubRemoteUrl("https://github.com/owner/repo.git"), {
   owner: "owner",
   repo: "repo",
@@ -463,6 +471,31 @@ assert.equal(
     pushed: true,
     statusPathCount: 0,
     statusPaths: [],
+    githubConnectorConfirmed: false,
+    reasons: []
+  }).reason,
+  "chatgpt_web_github_connector_unconfirmed"
+);
+assert.equal(
+  chooseRepoContextRoute({
+    provider: "chatgpt-web",
+    repoPath: "/tmp/repo",
+    githubRemote: {
+      name: "origin",
+      owner: "owner",
+      repo: "repo",
+      url: "git@github.com:owner/repo.git",
+      normalizedUrl: "https://github.com/owner/repo"
+    },
+    branch: "main",
+    commit: "abc",
+    upstream: "origin/main",
+    upstreamCommit: "abc",
+    clean: true,
+    pushed: true,
+    statusPathCount: 0,
+    statusPaths: [],
+    githubConnectorConfirmed: true,
     reasons: []
   }).route,
   "github_connector"
@@ -475,6 +508,7 @@ assert.equal(
     pushed: true,
     statusPathCount: 0,
     statusPaths: [],
+    githubConnectorConfirmed: false,
     reasons: []
   }).route,
   "local_bundle"
@@ -777,6 +811,19 @@ assert.equal(setupJson.commandName, "thehood");
 assert.ok(setupJson.localBuildCommand.includes("dist/cli/main.js"));
 assert.ok(setupJson.oneSessionAlias.startsWith("alias thehood="));
 assert.ok(setupJson.localUiCommand.includes("--repo"));
+const gitIgnoredInitRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-gitignore-init-smoke-"));
+await runLocalCommand("git", ["init"], gitIgnoredInitRepoPath);
+const gitIgnoredInit = JSON.parse((await runCli(["init", "--repo", gitIgnoredInitRepoPath, "--json"])).stdout);
+assert.equal(gitIgnoredInit.localStateIgnore.status, "updated");
+assert.deepEqual(gitIgnoredInit.localStateIgnore.addedEntries, [".thehood/", ".thehood-browser.json"]);
+await assertLocalStateExclude(gitIgnoredInitRepoPath);
+const gitIgnoredInitAgain = JSON.parse((await runCli(["init", "--repo", gitIgnoredInitRepoPath, "--json"])).stdout);
+assert.equal(gitIgnoredInitAgain.localStateIgnore.status, "already_ignored");
+assert.deepEqual(gitIgnoredInitAgain.localStateIgnore.addedEntries, []);
+const gitIgnoredRunRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-gitignore-run-smoke-"));
+await runLocalCommand("git", ["init"], gitIgnoredRunRepoPath);
+await runCli(["plan", "create local runtime state", "--repo", gitIgnoredRunRepoPath, "--json"]);
+await assertLocalStateExclude(gitIgnoredRunRepoPath);
 await runCli(["init", "--repo", repoPath]);
 const initialConfig = JSON.parse((await runCli(["config", "show", "--repo", repoPath, "--json"])).stdout);
 assert.equal(initialConfig.defaults.maxIterations, 8);
@@ -813,6 +860,7 @@ assert.equal(appliedSparkSonnetTeam.config.roles.critic.provider, "claude-code")
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
+assert.equal(doctorResult.runtime.version, packageJson.version);
 assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));
@@ -847,6 +895,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_team_presets"));
 assert.ok(doctorResult.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorResult.runtime.capabilities.includes("loop_recommendation_router"));
+assert.ok(doctorResult.runtime.capabilities.includes("codex_loop_plan_artifact"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorResult.runtime.capabilities.includes("configurable_budget_envelopes"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
@@ -2122,7 +2172,8 @@ await fs.writeFile(
 await fs.chmod(fakeExternalBridgePath, 0o755);
 const fakeExternalEnv = {
   THEHOOD_CHATGPT_WEB_COMMAND: fakeExternalBridgePath,
-  THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath
+  THEHOOD_FAKE_CHATGPT_LOG: fakeExternalBridgeLogPath,
+  THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED: "1"
 };
 const remoteContextRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-remote-context-smoke-"));
 await runCli(["init", "--repo", remoteContextRepoPath]);
@@ -2958,6 +3009,142 @@ assert.equal(finalReportQaLane.state, "satisfied");
 assert.equal(finalReportQaLane.owner.kind, "runtime");
 assert.equal(finalReportQaLane.canSatisfyRequired, true);
 assert.equal(finalReportQaLane.satisfiesRequired, true);
+
+const goalRepoPath = await fs.mkdtemp(path.join(os.tmpdir(), "thehood-goal-smoke-"));
+await runCli(["init", "--repo", goalRepoPath]);
+await runCli(["approvals", "policy", "set", "mode", "autopilot", "--repo", goalRepoPath]);
+await fs.writeFile(
+  path.join(goalRepoPath, "package.json"),
+  JSON.stringify(
+    {
+      scripts: {
+        typecheck: "node -e \"process.stdout.write('goal validation ok\\\\n')\""
+      }
+    },
+    null,
+    2
+  ),
+  "utf8"
+);
+const loopRecommendation = JSON.parse(
+  (await runCli([
+    "recommend-loop",
+    "fix flaky checkout tests before preview release",
+    "--repo",
+    goalRepoPath,
+    "--max-iterations",
+    "5",
+    "--json"
+  ])).stdout
+);
+assert.equal(loopRecommendation.kind, "loop_recommendation");
+assert.equal(loopRecommendation.contract.iterationBudget, 5);
+assert.ok(
+  ["build-test-fix", "completion-contract", "quality-streak"].includes(loopRecommendation.recommended.recipe.id),
+  "loop recommendation should route a flaky release-facing goal to a useful recipe"
+);
+assert.equal(loopRecommendation.runAction.tool, "thehood_orchestrate");
+assert.ok(
+  loopRecommendation.runAction.arguments.constraints.some((constraint) => constraint.startsWith("Loop stack:")),
+  "loop recommendation run action should carry the selected stack into runtime constraints"
+);
+assert.ok(
+  loopRecommendation.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "loop recommendation should expose a Codex app run action"
+);
+assert.ok(
+  loopRecommendation.actions.some((action) => action.action === "edit_contract"),
+  "loop recommendation should expose a Codex app edit-contract action"
+);
+assert.equal(loopRecommendation.card.title.startsWith("Recommended loop:"), true);
+assert.ok(
+  loopRecommendation.card.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "loop recommendation card should expose the runtime run action directly"
+);
+assert.ok(
+  loopRecommendation.card.sections.some((section) => section.id === "contract"),
+  "loop recommendation card should include a completion contract section"
+);
+assert.equal(loopRecommendation.artifact.surface, "dashboard");
+assert.equal(loopRecommendation.artifact.manifest.title, "TheHood Loop Plan");
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_recipes));
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_stack));
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.card_actions));
+assert.ok(
+  loopRecommendation.contract.validationCommands.includes("npm run typecheck"),
+  "loop recommendation should use discovered package validation scripts"
+);
+const releaseLoopRecommendation = JSON.parse(
+  (await runCli([
+    "recommend-loop",
+    "prepare hood for the public release",
+    "--repo",
+    goalRepoPath,
+    "--acceptance",
+    "Public preview docs match implemented behavior.",
+    "--validation",
+    "npm run smoke:mcp",
+    "--allowed-path",
+    "README.md",
+    "--forbidden-change",
+    "Do not publish private run logs.",
+    "--max-iterations",
+    "8",
+    "--json"
+  ])).stdout
+);
+assert.equal(releaseLoopRecommendation.recommended.recipe.id, "completion-contract");
+assert.deepEqual(
+  releaseLoopRecommendation.stack.map((item) => item.recipe.id),
+  ["completion-contract", "adversarial-review", "verifier-loop"],
+  "release-facing loop recommendation should expose a completion/review/verify stack"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.acceptanceCriteria.includes("Public preview docs match implemented behavior."),
+  "edited acceptance criteria should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.validationCommands.includes("npm run smoke:mcp"),
+  "edited validation commands should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.allowedPaths.includes("README.md"),
+  "edited allowed paths should be reflected in the recommendation contract"
+);
+assert.ok(
+  releaseLoopRecommendation.contract.forbiddenChanges.includes("Do not publish private run logs."),
+  "edited forbidden changes should be reflected in the recommendation contract"
+);
+const goalResult = JSON.parse(
+  (await runCli([
+    "goal",
+    "exercise public goal loop alias",
+    "--repo",
+    goalRepoPath,
+    "--orchestrator",
+    "stub:orchestrator",
+    "--implementer",
+    "stub:implementer",
+    "--qa",
+    "stub:qa",
+    "--verifier",
+    "stub:verifier",
+    "--critic",
+    "stub:critic",
+    "--max-iterations",
+    "5",
+    "--json"
+  ])).stdout
+);
+assert.equal(goalResult.run.state, "completed");
+assert.equal(goalResult.run.maxIterations, 5);
+assert.equal(goalResult.run.mode, "implement");
+assert.ok(goalResult.providerResponses.length >= 3);
+assert.ok(
+  goalResult.run.approvalEvents.some((event) =>
+    event.reason.includes("Auto-approved by TheHood autopilot policy")
+  )
+);
 const finalReportQaTesterLane = finalReport.reviewLanes.find((lane) => lane.id === "review-lane-qa-tester");
 assert.ok(finalReportQaTesterLane, "final report should expose QA tester lane");
 assert.equal(finalReportQaTesterLane.kind, "tester");

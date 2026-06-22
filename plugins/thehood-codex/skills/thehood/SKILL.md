@@ -19,16 +19,19 @@ TheHood is a local runtime. Models and Codex plugin skills may suggest work, but
 ## Runtime Use
 
 - Use `thehood_agent_board` when the user asks to see agents, lanes, role ownership, or current runtime status. Set `include_artifact: true` when the user wants a renderable dashboard payload.
+- Use `thehood_recommend_loop` before starting work when the user asks to use Hood loops or does not know which loop shape they need. Render `card` directly when present, including its sections and actions. Use the dashboard `artifact` only as the generic fallback.
 - Use `thehood_model_access` before external model-backed work. This is local-only and does not call providers or send repo context; it reports provider readiness, repo visibility, data boundary, a compact approval packet, and fallback paths. If the repo is dirty or unpushed, show the user choices. If the repo is clean and pushed, use the remote GitHub refs default when supported.
 - Use `thehood_pro_access` when the user asks for Pro from Codex. This is local-only and does not call Pro; it reports runtime policy, bridge readiness, and connector-mode handoff instructions.
 - Use `thehood_consult`, `thehood_summon`, or `thehood_fanout` for read-only guest roles.
 - Use `thehood_orchestrate` for implementation work and `thehood_continue` to resume active runs.
+- When a loop recommendation card action is `run_loop`, invoke its `tool` and `arguments` exactly. When the action is `edit_contract`, call `thehood_recommend_loop` again with edited acceptance criteria, validation commands, allowed paths, forbidden changes, or iteration budget. Do not start providers while the user is editing the contract.
 - Pass `approval: "none"` to `thehood_continue` when no manual approval gate is active. The runtime may auto-approve bounded low-risk gates when policy allows and will record that evidence.
 - Use explicit approval only for an active manual gate after the user approves that gate.
 
 ## Boundaries
 
 - Do not treat this skill, a plugin card, a dashboard artifact, or a Codex-native subagent as runtime authority.
+- Do not infer runtime success from a loop recommendation card. It is a decision surface only; accepted actions still run through TheHood approvals, evidence capture, validation, and verifier policy.
 - Do not let the same role satisfy implementer and verifier duties for the same task.
 - Do not give verifier or critic roles edit tools.
 - Do not treat an agent board card as proof that validation, review, or approval passed. Read the referenced artifacts, events, handoffs, and command evidence.
@@ -51,3 +54,5 @@ The plugin's MCP server config expects `thehood mcp` to be on `PATH`. During loc
 ```bash
 node dist/cli/main.js mcp config
 ```
+
+If a local build exposes a new MCP tool but the current Codex thread does not show it, run `npm run smoke:codex-config` to verify the fresh server and then start a new Codex thread or reload the app/session. Existing threads may keep the tool schema they loaded earlier.

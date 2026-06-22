@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a product or runtime improvement
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or runtime problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful version.
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Owning surface
+      description: Control surfaces should not duplicate runtime policy.
+      multiple: true
+      options:
+        - runtime
+        - CLI
+        - MCP
+        - TUI
+        - provider adapter
+        - docs
+        - website
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety or privacy impact
+      description: Does this affect provider access, transfers, local commands, filesystem writes, approvals, or logs?

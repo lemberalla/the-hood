@@ -15,6 +15,7 @@ import type { ProviderDescriptor } from "../runtime/providers.js";
 import type { RoleRosterItem } from "../runtime/roleRoster.js";
 import type { RunInsights } from "../runtime/runInsights.js";
 import type { AgentBoard } from "../runtime/agentBoard.js";
+import type { LoopRecommendation } from "../runtime/loopRecommendation.js";
 import { recentRunHandoffSummaries, type RunHandoffSummary } from "../runtime/handoffs.js";
 import type {
   LoopResponsibilityStatus,
@@ -133,6 +134,43 @@ export const formatAgentBoard = (board: AgentBoard): string => [
     : []),
   "",
   ...board.notes.map((note) => `  note        ${note}`)
+].join("\n");
+
+const formatRecipeScore = (score: LoopRecommendation["recommended"]): string =>
+  `${score.recipe.id} (${score.recipe.status}, score:${score.score}) ${score.recipe.title}`;
+
+export const formatLoopRecommendation = (recommendation: LoopRecommendation): string => [
+  "Loop Recommendation",
+  `  repo        ${recommendation.repoPath}`,
+  `  confidence  ${recommendation.confidence}`,
+  `  recipe      ${formatRecipeScore(recommendation.recommended)}`,
+  `  why         ${recommendation.reason}`,
+  "",
+  "recommended stack:",
+  ...recommendation.stack.map((item) =>
+    `  ${item.order}. ${item.recipe.id} (${item.recipe.status}) ${item.required ? "primary" : "companion"}`
+  ),
+  "",
+  "contract draft:",
+  `  goal        ${recommendation.contract.goal}`,
+  `  evidence    ${recommendation.contract.requiredEvidence.join("; ")}`,
+  `  validation  ${recommendation.contract.validationCommands.join("; ")}`,
+  `  stop        ${recommendation.contract.stopConditions.join("; ")}`,
+  `  budget      ${recommendation.contract.iterationBudget}`,
+  "",
+  "alternatives:",
+  ...recommendation.alternatives.map((score) => `  ${formatRecipeScore(score)}`),
+  "",
+  "run action:",
+  `  tool        ${recommendation.runAction.tool}`,
+  `  note        ${recommendation.runAction.description}`,
+  "",
+  "card actions:",
+  ...recommendation.actions.map((action) =>
+    `  ${action.label} ${action.style}${action.tool ? ` tool=${action.tool}` : ""}${action.commandHint ? ` hint=${action.commandHint}` : ""}`
+  ),
+  "",
+  ...recommendation.notes.map((note) => `  note        ${note}`)
 ].join("\n");
 
 export const formatProviders = (providers: ProviderDescriptor[]): string =>

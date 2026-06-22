@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TheHood - Governed local agent loops</title>
+    <meta name="description" content="TheHood is a local provider-neutral runtime for governed software goal loops in Codex, CLI, and MCP workflows.">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="docs/getting-started.html">Get Started</a>
+          <a href="docs/loops.html">Loops</a>
+          <a href="docs/provider-matrix.html">Providers</a>
+          <a href="docs/security.html">Security</a>
+          <a href="docs/known-limitations.html">Limits</a>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="wrap hero">
+        <div>
+          <p class="eyebrow">Developer preview v0.1.0-preview.0</p>
+          <h1>TheHood</h1>
+          <p class="lead">A local runtime for governed software goal loops. Models suggest. The runtime enforces. Users stay in control.</p>
+          <div class="actions">
+            <a class="button primary" href="docs/getting-started.html">Start locally</a>
+            <a class="button" href="docs/loops.html">Understand loops</a>
+          </div>
+        </div>
+        <div class="terminal" aria-label="Terminal demo">
+          <div class="terminal-bar">
+            <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+            <span>local runtime</span>
+          </div>
+          <pre><code>$ thehood goal "Prepare release metadata" --repo . --max-iterations 5
+run: created implement goal
+approval: autopilot recorded implementation_start
+orchestrator: delegated bounded work
+qa: reviewed runtime evidence
+verifier: approved final report
+state: <strong>completed</strong></code></pre>
+        </div>
+      </section>
+
+      <section class="band surface">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>What ships in preview</h2>
+            <p>The preview is intentionally local and evidence-first. It is not a hosted agent service, scheduler, or polished app platform.</p>
+          </div>
+          <div class="grid">
+            <article class="card">
+              <span class="label">Runtime</span>
+              <h3>Loop control lives locally</h3>
+              <p>The runtime owns approvals, artifacts, validation evidence, review routing, and terminal state.</p>
+            </article>
+            <article class="card">
+              <span class="label">Roles</span>
+              <h3>Provider-neutral work lanes</h3>
+              <p>Assign Codex, Claude Code, ChatGPT Web, or stub providers to planner, implementer, QA, verifier, and critic roles.</p>
+            </article>
+            <article class="card">
+              <span class="label warn">Boundary</span>
+              <h3>No hidden cloud loop</h3>
+              <p>The preview does not include hosted execution, timer schedules, production API adapters, or private artifact publishing.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>The loop path</h2>
+            <p>A goal advances only through runtime-owned state. Provider output is input, not authority.</p>
+          </div>
+          <div class="flow" aria-label="TheHood runtime flow">
+            <div class="flow-step"><span>1</span><strong>Goal</strong><p>Define the software outcome, repo, role map, and iteration budget.</p></div>
+            <div class="flow-step"><span>2</span><strong>Delegate</strong><p>Send bounded directives to configured role owners.</p></div>
+            <div class="flow-step"><span>3</span><strong>Capture</strong><p>Record command logs, git evidence, artifacts, and provider responses.</p></div>
+            <div class="flow-step"><span>4</span><strong>Verify</strong><p>Run deterministic checks and independent review lanes.</p></div>
+            <div class="flow-step"><span>5</span><strong>Stop</strong><p>Complete, ask for approval, fail closed, or stop at a budget cap.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band surface">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Public-preview docs</h2>
+            <p>These pages summarize the release surface. The repository docs remain the source of truth.</p>
+          </div>
+          <div class="grid doc-list">
+            <article class="card"><h3><a href="docs/getting-started.html">Getting Started</a></h3><p>Build locally, initialize a repo, and run the synthetic stub demo.</p></article>
+            <article class="card"><h3><a href="docs/provider-matrix.html">Provider Matrix</a></h3><p>What works now, what is experimental, and what remains future work.</p></article>
+            <article class="card"><h3><a href="docs/security.html">Security</a></h3><p>Local state, private artifacts, approval gates, and disclosure boundaries.</p></article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">TheHood developer preview. Local runtime, explicit boundaries, no hosted service.</div>
+    </footer>
+  </body>
+</html>

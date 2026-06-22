@@ -9,6 +9,8 @@ import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { InputError, TheHoodError } from "../runtime/errors.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
+import type { LocalStateIgnoreResult } from "../runtime/localStateIgnore.js";
+import { recommendLoop } from "../runtime/loopRecommendation.js";
 import { advanceRun } from "../runtime/loop.js";
 import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { startMcpServer } from "../mcp/server.js";
@@ -60,6 +62,7 @@ import {
   formatCommandResult,
   formatDoctorReport,
   formatGitEvidence,
+  formatLoopRecommendation,
   formatMcpConfigReport,
   formatMcpTunnelConfigReport,
   formatExternalTransferPreview,
@@ -100,6 +103,8 @@ Usage:
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
+  thehood recommend-loop <goal> [--repo <path>] [--constraint <text>] [--acceptance <text>] [--validation <command>] [--allowed-path <path>] [--forbidden-change <text>] [--max-iterations <n>] [--json]
+  thehood goal <goal> [--repo <path>] [--max-iterations <n>] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood plan <goal> [--repo <path>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood run <goal> [--repo <path>] [--mode <mode>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood status [run-id] [--repo <path>] [--json]
@@ -446,6 +451,19 @@ const latestDiffArtifact = (artifacts: RunArtifact[]): RunArtifact => {
   return artifact;
 };
 
+const formatLocalStateIgnoreResult = (result: LocalStateIgnoreResult): string => {
+  const entries = result.ignoredEntries.join(", ");
+
+  switch (result.status) {
+    case "updated":
+      return `Protected local state in git exclude: ${result.excludePath} (${entries})`;
+    case "already_ignored":
+      return `Local state already protected by git exclude: ${result.excludePath} (${entries})`;
+    case "not_git_repo":
+      return `Local state ignore not updated because this path is not a git checkout (${entries})`;
+  }
+};
+
 const handleInit = async (options: Record<string, CliOptionValue>): Promise<void> => {
   const result = await initConfig(repoFromOptions(options));
 
@@ -455,7 +473,10 @@ const handleInit = async (options: Record<string, CliOptionValue>): Promise<void
   }
 
   process.stdout.write(
-    `${result.created ? "Created" : "Found existing"} config: ${result.configPath}\n`
+    [
+      `${result.created ? "Created" : "Found existing"} config: ${result.configPath}`,
+      formatLocalStateIgnoreResult(result.localStateIgnore)
+    ].join("\n") + "\n"
   );
 };
 
@@ -649,19 +670,21 @@ const handleTeams = async (
 };
 
 const handleCreateRun = async (
-  command: "plan" | "run",
+  command: "goal" | "plan" | "run",
   args: string[],
   options: Record<string, CliOptionValue>
 ): Promise<void> => {
   const goal = args.join(" ").trim();
   const mode = command === "plan" ? "plan" : parseMode(getStringOption(options, "mode"), "implement");
-  const shouldLoop = getBooleanOption(options, "loop");
+  const shouldLoop = command === "goal" || getBooleanOption(options, "loop");
+  const maxIterations = parsePositiveIntegerOption(options, "maxIterations");
   const run = await createRun({
     repoPath: repoFromOptions(options),
     goal,
     mode,
     roleOverrides: parseRoleOverrides(options),
-    constraints: getStringListOption(options, "constraint")
+    constraints: getStringListOption(options, "constraint"),
+    ...(maxIterations === undefined ? {} : { maxIterations })
   });
 
   if (shouldLoop) {
@@ -679,6 +702,28 @@ const handleCreateRun = async (
   }
 
   shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
+};
+
+const handleRecommendLoop = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const goal = args.join(" ").trim();
+  const maxIterations = parsePositiveIntegerOption(options, "maxIterations");
+  const recommendation = await recommendLoop({
+    repoPath: repoFromOptions(options),
+    goal,
+    constraints: getStringListOption(options, "constraint"),
+    acceptanceCriteria: getStringListOption(options, "acceptance"),
+    validationCommands: getStringListOption(options, "validation"),
+    allowedPaths: getStringListOption(options, "allowedPath"),
+    forbiddenChanges: getStringListOption(options, "forbiddenChange"),
+    ...(maxIterations === undefined ? {} : { maxIterations })
+  });
+
+  shouldPrintJson(options)
+    ? printJson(recommendation)
+    : process.stdout.write(`${formatLoopRecommendation(recommendation)}\n`);
 };
 
 const handleStatus = async (
@@ -1207,6 +1252,10 @@ const runCli = async (argv: string[]): Promise<void> => {
     case "roles":
       await handleRoles(args, parsed.options);
       return;
+    case "recommend-loop":
+      await handleRecommendLoop(args, parsed.options);
+      return;
+    case "goal":
     case "plan":
     case "run":
       await handleCreateRun(command, args, parsed.options);

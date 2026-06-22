@@ -2,7 +2,7 @@
 
 TheHood is a local, provider-neutral agent runtime for running serious multi-agent software work from Codex, a CLI, and eventually a small macOS menubar companion.
 
-Status: experimental local runtime. The CLI, MCP server, runtime artifacts, provider role mapping, local Codex/Claude command adapters, ChatGPT Web bridge, same-run summons/fan-out, crew lanes, Codex-facing agent board snapshots, renderable dashboard payloads, optional Codex plugin scaffold, approval gates, and smoke tests exist today. API provider adapters, hosted/public UI, and automatic native Codex app visual rendering beyond explicit artifact rendering are planned or partial unless noted in the docs.
+Status: developer preview. TheHood is preparing for `v0.1.0-preview.0` as a local CLI/MCP runtime for governed software goal loops. It is useful for early adopters who are comfortable with local tools, explicit approval boundaries, and experimental provider wiring. It is not a hosted agent service, cloud scheduler, or polished app platform.
 
 The core idea is simple:
 
@@ -10,9 +10,29 @@ The core idea is simple:
 - The runtime enforces.
 - Users stay in control.
 
-TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into GPT, ChatGPT Pro, Claude Code, OpenAI API, Anthropic API, or local models for any role. Codex becomes the governed workbench; Claude can second-judge or build; Pro can approve strategy when the stakes justify it.
+TheHood lets a user assign different models or agent tools to different responsibilities. The product default is Codex-first: Codex can orchestrate, implement, QA, critique, and verify through separate runtime roles, while users can opt into GPT, ChatGPT Pro, Claude Code, future API adapters, or future local models for roles as those paths are wired. Codex becomes the governed workbench; Claude can second-judge or build; Pro can approve strategy when the stakes justify it.
 
 The first product surface is a CLI plus an MCP server. The macOS menubar app should remain a thin trigger and status surface over the same local runtime.
+
+## Works Today
+
+- Local project setup and JSON runtime config under `.thehood/config.json`, with local git excludes for TheHood runtime state.
+- CLI and stdio MCP control surfaces over the same local runtime.
+- Codex-first role mapping with separate orchestrator, planner, implementer, QA, verifier, and critic roles.
+- Local Codex CLI and Claude Code command adapters that must return schema-bound responses.
+- Deterministic `stub` provider for local smoke tests and synthetic demonstrations.
+- Approval gates, protected test/fixture/snapshot/eval classification, isolated patch capture, and runtime-owned integration reports.
+- Runtime-owned evidence: command logs, git status/diff snapshots, provider invocation artifacts, final reports, progress packets, review lanes, revision packets, and agent board snapshots.
+- Same-run summons and bounded fan-out as read-only sidecar evidence, not acceptance votes.
+- ChatGPT Web bridge and ChatGPT MCP connector guidance as experimental, user-configured provider paths.
+
+## Planned Or Experimental
+
+- OpenAI API, Anthropic API, and local model adapters are represented in provider config but are not wired as production external model adapters yet.
+- Hosted execution, cloud routines, timer schedules, and overnight automation are not part of `v0.1.0-preview.0`.
+- A full web dashboard and macOS menubar app remain future control surfaces over the runtime.
+- ChatGPT MCP connector mode depends on ChatGPT custom connector/tunnel availability in the user's workspace and should be treated as optional.
+- Native Codex visual rendering beyond explicit artifact/dashboard payloads remains a later integration layer.
 
 ## Current Implementation
 
@@ -29,6 +49,7 @@ It supports:
 - runtime-derived agent board snapshots and dashboard payloads for Codex card-style agent visibility
 - optional repo-local Codex plugin scaffold for TheHood workflow guidance and MCP setup
 - runtime-owned team presets for Codex default, ChatGPT Pro orchestration, Claude second-judge, Spark plus Sonnet, Claude builder, and high-assurance Pro plus Claude setups
+- read-only loop recommendation that routes a plain-language goal into a recipe, recommended stack, completion contract draft, actions, alternatives, and Codex card artifact
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
 - local-only Pro access preflight so Codex can distinguish runtime autopilot, direct bridge readiness, host-policy blocks, and ChatGPT MCP connector handoff paths
@@ -44,7 +65,7 @@ It supports:
 - runtime-owned final reports for completed runs
 - runtime-owned progress packet artifacts for completed runs
 - runtime-owned external transfer manifests before repo context or progress packets leave the machine
-- GitHub connector-aware repo context routing for clean pushed repos in ChatGPT Web
+- confirmed GitHub connector-aware repo context routing for clean pushed repos in ChatGPT Web
 - user-configurable approval policy with manual, auto-low-risk, and autopilot modes
 - separate approval gates when integrated patches touch protected test, fixture, snapshot, or eval paths
 - runtime-enforced max iteration limits across resumed runs
@@ -74,7 +95,7 @@ It supports:
 - runtime-derived loop responsibility schedules showing planner, implementer, verifier, runtime QA, QA tester, critic, reconciliation, integration, approval, and completion ownership
 - bounded canonical memory refs injected into provider directives so providers rehydrate from runtime state instead of stale chat history
 - runtime-captured repo context packs when read-only orchestrators request evidence
-- refs-only GitHub connector context when ChatGPT Web can inspect a clean pushed GitHub repo at the current commit
+- refs-only GitHub connector context when the active ChatGPT Web bridge has confirmed GitHub connector access and can inspect a clean pushed GitHub repo at the current commit
 - targeted follow-up repo context packs when a provider delegates concrete new repo paths
 - schema-bound planner reconciliation from completed run progress packets
 - bounded MCP artifact reads for inspecting guest-agent responses from chat
@@ -98,8 +119,9 @@ Users can choose between two ChatGPT Pro paths:
 - `mcp-connector`: ChatGPT connects to TheHood as an MCP connector and uses TheHood's repo/run tools directly.
 
 Both paths keep repo access, approvals, logs, and verification gates owned by the runtime.
+For connector mode, generate the local setup guide with `thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local`, keep Secure MCP Tunnel running, and validate from a fresh ChatGPT conversation with `thehood_doctor` plus a read-only repo gateway tool. This is separate from the `chatgpt-web` agent bridge and does not use Chrome/CDP bridge environment variables.
 When Codex or a tenant policy blocks a direct external disclosure to ChatGPT Web, that is outside TheHood autopilot. Use `thehood_pro_access` to get the local bridge status and a connector-mode handoff instead of repeating approval prompts.
-For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos default to remote refs when the provider supports that route, so Codex should not ask the user to type a new long disclosure sentence after a host-policy rejection.
+For broader Claude/Codex/GPT fan-outs, call `thehood_model_access` before the model-backed request. It does not call providers or send repo context; it returns provider readiness, repo visibility, the data boundary, a compact approval packet, and fallback paths. Dirty or unpushed repos ask the user to choose between committing and pushing a checkpoint, approving bounded local context/diff transfer, using no-repo-context strategy, or cancelling. Clean pushed GitHub repos can use remote refs only when the target provider route is verified. For `chatgpt-web`, TheHood treats remote refs as the default only when the active bridge GitHub connector surface is confirmed; otherwise it presents connector setup, explicit local context approval, no-repo-context, or cancel paths.
 
 ## Quick Start
 
@@ -126,6 +148,8 @@ node dist/cli/main.js agent-board --repo . --artifact --json
 node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
 node dist/cli/main.js roles --repo .
+node dist/cli/main.js recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
+node dist/cli/main.js goal "Prepare release metadata" --repo . --max-iterations 5
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js run "Exercise the full loop" --repo . --loop
 node dist/cli/main.js status --repo .
@@ -145,6 +169,8 @@ node dist/cli/main.js browser status
 node dist/cli/main.js ui --repo .
 node dist/cli/main.js mcp tunnel --tunnel-id <tunnel-id>
 ```
+
+TheHood stores local run history and evidence in `.thehood/`, including run records, logs, provider responses, approval evidence, final reports, and progress packets. This is useful local state, not source code. When TheHood creates repo-local state inside a git checkout, it automatically adds `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` so normal `git status` stays clean without changing the repo's committed `.gitignore`. Do not commit `.thehood/`; delete it when you want to clear local run history.
 
 The optional Codex plugin lives at `plugins/thehood-codex` and is listed by the repo marketplace at `.agents/plugins/marketplace.json`. It is not installed by default because repo-root Codex custom agents and plugin-provided surfaces should appear only when a user opts into them.
 
@@ -198,6 +224,14 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Codex Setup](docs/CODEX_SETUP.md)
 - [Runtime Loop](docs/RUNTIME_LOOP.md)
 - [Role Contracts](docs/ROLE_CONTRACTS.md)
+- [Trust Model](docs/TRUST_MODEL.md)
+- [Provider Matrix](docs/PROVIDER_MATRIX.md)
+- [Known Limitations](docs/KNOWN_LIMITATIONS.md)
+- [Goal, Loop, Schedule](docs/GOAL_LOOP_SCHEDULE.md)
+- [Loop Selection UX](docs/LOOP_SELECTION_UX.md)
+- [Completion Contract](docs/COMPLETION_CONTRACT.md)
+- [Loop Recipes](docs/LOOP_RECIPES.md)
+- [Synthetic Stub Demo](docs/DEMO.md)
 - [Prompt Schemas](docs/PROMPT_SCHEMAS.md)
 - [Memory And Reconciliation](docs/MEMORY_AND_RECONCILIATION.md)
 - [CLI Spec](docs/CLI_SPEC.md)
@@ -213,6 +247,8 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Licensing](docs/LICENSING.md)
 - [Open Decisions](docs/OPEN_DECISIONS.md)
 - [Public Repo Readiness](docs/PUBLIC_REPO_READINESS.md)
+- [v0.1.0-preview.0 Release Notes](docs/release/v0.1.0-preview.0.md)
+- [Static Preview Site](site/README.md)
 
 ## Public Repo Docs
 

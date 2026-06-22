@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible TheHood issue
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets, browser cookies, provider tokens, private `.thehood/` artifacts, private repo contents, or full provider transcripts.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the failure and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include exact commands and minimal redacted output.
+      render: bash
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15, Ubuntu 24.04, etc.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: node --version
+    validations:
+      required: true
+  - type: input
+    id: install-method
+    attributes:
+      label: Install method
+      placeholder: git checkout, npm install -g thehood@next, npm link
+  - type: input
+    id: version
+    attributes:
+      label: TheHood commit or version
+  - type: dropdown
+    id: provider-path
+    attributes:
+      label: Provider path
+      options:
+        - stub
+        - codex-cli
+        - claude-code
+        - chatgpt-web bridge
+        - ChatGPT MCP connector
+        - OpenAI API planned adapter
+        - Anthropic API planned adapter
+        - none / not provider-related
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface involved
+      options:
+        - CLI
+        - MCP
+        - TUI
+        - browser bridge
+        - runtime loop
+        - provider adapter
+        - docs
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or artifacts
+      description: Paste only redacted snippets. Do not include private run artifacts or provider transcripts.

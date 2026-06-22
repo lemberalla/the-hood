@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Goal Loops - TheHood</title>
+    <meta name="description" content="How TheHood distinguishes goals, loops, and future schedules.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="../index.html"><span class="brand-mark">TH</span><span>TheHood</span></a>
+        <div class="nav-links">
+          <a href="getting-started.html">Get Started</a>
+          <a aria-current="page" href="loops.html">Loops</a>
+          <a href="provider-matrix.html">Providers</a>
+          <a href="security.html">Security</a>
+          <a href="known-limitations.html">Limits</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-layout">
+      <aside class="doc-nav" aria-label="Docs navigation">
+        <a href="getting-started.html">Getting Started</a>
+        <a aria-current="page" href="loops.html">Goal Loops</a>
+        <a href="provider-matrix.html">Provider Matrix</a>
+        <a href="security.html">Security</a>
+        <a href="contributing.html">Contributing</a>
+        <a href="known-limitations.html">Known Limits</a>
+      </aside>
+      <article class="doc-content">
+        <p class="eyebrow">Runtime-owned progress</p>
+        <h1>Goal Loops</h1>
+        <p>The preview separates goals, loops, and schedules so public claims stay honest.</p>
+
+        <h2>Goal</h2>
+        <p>A goal is a concrete software objective with a verifiable stop condition.</p>
+        <div class="terminal"><pre><code>thehood goal "Prepare release metadata" --repo . --max-iterations 5</code></pre></div>
+
+        <h2>Loop</h2>
+        <p>A loop advances a run while the local runtime process is active. It stops at terminal state, manual approval, no progress, or a budget cap.</p>
+        <div class="flow" aria-label="Loop flow">
+          <div class="flow-step"><span>Plan</span><strong>Directive</strong><p>Runtime sends bounded instructions.</p></div>
+          <div class="flow-step"><span>Act</span><strong>Role owner</strong><p>The configured provider returns schema-bound output.</p></div>
+          <div class="flow-step"><span>Record</span><strong>Evidence</strong><p>The runtime writes artifacts and command logs.</p></div>
+          <div class="flow-step"><span>Review</span><strong>Lanes</strong><p>QA, verifier, and critic paths are separated.</p></div>
+          <div class="flow-step"><span>Stop</span><strong>State</strong><p>Completion, gate, failure, or budget stop.</p></div>
+        </div>
+
+        <h2>Schedule</h2>
+        <p>Schedules are future work. The public preview does not include timer loops, background daemons, hosted queues, or overnight automation.</p>
+      </article>
+    </main>
+
+    <footer class="site-footer"><div class="wrap">Source docs: `docs/GOAL_LOOP_SCHEDULE.md` and `docs/RUNTIME_LOOP.md`.</div></footer>
+  </body>
+</html>

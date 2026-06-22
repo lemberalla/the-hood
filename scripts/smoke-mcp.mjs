@@ -6,9 +6,11 @@ import path from "node:path";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
+const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 process.env.THEHOOD_CHATGPT_WEB_COMMAND = "";
 process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL = "0";
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_CDP_URL = "http://127.0.0.1:9";
 
 const runCommand = async (args) => {
@@ -100,6 +102,27 @@ await fs.writeFile(
 );
 await runCommand(["init", "--repo", repoPath]);
 
+const tunnelReport = JSON.parse(
+  await runCommand(["mcp", "tunnel", "--tunnel-id", "tunnel_0123456789abcdef", "--profile", "thehood-local", "--json"])
+);
+assert.ok(tunnelReport.installed.initCommand.includes("sample_mcp_stdio_local"));
+assert.ok(tunnelReport.installed.initCommand.includes("--mcp-command 'thehood mcp'"));
+assert.equal(tunnelReport.installed.doctorCommand, "tunnel-client doctor --profile thehood-local --explain");
+assert.equal(tunnelReport.installed.runCommand, "tunnel-client run --profile thehood-local");
+assert.ok(tunnelReport.local.initCommand.includes("dist/cli/main.js"));
+assert.ok(
+  tunnelReport.chatGptSteps.some((step) => step.includes("thehood_doctor") && step.includes("thehood_repo_tree")),
+  "tunnel report should include deterministic ChatGPT connector validation steps"
+);
+assert.ok(
+  tunnelReport.notes.some((note) => note.includes("separate from the chatgpt-web agent bridge")),
+  "tunnel report should keep MCP connector mode separate from the ChatGPT Web bridge"
+);
+assert.ok(
+  tunnelReport.notes.some((note) => note.includes("trusted MCP hosts")),
+  "tunnel report should warn that connector tool results disclose repo/run data"
+);
+
 const baseMessages = [
   {
     jsonrpc: "2.0",
@@ -145,6 +168,9 @@ const happyPath = await runMcp([
 assert.equal(happyPath[0].result.protocolVersion, "2025-06-18");
 assert.ok(happyPath[0].result.instructions.includes("approval=none"));
 assert.ok(happyPath[0].result.instructions.includes("autopilot"));
+assert.ok(happyPath[0].result.instructions.includes("thehood mcp tunnel --tunnel-id <id> --profile thehood-local"));
+assert.ok(happyPath[0].result.instructions.includes("Secure MCP Tunnel"));
+assert.ok(happyPath[0].result.instructions.includes("read-only repo gateway tools"));
 assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_plan"),
   "tools/list should expose thehood_plan"
@@ -189,6 +215,10 @@ assert.ok(
   "tools/list should expose thehood_model_access"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_recommend_loop"),
+  "tools/list should expose thehood_recommend_loop"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_agent_board"),
   "tools/list should expose thehood_agent_board"
 );
@@ -208,6 +238,71 @@ const initialContinueAction = happyPath[2].result.structuredContent.next_actions
 assert.equal(initialContinueAction.arguments.approval, "none");
 assert.ok(initialContinueAction.description.includes("approval=none"));
 assert.ok(initialContinueAction.description.includes("autopilot"));
+
+const recommendLoopPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "thehood_recommend_loop",
+      arguments: {
+        goal: "Use Hood loops to fix flaky checkout tests before preview release.",
+        repo_path: repoPath,
+        acceptance_criteria: ["Preview docs describe the beta loop behavior honestly."],
+        validation_commands: ["npm run smoke:mcp"],
+        allowed_paths: ["README.md", "docs/LOOP_SELECTION_UX.md"],
+        forbidden_changes: ["Do not publish private run logs."],
+        max_iterations: 5
+      }
+    }
+  }
+]);
+const recommendLoopContent = recommendLoopPath[1].result.structuredContent;
+assert.equal(recommendLoopContent.kind, "loop_recommendation");
+assert.equal(recommendLoopContent.contract.iterationBudget, 5);
+assert.equal(recommendLoopContent.runAction.tool, "thehood_orchestrate");
+assert.ok(
+  recommendLoopContent.runAction.arguments.constraints.some((constraint) => constraint.startsWith("Loop stack:")),
+  "MCP loop recommendation should carry stack context into the runtime action"
+);
+assert.ok(
+  recommendLoopContent.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "MCP loop recommendation should expose a run-loop card action"
+);
+assert.ok(
+  recommendLoopContent.actions.some((action) => action.action === "edit_contract"),
+  "MCP loop recommendation should expose an edit-contract card action"
+);
+assert.ok(recommendLoopContent.card.title.startsWith("Recommended loop:"));
+assert.ok(
+  recommendLoopContent.card.actions.some((action) => action.action === "run_loop" && action.tool === "thehood_orchestrate"),
+  "MCP loop recommendation card should expose the runtime run action directly"
+);
+assert.ok(
+  recommendLoopContent.card.sections.some((section) => section.id === "contract"),
+  "MCP loop recommendation card should include a completion contract section"
+);
+assert.equal(recommendLoopContent.artifact.surface, "dashboard");
+assert.equal(recommendLoopContent.artifact.manifest.title, "TheHood Loop Plan");
+assert.ok(Array.isArray(recommendLoopContent.artifact.manifest.blocks));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.loop_recipes));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.loop_stack));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.card_actions));
+assert.ok(
+  recommendLoopContent.contract.acceptanceCriteria.includes("Preview docs describe the beta loop behavior honestly."),
+  "MCP loop recommendation should accept edited contract criteria"
+);
+assert.ok(
+  recommendLoopContent.contract.validationCommands.includes("npm run smoke:mcp"),
+  "MCP loop recommendation should accept edited validation commands"
+);
+assert.ok(
+  recommendLoopContent.alternatives.some((candidate) => candidate.recipe.id === "completion-contract") ||
+    recommendLoopContent.recommended.recipe.id === "completion-contract",
+  "loop recommendation should keep release-facing completion contract visible"
+);
 
 const proAccessPath = await runMcp([
   ...baseMessages,
@@ -229,10 +324,14 @@ const proAccessContent = proAccessPath[1].result.structuredContent;
 assert.equal(proAccessContent.kind, "pro_access_preflight");
 assert.equal(proAccessContent.provider, "chatgpt-web:chatgpt-pro");
 assert.equal(proAccessContent.codex_host_policy_boundary.status, "outside_thehood_runtime_control");
+assert.equal(proAccessContent.bridge.github_connector_confirmed, false);
 assert.ok(
   proAccessContent.recommended_paths.some((path) => path.id === "chatgpt_mcp_connector"),
   "pro access preflight should return a connector-mode fallback"
 );
+const proConnectorPath = proAccessContent.recommended_paths.find((path) => path.id === "chatgpt_mcp_connector");
+assert.ok(proConnectorPath.setup_command.includes("--profile thehood-local"));
+assert.ok(proConnectorPath.handoff_prompt.includes("Call TheHood MCP tools"));
 assert.ok(
   proAccessContent.recommended_paths.some((path) => path.id === "codex_agent_bridge"),
   "pro access preflight should return direct bridge readiness"
@@ -343,34 +442,84 @@ const remoteModelAccessPath = await runMcp([
   }
 ]);
 const remoteModelAccessContent = remoteModelAccessPath[1].result.structuredContent;
-assert.equal(remoteModelAccessContent.repo_visibility.default_gate, "remote_github_refs");
+assert.equal(remoteModelAccessContent.repo_visibility.default_gate, "user_choice_required");
 assert.equal(remoteModelAccessContent.repo_visibility.clean, true);
 assert.equal(remoteModelAccessContent.repo_visibility.pushed, true);
+assert.equal(remoteModelAccessContent.repo_visibility.remote_refs_available, true);
+assert.equal(remoteModelAccessContent.repo_visibility.github_connector_confirmed, false);
 assert.equal(remoteModelAccessContent.repo_visibility.github_remote.owner, "thehood");
 assert.ok(
   remoteModelAccessContent.repo_visibility.user_choices.some(
-    (choice) => choice.id === "use_remote_github_refs" && choice.recommended === true
+    (choice) => choice.id === "confirm_chatgpt_web_github_connector" && choice.recommended === true
   ),
-  "clean pushed model access preflight should recommend remote GitHub refs"
+  "clean pushed model access preflight should require connector confirmation before remote refs"
 );
 assert.ok(
   remoteModelAccessContent.recommended_paths.some(
-    (path) => path.id === "use_remote_github_refs" && path.status === "default_for_chatgpt_web"
+    (path) => path.id === "confirm_chatgpt_web_github_connector" && path.status === "required_before_remote_default"
   ),
-  "clean pushed ChatGPT Web preflight should default to remote GitHub refs"
+  "clean pushed ChatGPT Web preflight should not default to unconfirmed remote GitHub refs"
 );
 assert.ok(
   remoteModelAccessContent.destinations.some(
     (destination) =>
       destination.assignment === "chatgpt-web:chatgpt-pro" &&
       destination.remote_repo_access.route === "github_connector" &&
-      destination.remote_repo_access.status === "default"
+      destination.remote_repo_access.status === "connector_unconfirmed"
   ),
-  "clean pushed ChatGPT Web destination should use GitHub connector by default"
+  "clean pushed ChatGPT Web destination should report unconfirmed connector access"
 );
 assert.ok(
-  !remoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
-  "clean pushed remote default should not recommend local context approval by default"
+  remoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "unconfirmed remote refs should keep explicit local context approval available"
+);
+
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "1";
+const confirmedRemoteModelAccessPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "thehood_model_access",
+      arguments: {
+        repo_path: remoteReadyRepoPath,
+        agents: ["chatgpt-web:chatgpt-pro"],
+        purpose: "Confirmed remote default review.",
+        context_kind: "repo_context"
+      }
+    }
+  }
+]);
+process.env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED = "0";
+const confirmedRemoteModelAccessContent = confirmedRemoteModelAccessPath[1].result.structuredContent;
+assert.equal(confirmedRemoteModelAccessContent.repo_visibility.default_gate, "remote_github_refs");
+assert.equal(confirmedRemoteModelAccessContent.repo_visibility.github_connector_confirmed, true);
+assert.ok(
+  confirmedRemoteModelAccessContent.repo_visibility.user_choices.some(
+    (choice) => choice.id === "use_remote_github_refs" && choice.recommended === true
+  ),
+  "confirmed clean pushed model access preflight should recommend remote GitHub refs"
+);
+assert.ok(
+  confirmedRemoteModelAccessContent.recommended_paths.some(
+    (path) => path.id === "use_remote_github_refs" && path.status === "default_for_chatgpt_web"
+  ),
+  "confirmed clean pushed ChatGPT Web preflight should default to remote GitHub refs"
+);
+assert.ok(
+  confirmedRemoteModelAccessContent.destinations.some(
+    (destination) =>
+      destination.assignment === "chatgpt-web:chatgpt-pro" &&
+      destination.remote_repo_access.route === "github_connector" &&
+      destination.remote_repo_access.status === "default"
+  ),
+  "confirmed clean pushed ChatGPT Web destination should use GitHub connector by default"
+);
+assert.ok(
+  !confirmedRemoteModelAccessContent.recommended_paths.some((path) => path.id === "approve_local_context_transfer"),
+  "confirmed remote default should not recommend local context approval by default"
 );
 
 const agentBoardPath = await runMcp([
@@ -483,6 +632,7 @@ const doctorPath = await runMcp([
 
 const doctorContent = doctorPath[1].result.structuredContent;
 assert.equal(doctorContent.runtime.name, "thehood");
+assert.equal(doctorContent.runtime.version, packageJson.version);
 assert.ok(doctorContent.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));
@@ -516,6 +666,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("compact_mcp_host_response
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorContent.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorContent.runtime.capabilities.includes("loop_recommendation_router"));
+assert.ok(doctorContent.runtime.capabilities.includes("codex_loop_plan_artifact"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));

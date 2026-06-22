@@ -19,6 +19,7 @@ export interface RemoteRepoContextInspection {
   provider: string;
   repoPath: string;
   githubRemote?: GitHubRemoteRef;
+  githubConnectorConfirmed: boolean;
   branch?: string;
   commit?: string;
   upstream?: string;
@@ -192,6 +193,10 @@ const githubRemotesFromGitOutput = (stdout: string): GitHubRemoteRef[] => {
 const normalizeDelegate = (delegate: JsonValue | undefined): JsonObject =>
   delegate && typeof delegate === "object" && !Array.isArray(delegate) ? delegate : {};
 
+export const chatGptWebGitHubConnectorConfirmed = (
+  env: NodeJS.ProcessEnv = process.env
+): boolean => env.THEHOOD_CHATGPT_WEB_GITHUB_CONNECTOR_CONFIRMED === "1";
+
 export const chooseRepoContextRoute = (
   inspection: RemoteRepoContextInspection
 ): RepoContextRouteDecision => {
@@ -237,10 +242,18 @@ export const chooseRepoContextRoute = (
     };
   }
 
+  if (!inspection.githubConnectorConfirmed) {
+    return {
+      route: "local_bundle",
+      reason: "chatgpt_web_github_connector_unconfirmed",
+      reasons: [...reasons, "chatgpt_web_github_connector_unconfirmed"]
+    };
+  }
+
   return {
     route: "github_connector",
-    reason: "clean_pushed_github_repo",
-    reasons
+    reason: "clean_pushed_github_repo_with_confirmed_chatgpt_web_github_connector",
+    reasons: [...reasons, "chatgpt_web_github_connector_confirmed"]
   };
 };
 
@@ -300,6 +313,8 @@ export const inspectRemoteRepoContext = async (
     provider: assignment.provider,
     repoPath,
     ...(githubRemote ? { githubRemote } : {}),
+    githubConnectorConfirmed:
+      assignment.provider === "chatgpt-web" && chatGptWebGitHubConnectorConfirmed(),
     ...(branch ? { branch } : {}),
     ...(commit ? { commit } : {}),
     ...(upstream ? { upstream } : {}),

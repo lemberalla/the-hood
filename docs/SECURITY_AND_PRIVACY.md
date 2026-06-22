@@ -52,7 +52,7 @@ Rules:
 - Capture only visible model outputs needed for the run.
 - Do not invoke ChatGPT Web for repo work until the user explicitly approves that provider invocation.
 - Do not send bounded repo context back to ChatGPT Web until the user explicitly approves that external context transfer or has configured low-risk external transfer auto-approval.
-- For clean pushed GitHub repos, ChatGPT Web may receive a refs-only `remote_context` artifact instead of local file excerpts. The directive tells ChatGPT to use its GitHub connector at the exact commit; it does not grant TheHood new GitHub access or bypass the user's ChatGPT connector permissions.
+- For clean pushed GitHub repos, ChatGPT Web may receive a refs-only `remote_context` artifact instead of local file excerpts only after the active bridge GitHub connector surface is confirmed. The directive tells ChatGPT to use its GitHub connector at the exact commit; it does not grant TheHood new GitHub access, attach ChatGPT apps, or bypass the user's ChatGPT connector permissions.
 - In autopilot mode, treat the user-configured approval policy as the approval source and still fail closed on secret-risk transfers, protected test changes, destructive commands, dependency installs, and dirty-checkout integration blockers.
 - Runtime-owned revision packets may route fixable reviewer findings back to the implementer, but unsafe critic feedback, verifier `ask_user` or `abort`, and protected-path gates must still stop for review.
 
@@ -69,6 +69,7 @@ The runtime must:
 - require explicit approval before applying isolated worker patches to the target checkout
 - require separate approval before verifier review when an applied worker patch changes protected test, fixture, snapshot, or eval paths
 - require `THEHOOD_ALLOW_DIRECT_EDIT=1` before a local agent can edit the target checkout directly
+- keep repo-local runtime state in `.thehood/`, automatically add `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` for git checkouts, and treat that state as private local evidence rather than source code
 
 ## MCP Repo Gateway
 
@@ -127,13 +128,13 @@ Rules:
 - Tell browser-backed providers to ignore stale provider session context and use only TheHood-supplied state.
 - Require browser-backed provider responses to acknowledge the current directive before accepting schema-valid output.
 - Keep directive-level `canonicalMemory` bounded and refs-only. It may name latest progress, reconciliation, repo context, final report, and transfer manifest artifacts, but it must not inline large artifact bodies.
-- GitHub connector repo context is also refs-only. It may name owner, repo, branch, upstream, and commit, but it must not inline local file bodies.
+- GitHub connector repo context is also refs-only and requires a confirmed provider connector route before selection. It may name owner, repo, branch, upstream, and commit, but it must not inline local file bodies.
 - If future work sends larger memory bodies to browser or API providers, treat that as a `memory_packet` external transfer and require a transfer manifest before the data leaves the machine.
 - Keep advanced memory engines pluggable and rebuildable from canonical artifacts.
 
 ## External Transfer Review
 
-Before local repo context bodies or runtime memory cross a browser or API provider boundary, TheHood should create a transfer manifest and point the approval gate at it. Refs-only GitHub connector context names remote coordinates instead of local file bodies; it is recorded as a `remote_context` artifact and does not replace transfer manifests for local context packs.
+Before local repo context bodies or runtime memory cross a browser or API provider boundary, TheHood should create a transfer manifest and point the approval gate at it. Confirmed refs-only GitHub connector context names remote coordinates instead of local file bodies; it is recorded as a `remote_context` artifact and does not replace transfer manifests for local context packs.
 
 The manifest records:
 

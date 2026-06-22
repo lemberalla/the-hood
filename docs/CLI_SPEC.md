@@ -30,6 +30,9 @@ thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood roles set implementer claude-code:sonnet
 thehood roles set verifier claude-code:sonnet
 thehood roles set critic claude-code:fable
+thehood recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
+thehood recommend-loop "Prepare public release" --repo . --acceptance "README claims match implemented behavior" --validation "npm run smoke:mcp" --allowed-path README.md --forbidden-change "Do not publish private run logs"
+thehood goal "Prepare release metadata" --repo . --max-iterations 5
 thehood run "Implement the requested change" --repo .
 thehood run "Implement the requested change" --repo . --loop
 thehood plan "Design the feature" --repo .
@@ -84,6 +87,20 @@ thehood roles set qa codex-cli:spark
 | `implement` | Scoped edits after approval policy allows them |
 | `review` | Independent diff or repo review |
 
+## Goal Surface
+
+`thehood goal "<goal>" --repo . --max-iterations 5` creates a normal bounded implementation run and immediately drives the existing headless loop. It is a product-facing alias over `run` plus `loop`, not a scheduler.
+
+`--max-iterations` applies only to the created run. It does not change repo config defaults and does not create timer loops, background daemons, cloud queues, or new approval behavior.
+
+## Loop Recommendation
+
+`thehood recommend-loop "<goal>" --repo . --max-iterations 5` is a read-only loop router. It recommends one public loop recipe, returns a recommended stack, drafts a completion contract, shows alternatives, and returns the MCP/Codex `runAction` shape for the existing runtime path.
+
+Recommendation does not start a run, call model providers, edit files, create schedules, approve gates, or send context externally. It is meant to answer "which loop shape fits this outcome?" before `thehood goal` or `thehood_orchestrate` starts the governed runtime loop.
+
+The draft contract can be edited before a run starts with repeatable `--acceptance`, `--validation`, `--allowed-path`, and `--forbidden-change` flags. These options update only the recommendation output and returned runtime constraints; they do not grant permissions or bypass runtime approvals.
+
 ## Role Selection
 
 Role mapping can be set globally, per repo, or per run.
@@ -136,6 +153,8 @@ thehood continue <run-id>
 ## Config File
 
 The current implementation uses `.thehood/config.json` to avoid adding a YAML parser before the runtime is stable.
+
+TheHood may also create `.thehood/runs` and `.thehood/artifacts` when a plan, run, orchestration, validation, or provider call records evidence. In git checkouts, TheHood automatically adds `.thehood/` and `.thehood-browser.json` to `.git/info/exclude` before writing repo-local runtime state. This keeps local evidence out of normal `git status` without mutating the repo's committed `.gitignore`. Users can delete `.thehood/` to clear local run history.
 
 Initial config shape:
 
@@ -292,7 +311,7 @@ TheHood excludes its own `.thehood` runtime directory from this evidence.
 
 `thehood approvals policy set external-transfers manual|auto-low-risk` remains available for transfer-specific policy tuning. It controls whether repo context and progress packet transfers always stop for manual approval or can be auto-approved when the manifest is bounded and does not have `secret_risk`.
 
-For read-only `plan`, `research`, and `review` runs, direct `chatgpt-web` role calls and same-run summons can attach refs-only `remote_context` before the provider call when local git reports a clean GitHub checkout whose `HEAD` matches the tracked upstream ref. An orchestrator or planner can also request `action: "delegate"` before enough repo evidence exists; the runtime applies that same GitHub connector route before falling back to local context capture. The `remote_context` artifact directs ChatGPT Web to use its GitHub connector at the exact commit. Otherwise, the runtime captures a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact before local repo context bodies are sent back to the provider. Manual policy pauses at an approval gate; `auto-low-risk` and `autopilot` may auto-approve bounded non-secret manifests and record the approval event before sending. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
+For read-only `plan`, `research`, and `review` runs, direct `chatgpt-web` role calls and same-run summons can attach refs-only `remote_context` before the provider call when local git reports a clean GitHub checkout whose `HEAD` matches the tracked upstream ref and the active ChatGPT Web bridge GitHub connector surface is confirmed. An orchestrator or planner can also request `action: "delegate"` before enough repo evidence exists; the runtime applies that same confirmed GitHub connector route before falling back to local context capture. The `remote_context` artifact directs ChatGPT Web to use its GitHub connector at the exact commit. Otherwise, the runtime captures a bounded `context` artifact with deterministic filesystem reads. Browser and API providers first write a `transfer_manifest` artifact before local repo context bodies are sent back to the provider. Manual policy pauses at an approval gate; `auto-low-risk` and `autopilot` may auto-approve bounded non-secret manifests and record the approval event before sending. If the provider later delegates concrete repo paths that were not in previous context packs, the runtime captures a targeted follow-up context and applies the same transfer review policy before sending it.
 
 When `codex-cli` or `claude-code` is selected, TheHood invokes the local CLI in non-interactive mode with a runtime-built directive and requires a normalized JSON `AgentResponse` before advancing. The JSON envelope carries mechanical fields, while plans, reports, reviews, and rationale should be returned as markdown in the role payload's `markdown` field. For read-only repo work, model-backed provider invocation pauses at an approval gate before the first provider call. After the command exits, TheHood writes redacted stdout/stderr `log` artifacts and a bounded `provider_invocation` artifact so status can show which local role command actually ran and where to inspect its output. `codex-cli` models are discovered from `codex debug models`; friendly names such as `spark` resolve against that live catalog, and `doctor` reports `model_not_available:<model>` when a custom assignment is not supported by the current CLI/account. `claude-code` model names such as `sonnet`, `fable`, and `mythos` are passthrough aliases; TheHood records them and passes explicit non-default names to the user's local Claude CLI. `configured` uses the local CLI default for Codex and Claude and is not sent as a literal model name.
 
@@ -370,5 +389,8 @@ The helper does not start the tunnel or contact OpenAI. It prints:
 - `tunnel-client doctor`
 - `tunnel-client run`
 - ChatGPT Developer Mode connector setup notes
+- a connector validation path using `thehood_doctor` and read-only repo gateway tools
+
+The tunnel helper is for MCP connector mode, where ChatGPT is the MCP host. It is separate from `thehood mcp config --chatgpt-web`, which configures the `chatgpt-web` browser bridge for TheHood-initiated agent-bridge calls.
 
 Use the local-build command while developing this checkout so ChatGPT sees the current `dist` output. Use the installed-package command after publishing or installing TheHood.
