@@ -2,6 +2,7 @@ import { loadConfig, writeConfig } from "../runtime/config.js";
 import { inspectRuntimeHealth } from "../runtime/doctor.js";
 import { buildAgentBoard, type AgentBoard, type AgentBoardAction, type AgentBoardCard } from "../runtime/agentBoard.js";
 import { buildAgentBoardArtifact } from "../runtime/agentBoardArtifact.js";
+import { recommendLoop } from "../runtime/loopRecommendation.js";
 import { abortRun, createRun, getRun, listRuns, recordApproval } from "../runtime/runtime.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import { fanoutAgents, type FanoutItemInput } from "../runtime/fanout.js";
@@ -676,6 +677,50 @@ const readOnlyAnnotations = (): JsonObject => ({
   destructiveHint: false,
   idempotentHint: true,
   openWorldHint: false
+});
+
+const createRecommendLoopTool = (): McpTool => ({
+  definition: {
+    name: "thehood_recommend_loop",
+    title: "Recommend TheHood Loop",
+    description:
+      "Recommend a governed software goal-loop recipe and completion contract draft without starting providers, edits, schedules, or external transfers.",
+    annotations: readOnlyAnnotations(),
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        goal: {
+          type: "string",
+          description: "The user outcome to route into a loop shape."
+        },
+        repo_path: {
+          type: "string"
+        },
+        constraints: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        },
+        max_iterations: {
+          type: "number",
+          description: "Optional positive integer for the drafted completion contract. Defaults to 5."
+        }
+      },
+      required: ["goal", "repo_path"]
+    }
+  },
+  handle: async (argumentsValue) =>
+    executeTool(argumentsValue, async (args) => {
+      const maxIterations = optionalPositiveInteger(args, "max_iterations");
+      return toJsonObject(await recommendLoop({
+        repoPath: requiredString(args, "repo_path"),
+        goal: requiredString(args, "goal"),
+        constraints: optionalStringList(args, "constraints"),
+        ...(maxIterations === undefined ? {} : { maxIterations })
+      }));
+    })
 });
 
 const createPlanTool = (): McpTool => ({
@@ -2416,6 +2461,7 @@ export const mcpTools: McpTool[] = [
   createRolesTool(),
   createModelAccessTool(),
   createProAccessTool(),
+  createRecommendLoopTool(),
   createAgentBoardTool(),
   createAssignRolesTool(),
   createPlanTool(),

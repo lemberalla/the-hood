@@ -46,6 +46,8 @@ export const runtimeCapabilities = [
   "bounded_same_run_fanout",
   "runtime_team_presets",
   "multi_model_team_presets",
+  "loop_recommendation_router",
+  "codex_loop_plan_artifact",
   "provider_model_passthrough",
   "configurable_budget_envelopes",
   "provider_access_modes",

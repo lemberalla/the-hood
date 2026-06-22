@@ -30,6 +30,7 @@ thehood roles set orchestrator chatgpt-web:chatgpt-pro
 thehood roles set implementer claude-code:sonnet
 thehood roles set verifier claude-code:sonnet
 thehood roles set critic claude-code:fable
+thehood recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
 thehood goal "Prepare release metadata" --repo . --max-iterations 5
 thehood run "Implement the requested change" --repo .
 thehood run "Implement the requested change" --repo . --loop
@@ -90,6 +91,12 @@ thehood roles set qa codex-cli:spark
 `thehood goal "<goal>" --repo . --max-iterations 5` creates a normal bounded implementation run and immediately drives the existing headless loop. It is a product-facing alias over `run` plus `loop`, not a scheduler.
 
 `--max-iterations` applies only to the created run. It does not change repo config defaults and does not create timer loops, background daemons, cloud queues, or new approval behavior.
+
+## Loop Recommendation
+
+`thehood recommend-loop "<goal>" --repo . --max-iterations 5` is a read-only loop router. It recommends one public loop recipe, drafts a completion contract, shows alternatives, and returns the MCP/Codex `runAction` shape for the existing runtime path.
+
+Recommendation does not start a run, call model providers, edit files, create schedules, approve gates, or send context externally. It is meant to answer "which loop shape fits this outcome?" before `thehood goal` or `thehood_orchestrate` starts the governed runtime loop.
 
 ## Role Selection
 

@@ -10,6 +10,7 @@ import { InputError, TheHoodError } from "../runtime/errors.js";
 import { readLatestExternalTransferManifest } from "../runtime/externalTransfer.js";
 import { captureGitEvidence } from "../runtime/gitEvidence.js";
 import type { LocalStateIgnoreResult } from "../runtime/localStateIgnore.js";
+import { recommendLoop } from "../runtime/loopRecommendation.js";
 import { advanceRun } from "../runtime/loop.js";
 import { runAutopilotLoop } from "../runtime/loopRunner.js";
 import { startMcpServer } from "../mcp/server.js";
@@ -61,6 +62,7 @@ import {
   formatCommandResult,
   formatDoctorReport,
   formatGitEvidence,
+  formatLoopRecommendation,
   formatMcpConfigReport,
   formatMcpTunnelConfigReport,
   formatExternalTransferPreview,
@@ -101,6 +103,7 @@ Usage:
   thehood teams [apply <preset>] [--repo <path>] [--json]
   thehood roles [--repo <path>] [--json]
   thehood roles set <role> <provider:model> [--repo <path>]
+  thehood recommend-loop <goal> [--repo <path>] [--constraint <text>] [--max-iterations <n>] [--json]
   thehood goal <goal> [--repo <path>] [--max-iterations <n>] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood plan <goal> [--repo <path>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
   thehood run <goal> [--repo <path>] [--mode <mode>] [--loop] [--max-cycles <n>] [--max-steps <n>] [--json]
@@ -701,6 +704,24 @@ const handleCreateRun = async (
   shouldPrintJson(options) ? printJson(run) : process.stdout.write(`${formatRunSummary(run)}\n`);
 };
 
+const handleRecommendLoop = async (
+  args: string[],
+  options: Record<string, CliOptionValue>
+): Promise<void> => {
+  const goal = args.join(" ").trim();
+  const maxIterations = parsePositiveIntegerOption(options, "maxIterations");
+  const recommendation = await recommendLoop({
+    repoPath: repoFromOptions(options),
+    goal,
+    constraints: getStringListOption(options, "constraint"),
+    ...(maxIterations === undefined ? {} : { maxIterations })
+  });
+
+  shouldPrintJson(options)
+    ? printJson(recommendation)
+    : process.stdout.write(`${formatLoopRecommendation(recommendation)}\n`);
+};
+
 const handleStatus = async (
   args: string[],
   options: Record<string, CliOptionValue>
@@ -1226,6 +1247,9 @@ const runCli = async (argv: string[]): Promise<void> => {
       return;
     case "roles":
       await handleRoles(args, parsed.options);
+      return;
+    case "recommend-loop":
+      await handleRecommendLoop(args, parsed.options);
       return;
     case "goal":
     case "plan":

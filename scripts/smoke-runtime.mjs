@@ -893,6 +893,8 @@ assert.ok(doctorResult.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorResult.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorResult.runtime.capabilities.includes("runtime_team_presets"));
 assert.ok(doctorResult.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorResult.runtime.capabilities.includes("loop_recommendation_router"));
+assert.ok(doctorResult.runtime.capabilities.includes("codex_loop_plan_artifact"));
 assert.ok(doctorResult.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorResult.runtime.capabilities.includes("configurable_budget_envelopes"));
 assert.ok(doctorResult.runtime.capabilities.includes("model_assisted_qa_tester"));
@@ -3021,6 +3023,31 @@ await fs.writeFile(
     2
   ),
   "utf8"
+);
+const loopRecommendation = JSON.parse(
+  (await runCli([
+    "recommend-loop",
+    "fix flaky checkout tests before preview release",
+    "--repo",
+    goalRepoPath,
+    "--max-iterations",
+    "5",
+    "--json"
+  ])).stdout
+);
+assert.equal(loopRecommendation.kind, "loop_recommendation");
+assert.equal(loopRecommendation.contract.iterationBudget, 5);
+assert.ok(
+  ["build-test-fix", "completion-contract", "quality-streak"].includes(loopRecommendation.recommended.recipe.id),
+  "loop recommendation should route a flaky release-facing goal to a useful recipe"
+);
+assert.equal(loopRecommendation.runAction.tool, "thehood_orchestrate");
+assert.equal(loopRecommendation.artifact.surface, "dashboard");
+assert.equal(loopRecommendation.artifact.manifest.title, "TheHood Loop Plan");
+assert.ok(Array.isArray(loopRecommendation.artifact.snapshot.datasets.loop_recipes));
+assert.ok(
+  loopRecommendation.contract.validationCommands.includes("npm run typecheck"),
+  "loop recommendation should use discovered package validation scripts"
 );
 const goalResult = JSON.parse(
   (await runCli([

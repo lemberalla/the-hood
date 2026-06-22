@@ -74,6 +74,7 @@ Implemented tools:
 - `thehood_roles`
 - `thehood_model_access`
 - `thehood_pro_access`
+- `thehood_recommend_loop`
 - `thehood_agent_board`
 - `thehood_assign_roles`
 - `thehood_plan`
@@ -161,6 +162,25 @@ Input:
 Output includes current TheHood approval policy, ChatGPT Web bridge readiness, an explicit note that Codex or tenant external-disclosure policy is outside TheHood runtime control, and recommended paths for ChatGPT MCP connector mode, direct Codex agent-bridge mode, or an abstract no-repo-context Pro prompt.
 
 If Codex rejects a direct Pro consult as an external disclosure, do not ask the user to approve the same blocked action again. Call `thehood_pro_access`, then use connector mode or a no-repo-context prompt.
+
+### `thehood_recommend_loop`
+
+Recommend a loop recipe and draft a completion contract without invoking providers, starting a run, editing files, creating schedules, or sending context externally.
+
+Input:
+
+```json
+{
+  "repo_path": "string",
+  "goal": "string",
+  "constraints": ["optional local-only constraints"],
+  "max_iterations": 5
+}
+```
+
+Output includes the recommended recipe, confidence, reason, alternatives, a completion contract draft, and `runAction` for the existing runtime path. It also includes `artifact.surface`, `artifact.manifest`, and `artifact.snapshot`, a bounded dashboard payload that Codex can render as a native loop-plan card.
+
+Codex should call this before asking the user to choose a recipe name. If the user accepts the recommendation, call the `runAction.tool` with `runAction.arguments`. Runtime approvals, provider calls, evidence capture, verifier review, and stop conditions still happen inside the normal TheHood run.
 
 ### `thehood_agent_board`
 

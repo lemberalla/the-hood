@@ -49,6 +49,7 @@ It supports:
 - runtime-derived agent board snapshots and dashboard payloads for Codex card-style agent visibility
 - optional repo-local Codex plugin scaffold for TheHood workflow guidance and MCP setup
 - runtime-owned team presets for Codex default, ChatGPT Pro orchestration, Claude second-judge, Spark plus Sonnet, Claude builder, and high-assurance Pro plus Claude setups
+- read-only loop recommendation that routes a plain-language goal into a recipe, completion contract draft, alternatives, and Codex card artifact
 - configurable budget defaults for max provider iterations and fan-out item caps
 - Codex-facing MCP tools for role assignment and guest-agent consultation
 - local-only Pro access preflight so Codex can distinguish runtime autopilot, direct bridge readiness, host-policy blocks, and ChatGPT MCP connector handoff paths
@@ -147,6 +148,7 @@ node dist/cli/main.js agent-board --repo . --artifact --json
 node dist/cli/main.js teams --repo .
 node dist/cli/main.js config set fanout-max-items 4 --repo .
 node dist/cli/main.js roles --repo .
+node dist/cli/main.js recommend-loop "Fix flaky checkout tests" --repo . --max-iterations 5
 node dist/cli/main.js goal "Prepare release metadata" --repo . --max-iterations 5
 node dist/cli/main.js run "Implement the first provider adapter" --repo .
 node dist/cli/main.js run "Exercise the full loop" --repo . --loop
@@ -226,6 +228,7 @@ Codex-native Subagents are owned by Codex, not by TheHood MCP tool output. TheHo
 - [Provider Matrix](docs/PROVIDER_MATRIX.md)
 - [Known Limitations](docs/KNOWN_LIMITATIONS.md)
 - [Goal, Loop, Schedule](docs/GOAL_LOOP_SCHEDULE.md)
+- [Loop Selection UX](docs/LOOP_SELECTION_UX.md)
 - [Completion Contract](docs/COMPLETION_CONTRACT.md)
 - [Loop Recipes](docs/LOOP_RECIPES.md)
 - [Synthetic Stub Demo](docs/DEMO.md)

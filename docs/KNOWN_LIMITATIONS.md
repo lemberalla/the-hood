@@ -11,7 +11,7 @@ TheHood `v0.1.0-preview.0` is a developer preview. It is meant to prove a local 
 - No production OpenAI API adapter.
 - No production Anthropic API adapter.
 - No production local model adapter.
-- No mature public loop library or preset marketplace.
+- No built-in TheHood loop preset marketplace. The preview can recommend local recipe shapes, but it does not yet import or publish third-party loop catalogs as executable runtime presets.
 - No polished macOS menubar app.
 - No automatic native Codex visual rendering beyond explicit agent-board or dashboard artifact payloads.
 

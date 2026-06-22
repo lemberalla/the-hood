@@ -214,6 +214,10 @@ assert.ok(
   "tools/list should expose thehood_model_access"
 );
 assert.ok(
+  happyPath[1].result.tools.some((tool) => tool.name === "thehood_recommend_loop"),
+  "tools/list should expose thehood_recommend_loop"
+);
+assert.ok(
   happyPath[1].result.tools.some((tool) => tool.name === "thehood_agent_board"),
   "tools/list should expose thehood_agent_board"
 );
@@ -233,6 +237,36 @@ const initialContinueAction = happyPath[2].result.structuredContent.next_actions
 assert.equal(initialContinueAction.arguments.approval, "none");
 assert.ok(initialContinueAction.description.includes("approval=none"));
 assert.ok(initialContinueAction.description.includes("autopilot"));
+
+const recommendLoopPath = await runMcp([
+  ...baseMessages,
+  {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "thehood_recommend_loop",
+      arguments: {
+        goal: "Use Hood loops to fix flaky checkout tests before preview release.",
+        repo_path: repoPath,
+        max_iterations: 5
+      }
+    }
+  }
+]);
+const recommendLoopContent = recommendLoopPath[1].result.structuredContent;
+assert.equal(recommendLoopContent.kind, "loop_recommendation");
+assert.equal(recommendLoopContent.contract.iterationBudget, 5);
+assert.equal(recommendLoopContent.runAction.tool, "thehood_orchestrate");
+assert.equal(recommendLoopContent.artifact.surface, "dashboard");
+assert.equal(recommendLoopContent.artifact.manifest.title, "TheHood Loop Plan");
+assert.ok(Array.isArray(recommendLoopContent.artifact.manifest.blocks));
+assert.ok(Array.isArray(recommendLoopContent.artifact.snapshot.datasets.loop_recipes));
+assert.ok(
+  recommendLoopContent.alternatives.some((candidate) => candidate.recipe.id === "completion-contract") ||
+    recommendLoopContent.recommended.recipe.id === "completion-contract",
+  "loop recommendation should keep release-facing completion contract visible"
+);
 
 const proAccessPath = await runMcp([
   ...baseMessages,
@@ -595,6 +629,8 @@ assert.ok(doctorContent.runtime.capabilities.includes("compact_mcp_host_response
 assert.ok(doctorContent.runtime.capabilities.includes("same_run_agent_summons"));
 assert.ok(doctorContent.runtime.capabilities.includes("bounded_same_run_fanout"));
 assert.ok(doctorContent.runtime.capabilities.includes("multi_model_team_presets"));
+assert.ok(doctorContent.runtime.capabilities.includes("loop_recommendation_router"));
+assert.ok(doctorContent.runtime.capabilities.includes("codex_loop_plan_artifact"));
 assert.ok(doctorContent.runtime.capabilities.includes("provider_model_passthrough"));
 assert.ok(doctorContent.runtime.capabilities.includes("model_assisted_qa_tester"));
 assert.ok(doctorContent.runtime.capabilities.includes("critic_trigger_artifacts"));
