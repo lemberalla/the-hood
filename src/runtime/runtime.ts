@@ -142,6 +142,7 @@ export const createRun = async (input: CreateRunInput): Promise<RunRecord> => {
     approvalEvents: [],
     toolEvents: [],
     handoffs: [],
+    providerWaits: [],
     events: [
       createEvent("run_created", `Created ${input.mode} run.`),
       createEvent(

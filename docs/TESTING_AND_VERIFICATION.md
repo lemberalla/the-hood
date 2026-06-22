@@ -40,6 +40,7 @@ Current implementation:
 - `thehood evidence <run-id>` captures git status, git diff, and protected path matches.
 - The verification phase discovers package validation scripts in `typecheck`, `test`, `lint`, `build` order, runs the first available script through the runtime command runner, and attaches a validation summary artifact before verifier review.
 - After validation evidence is captured, the runtime attaches a `review_routing` artifact that classifies implementation risk and records which subjective review lanes are required or skipped.
+- Provider calls attach typed provider-wait records and `provider_wait` artifacts before a provider response is accepted. Active waits should be checked through run status before retrying a long-running browser or bridge-backed provider call.
 - Local command providers such as Codex CLI and Claude Code attach redacted stdout/stderr `log` artifacts plus compact `provider_invocation` artifacts with command, role, provider/model, workspace mode, sandbox or permission mode, exit code, timeout state, output lengths and refs, parse status, and isolated patch refs when present.
 - Isolated implementer patches stop at an approval gate, then deterministic runtime integration applies the approved patch and writes an integration report before verifier review.
 - Integrated patches that touch protected test, fixture, snapshot, or eval paths stop at a separate approval gate before verifier review.
@@ -171,6 +172,7 @@ evidence:
 - A model QA response is treated as proof that validation commands passed.
 - A critic response is treated as proof that implementation is accepted or deterministic validation passed.
 - A provider invocation artifact is treated as proof that code behavior is correct; it only proves the local agent adapter command ran and returned parseable or fallback output.
+- A timed-out MCP host call is retried without first checking `thehood runs` or `thehood status` for an active provider wait.
 - A stale pre-revision verifier or validation result is treated as satisfying the post-repair review gate.
 - A risk-routing decision is treated as proof that code behavior is correct without validation and verifier evidence.
 - A crew lane trail is treated as proof that a gate was satisfied without reading the lane's artifact, event, or command evidence.

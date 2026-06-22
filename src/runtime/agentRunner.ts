@@ -2,6 +2,7 @@ import { writeRunArtifact } from "./artifacts.js";
 import { buildAgentDirective } from "./directives.js";
 import { newId, nowIso } from "./ids.js";
 import { getProviderAdapter } from "../providers/router.js";
+import { beginProviderWait, completeProviderWait } from "./providerWaits.js";
 import { validateAgentResponse } from "./responseContracts.js";
 import { loadRun, saveRun } from "./store.js";
 import type { AgentResponse } from "../providers/types.js";
@@ -87,47 +88,68 @@ export const runAgent = async (
 
   await saveRun(runWithDirective);
 
-  const response = await adapter.runAgent({
+  const wait = await beginProviderWait({
     run: runWithDirective,
     role,
     assignment,
-    context,
-    directive
+    directive,
+    directiveArtifact
   });
-  validateAgentResponse(role, directive, response);
 
-  const responseArtifactKind = options.responseArtifactKind ?? defaultResponseArtifactKind(role);
-  const artifact = await writeRunArtifact({
-    repoPath: runWithDirective.repoPath,
-    runId: runWithDirective.runId,
-    kind: responseArtifactKind,
-    name: `${options.responseArtifactNamePrefix ?? role}-${callId}-response.json`,
-    content: `${JSON.stringify(response, null, 2)}\n`,
-    summary: options.responseArtifactSummary?.(response) ?? `${role} response: ${response.summary}`
-  });
-  const latestRun = await loadRun(runWithDirective.repoPath, runWithDirective.runId);
-  const updated: RunRecord = {
-    ...latestRun,
-    updatedAt: nowIso(),
-    artifacts: [...latestRun.artifacts, artifact],
-    events: [
-      ...latestRun.events,
-      createEvent(options.responseEventType ?? "agent_response", `${role} responded: ${response.summary}`, {
-        role,
-        provider: assignment.provider,
-        model: assignment.model,
-        status: response.status,
-        artifactRef: artifact.ref
-      })
-    ]
-  };
+  try {
+    const response = await adapter.runAgent({
+      run: wait.run,
+      role,
+      assignment,
+      context,
+      directive
+    });
+    validateAgentResponse(role, directive, response);
 
-  await saveRun(updated);
+    const responseArtifactKind = options.responseArtifactKind ?? defaultResponseArtifactKind(role);
+    const artifact = await writeRunArtifact({
+      repoPath: wait.run.repoPath,
+      runId: wait.run.runId,
+      kind: responseArtifactKind,
+      name: `${options.responseArtifactNamePrefix ?? role}-${callId}-response.json`,
+      content: `${JSON.stringify(response, null, 2)}\n`,
+      summary: options.responseArtifactSummary?.(response) ?? `${role} response: ${response.summary}`
+    });
+    const latestRun = await loadRun(wait.run.repoPath, wait.run.runId);
+    const updated: RunRecord = {
+      ...latestRun,
+      updatedAt: nowIso(),
+      artifacts: [...latestRun.artifacts, artifact],
+      events: [
+        ...latestRun.events,
+        createEvent(options.responseEventType ?? "agent_response", `${role} responded: ${response.summary}`, {
+          role,
+          provider: assignment.provider,
+          model: assignment.model,
+          status: response.status,
+          artifactRef: artifact.ref
+        })
+      ]
+    };
 
-  return {
-    run: updated,
-    response,
-    directiveArtifact,
-    responseArtifact: artifact
-  };
+    await saveRun(updated);
+    const completed = await completeProviderWait(updated, wait.wait.id, {
+      status: "ingested",
+      responseArtifact: artifact
+    });
+
+    return {
+      run: completed,
+      response,
+      directiveArtifact,
+      responseArtifact: artifact
+    };
+  } catch (error) {
+    await completeProviderWait(wait.run, wait.wait.id, {
+      status: "failed",
+      lastError: error instanceof Error ? error.message : String(error)
+    });
+
+    throw error;
+  }
 };

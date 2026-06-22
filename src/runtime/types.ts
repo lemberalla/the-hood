@@ -114,6 +114,7 @@ export type RunArtifactKind =
   | "review_routing"
   | "fanout"
   | "provider_invocation"
+  | "provider_wait"
   | "transfer_manifest";
 
 export interface RunArtifact {
@@ -181,6 +182,53 @@ export interface RunHandoffEvent {
   artifactRefs?: string[];
 }
 
+export type ProviderWaitStatus =
+  | "pending_post"
+  | "posted_waiting"
+  | "answer_seen"
+  | "ingested"
+  | "failed"
+  | "target_lost"
+  | "superseded";
+
+export interface ProviderWaitDirectiveAck {
+  runId: string;
+  nonce: string;
+  responseField: string;
+}
+
+export interface ProviderWaitTarget {
+  kind: string;
+  label: string;
+  command?: string;
+  workspaceMode?: string;
+  args?: string[];
+}
+
+export interface ProviderWaitRecord {
+  schemaVersion: 1;
+  id: string;
+  idempotencyKey: string;
+  runId: string;
+  role: RuntimeRole;
+  provider: string;
+  model: string;
+  directiveAck: ProviderWaitDirectiveAck;
+  directiveArtifactRef?: string;
+  promptHash?: string;
+  status: ProviderWaitStatus;
+  createdAt: string;
+  updatedAt: string;
+  postedAt?: string;
+  completedAt?: string;
+  lastPollAt?: string;
+  attemptCount: number;
+  target?: ProviderWaitTarget;
+  artifactRefs: string[];
+  lastError?: string;
+  resendOf?: string;
+}
+
 export interface RunRecord {
   runId: string;
   createdAt: string;
@@ -201,6 +249,7 @@ export interface RunRecord {
   toolEvents: ToolEvent[];
   events: RunEvent[];
   handoffs: RunHandoffEvent[];
+  providerWaits: ProviderWaitRecord[];
 }
 
 export type ProgressPacketSourceKind =

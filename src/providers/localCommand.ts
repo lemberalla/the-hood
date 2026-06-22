@@ -5,12 +5,13 @@ import path from "node:path";
 import { writeRunArtifact } from "../runtime/artifacts.js";
 import { ProviderUnavailableError } from "../runtime/errors.js";
 import { newId, nowIso } from "../runtime/ids.js";
+import { markProviderWaitPosted } from "../runtime/providerWaits.js";
 import { redactText } from "../runtime/redaction.js";
 import { loadRun, saveRun } from "../runtime/store.js";
 import { agentMarkdownField } from "./markdownPayload.js";
 import { buildAgentResponseSchema } from "./responseSchema.js";
 import type { AgentRequest, AgentResponse, ProviderAdapter } from "./types.js";
-import type { JsonObject, JsonValue, RunArtifact, RuntimeRole } from "../runtime/types.js";
+import type { JsonObject, JsonValue, ProviderWaitTarget, RunArtifact, RuntimeRole } from "../runtime/types.js";
 
 export interface LocalAgentCommandSpec {
   providerId: string;
@@ -552,6 +553,31 @@ const commandOption = (args: string[], option: string): string | undefined => {
   return optionIndex >= 0 ? args[optionIndex + 1] : undefined;
 };
 
+const providerWaitPathOptionLabels = new Map([
+  ["--cd", "[cwd]"],
+  ["--schema", "[schema-path]"],
+  ["--output-schema", "[schema-path]"]
+]);
+
+const providerWaitArg = (args: string[], index: number): string => {
+  const replacement = providerWaitPathOptionLabels.get(args[index - 1] ?? "");
+
+  return replacement ?? redactText(args[index] ?? "");
+};
+
+const providerWaitTarget = (
+  request: AgentRequest,
+  spec: LocalAgentCommandSpec,
+  workspace: LocalWorkspace,
+  args: string[]
+): ProviderWaitTarget => ({
+  kind: "local_command",
+  label: `${spec.providerId} command for ${request.role}`,
+  command: path.basename(spec.command),
+  workspaceMode: workspace.mode,
+  args: args.map((_arg, index) => providerWaitArg(args, index))
+});
+
 const writeLocalAgentExecutionArtifact = async (
   input: LocalAgentExecutionArtifactInput
 ): Promise<RunArtifact> => {
@@ -700,6 +726,13 @@ export const runLocalAgentCommand = async (
   child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
   child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
   child.stdin.end(prompt);
+  await markProviderWaitPosted({
+    run: request.run,
+    role: request.role,
+    assignment: request.assignment,
+    directive: request.directive,
+    target: providerWaitTarget(request, spec, workspace, args)
+  });
 
   try {
     const exitCode = await new Promise<number>((resolve, reject) => {

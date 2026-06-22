@@ -3,6 +3,7 @@ import { deriveCrewLaneTrail } from "./crewLanes.js";
 import { deriveLoopResponsibilitySchedule } from "./loopResponsibilities.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import { deriveRevisionTrail } from "./revisionTrail.js";
+import { latestActiveProviderWait } from "./providerWaits.js";
 import type {
   CrewLane,
   LoopResponsibility,
@@ -146,6 +147,7 @@ const revisionTrail = (run: RunRecord): RevisionTrailItem[] =>
 
 const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
   const waitingDirective = directiveWait(run);
+  const activeProviderWait = latestActiveProviderWait(run);
   const latestTransferManifest = latestArtifact(run, (artifact) => artifact.kind === "transfer_manifest");
   const gate = approvalGateName(run);
 
@@ -162,6 +164,28 @@ const monitorItemForRun = (run: RunRecord): RunMonitorItem => {
       detail: run.approvalReason ?? "Approval is required before this run can continue.",
       ...(gate ? { gate } : {}),
       artifactRefs: approvalArtifactRefs(run),
+      reviewLanes: reviewLanes(run),
+      crewLanes: crewLanes(run),
+      revisionTrail: revisionTrail(run),
+      loopResponsibilities: loopResponsibilities(run),
+      operatorNextActions: operatorNextActions(run)
+    };
+  }
+
+  if (activeProviderWait) {
+    const provider = `${activeProviderWait.provider}:${activeProviderWait.model}`;
+
+    return {
+      runId: run.runId,
+      updatedAt: run.updatedAt,
+      mode: run.mode,
+      state: run.state,
+      phase: "provider_wait",
+      goal: run.userGoal,
+      detail: `Waiting on ${activeProviderWait.role} response since ${activeProviderWait.createdAt}.`,
+      lane: activeProviderWait.role,
+      provider,
+      artifactRefs: activeProviderWait.artifactRefs.slice(-3),
       reviewLanes: reviewLanes(run),
       crewLanes: crewLanes(run),
       revisionTrail: revisionTrail(run),

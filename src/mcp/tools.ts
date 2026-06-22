@@ -202,6 +202,21 @@ const compactProviderExecution = (execution: RunInsights["recentProviderExecutio
   ...(execution.responseStatus ? { responseStatus: execution.responseStatus } : {})
 });
 
+const compactProviderWaits = (run: RunRecord): JsonObject[] =>
+  (run.providerWaits ?? []).slice(-5).map((wait) => ({
+    id: wait.id,
+    status: wait.status,
+    role: wait.role,
+    provider: wait.provider,
+    model: wait.model,
+    createdAt: wait.createdAt,
+    updatedAt: wait.updatedAt,
+    ...(wait.postedAt ? { postedAt: wait.postedAt } : {}),
+    ...(wait.completedAt ? { completedAt: wait.completedAt } : {}),
+    ...(wait.target ? { target: wait.target as unknown as JsonObject } : {}),
+    artifactRefs: wait.artifactRefs.slice(-3)
+  }));
+
 const compactDecision = (decision: JsonObject): JsonObject => ({
   ...(typeof decision.action === "string" ? { action: decision.action } : {}),
   ...(typeof decision.reason === "string" ? { reason: truncateText(decision.reason, 240) } : {}),
@@ -457,6 +472,7 @@ const fullRunSummary = (run: RunRecord, insights?: JsonObject): JsonObject => ({
   approval_required: run.approvalRequired,
   approval_reason: run.approvalReason ?? null,
   stop_reason: run.stopReason ?? null,
+  provider_waits: (run.providerWaits ?? []) as unknown as JsonObject[],
   artifacts: run.artifacts.map((artifact) => ({
     kind: artifact.kind,
     ref: artifact.ref,
@@ -487,6 +503,8 @@ const compactRunSummary = (run: RunRecord, insights?: RunInsights): JsonObject =
     event_count: run.events.length,
     approval_event_count: run.approvalEvents.length,
     tool_event_count: run.toolEvents.length,
+    provider_wait_count: (run.providerWaits ?? []).length,
+    provider_waits: compactProviderWaits(run),
     events: compactRunEvents(run),
     ...(insights ? { insights: compactInsights(insights) } : {}),
     next_actions: compactNextActions(run),

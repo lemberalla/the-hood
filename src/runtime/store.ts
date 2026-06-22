@@ -21,7 +21,8 @@ const hydrateRun = (value: unknown): RunRecord => {
 
   return {
     ...run,
-    handoffs: Array.isArray(run.handoffs) ? run.handoffs : []
+    handoffs: Array.isArray(run.handoffs) ? run.handoffs : [],
+    providerWaits: Array.isArray(run.providerWaits) ? run.providerWaits : []
   };
 };
 

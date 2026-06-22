@@ -21,6 +21,7 @@ import { decideCriticTrigger, type CriticTriggerDecision } from "./criticPolicy.
 import { newId, nowIso } from "./ids.js";
 import { findProtectedPathMatches, type ProtectedPathMatch } from "./protectedPaths.js";
 import { writeProgressPacketArtifact } from "./progressPacket.js";
+import { latestActiveProviderWait, providerWaitLabel } from "./providerWaits.js";
 import {
   decideRevisionPacket,
   writeRevisionPacketArtifact,
@@ -1905,6 +1906,15 @@ const advanceOneStep = async (
       run,
       advanced: false,
       stopReason: run.approvalReason ?? "Approval required."
+    };
+  }
+
+  const activeProviderWait = latestActiveProviderWait(run);
+  if (activeProviderWait) {
+    return {
+      run,
+      advanced: false,
+      stopReason: providerWaitLabel(activeProviderWait)
     };
   }
 

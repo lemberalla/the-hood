@@ -1,6 +1,7 @@
 import { approvalMessageHint } from "./approvalInbox.js";
 import { roleLaneLabel } from "./handoffs.js";
 import { nowIso } from "./ids.js";
+import { latestActiveProviderWait } from "./providerWaits.js";
 import { deriveReviewLanes } from "./reviewLanes.js";
 import { runtimeRoles } from "./types.js";
 import type {
@@ -315,6 +316,41 @@ export const deriveOperatorNextActions = (run: RunRecord): OperatorNextAction[] 
   }
 
   const waitingDirective = providerWaitEvent(run);
+  const activeProviderWait = latestActiveProviderWait(run);
+  if (activeProviderWait) {
+    const providerLabel = `${activeProviderWait.provider}:${activeProviderWait.model}`;
+    const latestWaitEvent = latestEvent(run, (event) => event.data?.waitId === activeProviderWait.id);
+
+    return [
+      action(run, {
+        action: "wait_for_provider",
+        label: "Waiting for provider",
+        description: `Waiting on ${activeProviderWait.role} response from ${providerLabel}.`,
+        owner: roleOwner(activeProviderWait.role),
+        blocking: true,
+        required: true,
+        reason: activeProviderWait.target?.label ?? activeProviderWait.status,
+        artifactRefs: activeProviderWait.artifactRefs.slice(-3),
+        eventRefs: latestWaitEvent ? [latestWaitEvent.id] : []
+      }, generatedAt),
+      action(run, {
+        action: "inspect_status",
+        label: "Inspect run status",
+        description: "Inspect the active provider wait without posting another prompt.",
+        owner: runtimeOwner("Runtime Status"),
+        commandHint: `thehood status ${run.runId} --repo ${quoteArg(run.repoPath)}`,
+        mcpToolHint: "thehood_status",
+        tool: "thehood_status",
+        arguments: {
+          repo_path: run.repoPath,
+          run_id: run.runId
+        },
+        artifactRefs: activeProviderWait.artifactRefs.slice(-3),
+        eventRefs: latestWaitEvent ? [latestWaitEvent.id] : []
+      }, generatedAt)
+    ];
+  }
+
   if (waitingDirective) {
     const role = roleField(waitingDirective.data?.role);
     const provider = stringField(waitingDirective.data?.provider);

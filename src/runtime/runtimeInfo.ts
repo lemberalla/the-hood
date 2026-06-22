@@ -25,6 +25,7 @@ export const runtimeCapabilities = [
   "canonical_memory_rehydration",
   "provider_directive_ack",
   "provider_markdown_payloads",
+  "provider_wait_receipts",
   "local_agent_execution_artifacts",
   "mcp_final_report_next_action",
   "max_iteration_enforcement",

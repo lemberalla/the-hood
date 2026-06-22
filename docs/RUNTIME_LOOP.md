@@ -26,6 +26,8 @@ Each provider call is preceded by a runtime-built directive artifact containing 
 
 Local command providers such as `codex-cli` and `claude-code` also write redacted stdout/stderr `log` artifacts plus a compact `provider_invocation` artifact after the command exits. The invocation artifact records role, provider/model, command args, workspace mode, sandbox or permission mode when available, exit code, timeout state, output lengths and refs, parse status, and any isolated patch ref. It proves the runtime actually spawned the local agent adapter, but it does not replace the provider response, validation logs, or verifier verdict.
 
+Provider waits are persisted before the provider receives the directive. The run record stores typed `providerWaits` entries and `provider_wait` artifacts with the role, provider/model, directive acknowledgement, hashed directive identity, status, safe target summary, and artifact refs. Browser and bridge-backed providers move from `pending_post` to `posted_waiting` after the prompt is posted, then to `ingested` only after TheHood stores a validated response artifact. If an MCP host times out while ChatGPT Web or another bridge is still answering, operators should inspect `thehood runs` or `thehood status <run-id>` instead of sending the same prompt again; an active provider wait blocks a fresh `continue` transition until the current wait resolves or the run is explicitly handled.
+
 Provider directives include a `directiveAck` marker. Browser-backed adapters must require the current marker in the provider response before accepting schema-valid JSON, which prevents stale ChatGPT Web project or conversation context from being mistaken for the current run.
 
 The `AgentResponse` JSON envelope is deliberately mechanical. It carries status, a short summary, required role-control fields such as `action`, `status`, or `verdict`, refs, and the directive acknowledgement. Human-facing plans, reports, reviews, critique, rationale, acceptance criteria, and long next-step writeups should live in `data.<required_data_key>.markdown` as GitHub-flavored Markdown. Status surfaces expose only a bounded markdown preview plus the response artifact ref; the full response artifact remains the source of truth.
@@ -143,6 +145,7 @@ The runtime captures evidence directly:
 - final report artifacts for completed runs
 - progress packet artifacts for later planner reconciliation
 - provider invocation artifacts for local Codex CLI and Claude Code adapter executions
+- provider wait artifacts before and after long-running provider calls
 - derived review ownership metadata for verifier, runtime QA/validation, model-assisted QA tester, critic, and read-only summon evidence
 - review routing artifacts explaining risk tier, required lanes, skipped roles, and routing reasons
 - critic trigger artifacts explaining why an advisory critic was called

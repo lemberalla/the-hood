@@ -690,6 +690,23 @@ const formatRunInsights = (run: RunRecord, insights?: RunInsights): string[] => 
   ];
 };
 
+const formatProviderWaits = (run: RunRecord): string[] => {
+  const waits = (run.providerWaits ?? []).slice(-5);
+
+  if (waits.length === 0) {
+    return [];
+  }
+
+  return [
+    "",
+    "provider waits:",
+    ...waits.map((wait) => {
+      const target = wait.target?.label ? ` target=${wait.target.label}` : "";
+      return `  ${wait.status}  ${wait.role} ${wait.provider}:${wait.model} since=${wait.createdAt}${target}`;
+    })
+  ];
+};
+
 export const formatRunSummary = (run: RunRecord, insights?: RunInsights): string => {
   const approval = run.approvalRequired
     ? `\napproval: required (${run.approvalReason ?? "no reason recorded"})`
@@ -708,6 +725,7 @@ export const formatRunSummary = (run: RunRecord, insights?: RunInsights): string
       .split("\n")
       .map((line) => `  ${line}`)
       .join("\n"),
+    ...formatProviderWaits(run),
     ...formatRunInsights(run, insights)
   ].join("\n");
 };
