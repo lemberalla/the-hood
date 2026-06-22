@@ -6,6 +6,7 @@ import path from "node:path";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
+const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 process.env.THEHOOD_CHATGPT_WEB_COMMAND = "";
 process.env.THEHOOD_CHATGPT_WEB_MODEL_CONFIRMED = "0";
 process.env.THEHOOD_CHATGPT_WEB_ALLOW_UNVERIFIED_MODEL = "0";
@@ -631,6 +632,7 @@ const doctorPath = await runMcp([
 
 const doctorContent = doctorPath[1].result.structuredContent;
 assert.equal(doctorContent.runtime.name, "thehood");
+assert.equal(doctorContent.runtime.version, packageJson.version);
 assert.ok(doctorContent.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorContent.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorContent.runtime.capabilities.includes("cli_artifact_reads"));

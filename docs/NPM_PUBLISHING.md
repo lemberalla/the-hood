@@ -17,10 +17,10 @@ npm ci
 npm run release:check
 ```
 
-If the local npm cache has ownership problems, use a temporary cache for the pack step:
+`npm run pack:check` uses a temporary npm cache by default so local cache ownership problems do not block package-boundary verification. If a specific cache path is required, set `THEHOOD_NPM_PACK_CACHE`:
 
 ```bash
-npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json
+THEHOOD_NPM_PACK_CACHE=/private/tmp/thehood-npm-cache npm run pack:check
 ```
 
 ## First Preview Publish

@@ -31,8 +31,8 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Pack dry run
-        run: npm pack --dry-run --json
+      - name: Pack manifest check
+        run: npm run pack:check
 
       - name: Publish preview
         run: npm publish --tag next

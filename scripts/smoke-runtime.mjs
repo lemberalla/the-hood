@@ -10,6 +10,7 @@ import { pathToFileURL } from "node:url";
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const cliPath = path.join(root, "dist", "cli", "main.js");
 const chatGptBridgePath = path.join(root, "dist", "bridges", "chatgptWebBridge.js");
+const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 const baseEnv = () => ({
   ...process.env,
   THEHOOD_CHATGPT_WEB_COMMAND: "",
@@ -859,6 +860,7 @@ assert.equal(appliedSparkSonnetTeam.config.roles.critic.provider, "claude-code")
 const doctor = await runCli(["doctor", "--repo", repoPath, "--json"]);
 const doctorResult = JSON.parse(doctor.stdout);
 assert.equal(doctorResult.runtime.name, "thehood");
+assert.equal(doctorResult.runtime.version, packageJson.version);
 assert.ok(doctorResult.runtime.capabilities.includes("approval_artifact_next_actions"));
 assert.ok(doctorResult.runtime.capabilities.includes("protected_integrated_patch_gate"));
 assert.ok(doctorResult.runtime.capabilities.includes("cli_artifact_reads"));

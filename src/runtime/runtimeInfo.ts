@@ -1,3 +1,7 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
 export const runtimeCapabilities = [
   "structured_mcp_next_actions",
   "approval_artifact_next_actions",
@@ -67,8 +71,20 @@ export interface RuntimeInfo {
   capabilities: RuntimeCapability[];
 }
 
+const readRuntimeVersion = (): string => {
+  const packageJson = require("../../package.json") as { version?: unknown };
+
+  if (typeof packageJson.version !== "string" || packageJson.version.trim().length === 0) {
+    throw new Error("Could not read TheHood package version from package.json.");
+  }
+
+  return packageJson.version;
+};
+
+export const runtimeVersion = readRuntimeVersion();
+
 export const runtimeInfo: RuntimeInfo = {
   name: "thehood",
-  version: "0.0.0",
+  version: runtimeVersion,
   capabilities: [...runtimeCapabilities]
 };

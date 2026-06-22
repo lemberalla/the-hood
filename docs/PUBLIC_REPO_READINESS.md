@@ -17,7 +17,7 @@ It should not claim cloud routines, hosted execution, API-provider automation, a
 - Keep examples and fixtures synthetic. Do not publish real runtime artifacts or provider transcripts.
 - Verify a fresh clone path: `npm ci`, `npm run build`, `npm run smoke:mcp`, `npm run smoke:codex-config`, and `npm run smoke:runtime`.
 - Verify release packaging with `npm run release:check`.
-- Verify package contents with `npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json`.
+- Verify package contents with `npm run pack:check`.
 - Keep the synthetic stub demo runnable from `examples/stub-demo` and `docs/DEMO.md`.
 - Keep the static site in `site/` dependency-free, analytics-free, and aligned with README claims.
 - Make README claims match current behavior. Mark API adapters, hosted UI, and automatic Codex app rendering beyond explicit agent board artifact payloads as planned unless implemented.
@@ -34,7 +34,7 @@ It should not claim cloud routines, hosted execution, API-provider automation, a
 
 ## Package Boundary
 
-`package.json` uses a `files` allowlist. A dry-run package should include built `dist/`, README, package metadata, and docs only. It should not include `.thehood/`, `src/`, `node_modules/`, `.env`, browser state, provider logs, local config, or generated archives.
+`package.json` uses a `files` allowlist. `npm run pack:check` should include built `dist/`, README, package metadata, docs, and the synthetic demo only. It should not include `.thehood/`, `src/`, `node_modules/`, `.env`, browser state, provider logs, local config, site drafts, GitHub workflow internals, or generated archives.
 
 ## Release Gate
 
@@ -43,7 +43,6 @@ Before the first public release, run:
 ```bash
 npm ci
 npm run release:check
-npm_config_cache=/private/tmp/thehood-npm-cache npm pack --dry-run --json
 git --no-pager diff --check
 ```
 

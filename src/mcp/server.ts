@@ -9,6 +9,7 @@ import {
   type JsonRpcResponse
 } from "./protocol.js";
 import { asObject, optionalObject, requiredString } from "./validation.js";
+import { runtimeVersion } from "../runtime/runtimeInfo.js";
 import type { JsonObject, JsonValue } from "../runtime/types.js";
 
 const parseMessage = (line: string): JsonRpcRequest => {
@@ -36,7 +37,7 @@ const sendResponse = (response: JsonRpcResponse): void => {
 const serverInfo = {
   name: "thehood",
   title: "TheHood",
-  version: "0.0.0"
+  version: runtimeVersion
 };
 
 const initializeResult = (): JsonObject => ({
