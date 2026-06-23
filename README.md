@@ -36,6 +36,94 @@ npx thehood@next doctor --repo .
 
 TheHood requires Node.js 22 or newer.
 
+## Start Here
+
+> [!TIP]
+> **First 60 seconds**
+>
+> ```bash
+> cd /path/to/your/project
+> thehood doctor --repo .
+> thehood ui --repo .
+> ```
+>
+> `doctor` checks provider and role readiness without calling external models. `ui` opens the local terminal command center.
+
+> [!NOTE]
+> **Codex-first local loop**
+>
+> ```bash
+> thehood teams apply codex-default --repo .
+> thehood run "Plan and implement one small safe improvement" --repo . --loop
+> ```
+>
+> Use this when you want TheHood's approval gates, evidence, verifier separation, and final reports without involving ChatGPT Pro.
+
+> [!NOTE]
+> **ChatGPT Pro as planner, Codex as builder**
+>
+> ```bash
+> thehood teams apply pro-orchestrator --repo .
+> thehood run "Improve the README onboarding in one small safe slice" --repo . --loop
+> thehood ui approvals --repo .
+> ```
+>
+> Prompt from Codex: "Use TheHood to ask Pro to plan a small README cleanup, keep Codex as implementer, and stop before applying any patch until I approve."
+
+> [!IMPORTANT]
+> TheHood stops at approval gates when provider calls, repo-context transfers, patch application, protected test changes, dependency installs, or risky commands need review.
+
+## Starter Workflows
+
+> [!NOTE]
+> **Pro for architecture or critique**
+>
+> Use this when you want ChatGPT Pro to think through the direction before local coding work starts.
+>
+> ```bash
+> thehood teams apply pro-orchestrator --repo .
+> thehood plan "Review this project and propose the next safe improvement" --repo . --loop
+> ```
+>
+> Example prompt: "Use TheHood to ask Pro for an architecture plan, then keep Codex as the implementation lane."
+
+> [!NOTE]
+> **Claude as second judge**
+>
+> Use this when you want another model to critique or verify a Codex-produced plan or patch.
+>
+> ```bash
+> thehood teams apply claude-second-judge --repo .
+> thehood run "Review this change for missed edge cases" --repo . --loop
+> ```
+>
+> Example prompt: "Use TheHood to let Codex implement the change, then ask Claude as a second judge before verifier approval."
+
+> [!NOTE]
+> **Self-building / agentic loop**
+>
+> Use TheHood on TheHood itself: ask Pro to plan a small runtime or CLI improvement, let Codex implement, then route QA, verifier, and critic lanes through the runtime.
+>
+> ```bash
+> thehood teams apply pro-orchestrator --repo .
+> thehood run "Improve TheHood's CLI harness UX in one small safe slice" --repo . --loop
+> thehood ui approvals --repo .
+> ```
+>
+> Example prompt: "Use TheHood to improve TheHood's CLI harness UX. Ask Pro to plan a small safe slice, use Codex as implementer, run verifier and critic lanes, and stop before applying any patch until I approve."
+
+> [!NOTE]
+> **MCP connector path**
+>
+> Use this when ChatGPT should act as the MCP host and pull bounded repo evidence through TheHood tools.
+>
+> ```bash
+> thehood mcp config
+> thehood mcp tunnel --tunnel-id <tunnel-id> --profile thehood-local
+> ```
+>
+> Example prompt in ChatGPT: "Use TheHood to inspect this repo, read only the files needed for a small plan, and ask me before any implementation or external transfer."
+
 ## Important Guidelines
 
 - Treat `thehood@next` as a developer preview, not a stable production service.
